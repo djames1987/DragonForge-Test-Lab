@@ -1,10 +1,10 @@
+#[cfg(not(windows))]
+use std::env;
 use std::{
     io,
     path::{Path, PathBuf},
     process::{Child, Command},
 };
-#[cfg(not(windows))]
-use std::env;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -122,7 +122,9 @@ pub fn sandbox_project_command(
         }),
         SandboxMode::Docker | SandboxMode::Podman => {
             if program != "cargo" {
-                return Err(SandboxError::UnsupportedContainerProgram(program.to_owned()));
+                return Err(SandboxError::UnsupportedContainerProgram(
+                    program.to_owned(),
+                ));
             }
 
             let runtime = mode
@@ -354,7 +356,7 @@ mod windows {
                 JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
                 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
             },
-            Threading::{CREATE_SUSPENDED, OpenThread, ResumeThread, THREAD_SUSPEND_RESUME},
+            Threading::{OpenThread, ResumeThread, CREATE_SUSPENDED, THREAD_SUSPEND_RESUME},
             WindowsProgramming::GetUserNameW,
         },
     };
@@ -448,8 +450,7 @@ mod windows {
 
         while has_entry {
             if entry.th32OwnerProcessID == process_id {
-                let thread =
-                    unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID) };
+                let thread = unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID) };
                 if thread.is_null() {
                     let error = io::Error::last_os_error();
                     unsafe {
