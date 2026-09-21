@@ -21,7 +21,7 @@ Phase 3 moves DragonForge Test Lab from bounded direct-child execution to explic
 - Aggregate Windows Job Object memory ceiling using the job's `max_memory_mib`.
 - Windows active-process ceiling using the job's `max_processes`.
 - Explicit Docker and Podman sandbox modes for Cargo project actions.
-- Fixed project-owned container image: `dragonforge/test-lab-rust:0.4.0`, built from `rust:1.80-bookworm` with `rustfmt` and `clippy` explicitly installed.
+- Fixed project-owned container image: `dragonforge/test-lab-rust:0.4.0`, built from `rust:1.96-bookworm` with `rustfmt` and `clippy` explicitly installed.
 - Container hardening:
   - `--cap-drop=ALL`;
   - `--security-opt=no-new-privileges`;
@@ -57,7 +57,7 @@ A production worker can be run under a dedicated, non-administrator local accoun
 
     --worker-user DragonForgeTestLab
 
-Before any repository execution, Test Lab compares the running identity with the required worker identity and fails closed on mismatch.
+Before any repository execution, On Windows, Test Lab reads the actual process account through the operating system rather than trusting the `USERNAME` environment variable. It compares that identity with the required worker identity and fails closed on mismatch.
 
 For local development, omitting `--worker-user` keeps the identity check optional. The Phase 3 validation script supplies the current account by default so the enforcement path itself is exercised.
 
