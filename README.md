@@ -6,13 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 3 — Sandboxing
+Phase 4 — VM Lab
 
-Phases 0-2 established the versioned protocol, capability-aware controller/agent boundary, secured local Rust worker, artifacts, and GitHub-aware immutable-commit validation. Phase 3 adds process-tree containment and resource enforcement.
+Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-On Windows native mode, each Test Lab command is created suspended, assigned to a Job Object with kill-on-close plus memory/process ceilings, then resumed. Timeout and cancellation terminate the whole contained tree rather than only the direct child.
-
-Docker and Podman are also supported as explicit Cargo project-action sandbox modes. Test Lab supplies fixed container arguments and never accepts arbitrary shell text.
+Phase 4 adds typed Hyper-V VM orchestration for disposable Windows/Linux test machines. Managed VMs use DragonForge-* names, Generation 2 hardware, golden VHDX parents, per-instance differencing disks, clean DragonForge-Baseline checkpoints, and rollback/destroy lifecycle commands.
 
 ## Workspace
 
@@ -24,59 +22,70 @@ Docker and Podman are also supported as explicit Cargo project-action sandbox mo
       df-test-agent/          worker-side trust boundary
       df-test-controller/     scheduling/controller core
       df-test-executor/       checkout/process/artifact execution
-      df-test-github/         typed GitHub CLI adapter and commit statuses
-      df-test-sandbox/        Job Objects, identity checks, Docker/Podman wrapping
+      df-test-github/         typed GitHub adapter
+      df-test-sandbox/        native/container containment
+      df-test-vm/             Hyper-V VM Lab orchestration
     docs/
       ARCHITECTURE.md
       SECURITY.md
+      HOST-SETUP-HYPERV.md
       PHASE-0.md
       PHASE-1.md
       PHASE-2.md
       PHASE-3.md
+      PHASE-4.md
       ROADMAP.md
     scripts/
+      check-hyperv-host.ps1
       test-phase1.ps1
       test-phase2.ps1
       test-phase3.ps1
+      test-phase4.ps1
 
-## Doctors
+## Hyper-V host setup
 
-    cargo run -p dragonforge-test-lab -- doctor
+Follow docs/HOST-SETUP-HYPERV.md before running VM lifecycle tests.
 
-    cargo run -p dragonforge-test-lab -- github-doctor
+Read-only host readiness:
 
-    cargo run -p dragonforge-test-lab -- sandbox-doctor --sandbox native
+    .\scripts\check-hyperv-host.ps1 -VmRoot C:\DragonForge-Test-Lab-VMs -SwitchName "Default Switch"
 
-To require a dedicated worker account:
+VM Lab doctor:
 
-    cargo run -p dragonforge-test-lab -- sandbox-doctor --sandbox native --worker-user DragonForgeTestLab
+    cargo run -p dragonforge-test-lab -- vm-doctor --vm-root C:\DragonForge-Test-Lab-VMs --image-root C:\DragonForge-Test-Lab-VMs\images --switch "Default Switch"
 
-## Sandboxed local validation
+## VM lifecycle
 
-Native Windows Job Object:
+Create:
 
-    cargo run -p dragonforge-test-lab -- run-local --repo https://github.com/djames1987/DragonForge-Test-Lab.git --revision phase-3-sandboxing --sandbox native
+    cargo run -p dragonforge-test-lab -- vm-create --name DragonForge-Windows-Test-01 --guest-os windows --base-vhdx C:\DragonForge-Test-Lab-VMs\images\windows-base.vhdx --vm-root C:\DragonForge-Test-Lab-VMs --image-root C:\DragonForge-Test-Lab-VMs\images
 
-Docker (build the fixed worker image once first):
+Create clean baseline:
 
-    .\scripts\build-sandbox-image.ps1 -Runtime docker
+    cargo run -p dragonforge-test-lab -- vm-baseline --name DragonForge-Windows-Test-01
 
-    cargo run -p dragonforge-test-lab -- run-local --repo https://github.com/djames1987/DragonForge-Test-Lab.git --revision phase-3-sandboxing --sandbox docker
+Restore baseline:
 
-Podman:
+    cargo run -p dragonforge-test-lab -- vm-restore --name DragonForge-Windows-Test-01
 
-    .\scripts\build-sandbox-image.ps1 -Runtime podman
+Destroy:
 
-    cargo run -p dragonforge-test-lab -- run-local --repo https://github.com/djames1987/DragonForge-Test-Lab.git --revision phase-3-sandboxing --sandbox podman
+    cargo run -p dragonforge-test-lab -- vm-destroy --name DragonForge-Windows-Test-01 --vm-root C:\DragonForge-Test-Lab-VMs --confirm
 
-For the complete Phase 3 Windows validation with an uploadable transcript:
+## Phase 4 validation
 
-    .\scripts\test-phase3.ps1 -RepositoryUrl https://github.com/djames1987/DragonForge-Test-Lab.git -Revision phase-3-sandboxing
+Core host/code validation:
+
+    .\scripts\test-phase4.ps1 -VmRoot C:\DragonForge-Test-Lab-VMs
+
+Full VM lifecycle validation after a golden image is prepared:
+
+    .\scripts\test-phase4.ps1 -VmRoot C:\DragonForge-Test-Lab-VMs -BaseVhdx C:\DragonForge-Test-Lab-VMs\images\windows-base.vhdx -GuestOs windows
 
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
-Callers submit typed operations. Workers independently enforce repository allowlists, capability restrictions, protocol compatibility, resource ceilings, sandbox mode, and optional worker identity. Phase 3 improves containment substantially, but disposable VMs remain the intended hostile-code boundary in Phase 4.
+VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/PHASE-3.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, and docs/ROADMAP.md.
