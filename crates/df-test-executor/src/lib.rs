@@ -531,11 +531,14 @@ fn directory_size(root: &Path) -> io::Result<u64> {
     while let Some(path) = pending.pop() {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
-            let metadata = entry.metadata()?;
-            if metadata.is_dir() {
+            let file_type = entry.file_type()?;
+            if file_type.is_symlink() {
+                continue;
+            }
+            if file_type.is_dir() {
                 pending.push(entry.path());
-            } else if metadata.is_file() {
-                total = total.saturating_add(metadata.len());
+            } else if file_type.is_file() {
+                total = total.saturating_add(entry.metadata()?.len());
             }
         }
     }

@@ -1,6 +1,7 @@
 /target
 /.idea
 /.vscode
+/.dragonforge-test-lab
 *.log
 .env
 artifacts/
