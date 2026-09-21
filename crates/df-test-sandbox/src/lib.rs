@@ -1,8 +1,10 @@
 use std::{
-    env, io,
+    io,
     path::{Path, PathBuf},
     process::{Child, Command},
 };
+#[cfg(not(windows))]
+use std::env;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -166,16 +168,20 @@ pub fn sandbox_project_command(
     }
 }
 
-pub fn current_worker_identity() -> String {
-    if cfg!(windows) {
-        env::var("USERNAME").unwrap_or_else(|_| "unknown".into())
-    } else {
-        env::var("USER").unwrap_or_else(|_| "unknown".into())
+pub fn current_worker_identity() -> Result<String, SandboxError> {
+    #[cfg(windows)]
+    {
+        windows::current_username()
+    }
+
+    #[cfg(not(windows))]
+    {
+        env::var("USER").map_err(|_| SandboxError::WorkerIdentityUnavailable)
     }
 }
 
 pub fn verify_worker_identity(expected: &str) -> Result<(), SandboxError> {
-    let actual = current_worker_identity();
+    let actual = current_worker_identity()?;
     let matches = if cfg!(windows) {
         actual.eq_ignore_ascii_case(expected)
     } else {
@@ -349,9 +355,22 @@ mod windows {
                 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
             },
             Threading::{CREATE_SUSPENDED, OpenThread, ResumeThread, THREAD_SUSPEND_RESUME},
+            WindowsProgramming::GetUserNameW,
         },
     };
     use std::os::windows::process::CommandExt;
+
+    pub fn current_username() -> Result<String, SandboxError> {
+        let mut buffer = [0_u16; 257];
+        let mut length = buffer.len() as u32;
+        let result = unsafe { GetUserNameW(buffer.as_mut_ptr(), &mut length) };
+        if result == 0 {
+            return Err(SandboxError::WindowsIdentity(io::Error::last_os_error()));
+        }
+
+        let length_without_nul = length.saturating_sub(1) as usize;
+        Ok(String::from_utf16_lossy(&buffer[..length_without_nul]))
+    }
 
     pub struct JobGuard {
         handle: HANDLE,
@@ -488,8 +507,13 @@ pub enum SandboxError {
     InvalidLimits,
     #[error("container sandbox can only wrap fixed Cargo project actions, got {0}")]
     UnsupportedContainerProgram(String),
+    #[error("worker identity could not be determined")]
+    WorkerIdentityUnavailable,
     #[error("worker identity mismatch: expected {expected}, running as {actual}")]
     WorkerIdentityMismatch { expected: String, actual: String },
+    #[cfg(windows)]
+    #[error("failed to read Windows worker identity: {0}")]
+    WindowsIdentity(io::Error),
     #[error("failed to start container runtime {program}: {source}")]
     SpawnRuntime {
         program: String,
@@ -554,6 +578,13 @@ mod tests {
         assert!(command.args.contains(&"1024m".into()));
         assert!(command.args.contains(&"32".into()));
         assert_eq!(command.args.last().unwrap(), "--workspace");
+    }
+
+    #[test]
+    fn current_worker_identity_matches_itself() {
+        let identity = current_worker_identity().unwrap();
+        assert!(!identity.is_empty());
+        verify_worker_identity(&identity).unwrap();
     }
 
     #[test]
