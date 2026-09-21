@@ -5,7 +5,6 @@ use std::{
     process::{Command, Output},
 };
 use thiserror::Error;
-use uuid::Uuid;
 
 pub const VM_NAME_PREFIX: &str = "DragonForge-";
 pub const DEFAULT_BASELINE_CHECKPOINT: &str = "DragonForge-Baseline";
@@ -62,10 +61,10 @@ impl VmCreateSpec {
     pub fn validate(&self, config: &VmLabConfig) -> Result<(), VmError> {
         validate_vm_name(&self.name)?;
         validate_switch_name(&self.switch_name)?;
-        if self.memory_mib < 1024 || self.memory_mib > 131_072 {
+        if !(1024..=131_072).contains(&self.memory_mib) {
             return Err(VmError::InvalidMemory(self.memory_mib));
         }
-        if self.processors == 0 || self.processors > 64 {
+        if !(1..=64).contains(&self.processors) {
             return Err(VmError::InvalidProcessorCount(self.processors));
         }
         validate_base_image(&config.base_image_root, &self.base_vhdx)
