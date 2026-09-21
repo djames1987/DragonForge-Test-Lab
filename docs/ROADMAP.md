@@ -6,7 +6,7 @@ Protocol, controller, agent, policy, manifests, tests, security model.
 ## Phase 1 — Local Rust Worker — Complete
 Safe workspace creation, trusted repository checkout, fixed Cargo commands, bounded process execution, logs, artifacts, cancellation, cleanup, and local validation tooling.
 
-## Phase 2 — GitHub Integration — Implementation complete; local validation pending
+## Phase 2 — GitHub Integration — Complete
 GitHub repository/ref resolution to immutable commit SHAs, authenticated GitHub CLI integration, commit-status lifecycle reporting, GitHub-aware local execution, and validation tooling. GitHub Actions remains optional rather than being the Test Lab execution core.
 
 ## Phase 3 — Sandboxing
