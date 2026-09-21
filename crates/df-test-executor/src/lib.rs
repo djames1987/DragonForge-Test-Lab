@@ -305,7 +305,7 @@ impl LocalExecutor {
                 sandbox_limits,
             )?;
             CommandSpec {
-                name: effective.name,
+                name: spec.name,
                 program: wrapped.program,
                 args: wrapped.args,
                 current_dir: wrapped.current_dir,
@@ -354,7 +354,7 @@ impl LocalExecutor {
             .map_err(|_| ExecutorError::ReaderPanicked)??;
 
         Ok(StepReport {
-            name: spec.name,
+            name: effective.name,
             exit_code: status.and_then(|value| value.code()),
             duration_ms: started.elapsed().as_millis(),
             stdout: String::from_utf8_lossy(&stdout_bytes).into_owned(),
