@@ -1,0 +1,11 @@
+schema_version = 1
+
+[project]
+name = "DragonForge Test Lab"
+
+[profiles.fast]
+actions = ["cargo_fmt_check", "cargo_clippy", "cargo_test"]
+timeout_seconds = 900
+
+[security]
+allow_arbitrary_shell = false

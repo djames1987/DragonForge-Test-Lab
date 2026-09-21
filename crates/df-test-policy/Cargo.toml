@@ -1,0 +1,10 @@
+[package]
+name = "df-test-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+df-test-protocol = { path = "../df-test-protocol" }
+thiserror.workspace = true

@@ -1,0 +1,9 @@
+[package]
+name = "dragonforge-test-lab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+df-test-protocol = { path = "../../crates/df-test-protocol" }

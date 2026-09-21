@@ -1,0 +1,10 @@
+[package]
+name = "df-test-controller"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+df-test-protocol = { path = "../df-test-protocol" }
+uuid.workspace = true
