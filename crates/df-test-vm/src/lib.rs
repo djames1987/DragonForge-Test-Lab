@@ -106,11 +106,11 @@ impl HyperVClient {
         require_windows()?;
         let script = concat!(
             "$ErrorActionPreference='Stop';",
-            "$feature=Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All;",
             "$module=[bool](Get-Module -ListAvailable Hyper-V);",
             "$vmms=Get-Service vmms -ErrorAction SilentlyContinue;",
+            "$vmhost=$null;try{$vmhost=Get-VMHost -ErrorAction Stop}catch{};",
             "$switches=@(Get-VMSwitch -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name);",
-            "[pscustomobject]@{hyper_v_enabled=($feature.State -eq 'Enabled');",
+            "[pscustomobject]@{hyper_v_enabled=($null -ne $vmhost);",
             "hyper_v_module=$module;vmms_running=($vmms.Status -eq 'Running');switches=$switches}",
             "| ConvertTo-Json -Compress"
         );
@@ -144,14 +144,15 @@ impl HyperVClient {
         spec.validate(config)?;
 
         let vm_root = absolute_path(&config.vm_root())?;
-        let base_root = absolute_path(&config.base_image_root)?;
         fs::create_dir_all(&vm_root)?;
-        fs::create_dir_all(&base_root)?;
+        fs::create_dir_all(&config.base_image_root)?;
 
-        let base = absolute_existing_file(&spec.base_vhdx)?;
-        if !is_descendant(&base_root, &base) {
+        let canonical_root = fs::canonicalize(&config.base_image_root)?;
+        let canonical_base = fs::canonicalize(&spec.base_vhdx)?;
+        if !canonical_base.is_file() || !is_descendant(&canonical_root, &canonical_base) {
             return Err(VmError::BaseImageOutsideRoot);
         }
+        let base = absolute_path(&spec.base_vhdx)?;
 
         let instance_dir = vm_root.join(&spec.name);
         let disk_dir = instance_dir.join("Virtual Hard Disks");
@@ -187,6 +188,11 @@ impl HyperVClient {
         );
         let output = self.run_script(&script)?;
         if !output.status.success() {
+            let cleanup = format!(
+                "$vm=Get-VM -Name '{}' -ErrorAction SilentlyContinue;if($vm){{Stop-VM -VM $vm -TurnOff -ErrorAction SilentlyContinue;Remove-VM -VM $vm -Force -ErrorAction SilentlyContinue}}",
+                ps_literal(&spec.name)
+            );
+            let _ = self.run_script(&cleanup);
             let _ = fs::remove_dir_all(&instance_dir);
             return Err(command_failed("create VM", &output));
         }
@@ -200,7 +206,7 @@ impl HyperVClient {
     pub fn stop(&self, name: &str) -> Result<(), VmError> {
         self.vm_action(
             name,
-            "Stop-VM -Name '{name}' -Force -TurnOff | Out-Null",
+            "Stop-VM -Name '{name}' -TurnOff | Out-Null",
             "stop VM",
         )
     }
@@ -222,7 +228,7 @@ impl HyperVClient {
         let script = format!(
             concat!(
                 "$ErrorActionPreference='Stop';",
-                "Stop-VM -Name '{name}' -Force -TurnOff -ErrorAction SilentlyContinue;",
+                "Stop-VM -Name '{name}' -TurnOff -ErrorAction SilentlyContinue;",
                 "Restore-VMCheckpoint -VMName '{name}' -Name '{checkpoint}' -Confirm:$false;",
                 "Start-VM -Name '{name}' | Out-Null"
             ),
@@ -252,7 +258,7 @@ impl HyperVClient {
     pub fn destroy_managed(&self, config: &VmLabConfig, name: &str) -> Result<(), VmError> {
         validate_vm_name(name)?;
         let script = format!(
-            "$ErrorActionPreference='Stop';Stop-VM -Name '{}' -Force -TurnOff -ErrorAction SilentlyContinue;Remove-VM -Name '{}' -Force",
+            "$ErrorActionPreference='Stop';Stop-VM -Name '{}' -TurnOff -ErrorAction SilentlyContinue;Remove-VM -Name '{}' -Force",
             ps_literal(name),
             ps_literal(name)
         );
@@ -346,7 +352,7 @@ fn validate_switch_name(name: &str) -> Result<(), VmError> {
 }
 
 fn validate_base_image(root: &Path, path: &Path) -> Result<(), VmError> {
-    let root = absolute_path(root)?;
+    let root = fs::canonicalize(root).map_err(|_| VmError::BaseImageRootMissing)?;
     let image = absolute_existing_file(path)?;
     if !is_descendant(&root, &image) {
         return Err(VmError::BaseImageOutsideRoot);
@@ -434,6 +440,8 @@ pub enum VmError {
     InvalidMemory(u64),
     #[error("invalid VM processor count: {0}")]
     InvalidProcessorCount(u32),
+    #[error("configured base image root does not exist")]
+    BaseImageRootMissing,
     #[error("base VHDX must exist beneath the configured base image root")]
     BaseImageOutsideRoot,
     #[error("base image must be an existing .vhdx file")]
