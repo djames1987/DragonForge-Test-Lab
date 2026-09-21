@@ -275,7 +275,10 @@ fn sandbox_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(version) = runtime_version(mode)? {
         println!("container_runtime={version}");
         verify_container_image(mode)?;
-        println!("container_image={}", df_test_sandbox::DEFAULT_CONTAINER_IMAGE);
+        println!(
+            "container_image={}",
+            df_test_sandbox::DEFAULT_CONTAINER_IMAGE
+        );
     }
 
     println!("status=sandbox_ready");
