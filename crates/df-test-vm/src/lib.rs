@@ -388,7 +388,7 @@ fn is_descendant(root: &Path, path: &Path) -> bool {
 }
 
 fn ps_literal(value: &str) -> String {
-    value.replace(''', "''")
+    value.replace('\'', "''")
 }
 
 fn ps_literal_path(path: &Path) -> String {
