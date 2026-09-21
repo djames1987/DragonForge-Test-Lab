@@ -12,7 +12,8 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-controller: queue and capability-aware worker scheduling.
 - df-test-executor: local workspace, fixed-command process execution, cancellation, output capture, artifact generation, and cleanup.
 - df-test-github: typed GitHub repository/ref resolution and commit-status reporting through the authenticated gh CLI.
-- dragonforge-test-lab: operator CLI, doctor checks, local execution, and GitHub-aware execution entry point.
+- df-test-sandbox: native/container sandbox selection, Windows Job Object containment, resource ceilings, worker-identity enforcement, and fixed Docker/Podman wrapping.
+- dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
 
@@ -31,6 +32,21 @@ Operator -> CLI -> Agent policy validation -> LocalExecutor -> per-job workspace
 Operator -> run-github -> GitHub ref resolution -> exact commit SHA -> pending status -> Agent policy validation -> LocalExecutor -> exact SHA checkout -> Cargo validation -> result status.
 
 GitHub Actions is optional. A self-hosted Actions runner may later invoke Test Lab, but Test Lab does not depend on Actions as its execution engine.
+
+## Phase 3 sandbox flow
+
+    authorized typed job
+      -> select sandbox mode
+      -> optional worker-identity check
+      -> fixed Git/Cargo command
+      -> Windows: suspended spawn -> Job Object assignment -> resume
+      -> or Docker/Podman: fixed Cargo container wrapper
+      -> memory/process ceilings
+      -> bounded output/artifacts
+      -> whole-tree teardown on timeout/cancel
+      -> cleanup
+
+Windows native mode is the default on the current worker platform. Non-Windows native mode fails closed until a native containment implementation exists; Docker/Podman remain available as the portable project-code sandbox path.
 
 ## Distributed target
 
