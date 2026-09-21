@@ -297,10 +297,9 @@ mod tests {
 
     #[test]
     fn parses_supported_github_https_urls() {
-        let repo = GitHubRepository::parse_https(
-            "https://github.com/djames1987/DragonForge-Test-Lab.git",
-        )
-        .unwrap();
+        let repo =
+            GitHubRepository::parse_https("https://github.com/djames1987/DragonForge-Test-Lab.git")
+                .unwrap();
         assert_eq!(repo.owner, "djames1987");
         assert_eq!(repo.name, "DragonForge-Test-Lab");
         assert_eq!(repo.slug(), "djames1987/DragonForge-Test-Lab");
@@ -319,7 +318,10 @@ mod tests {
             name: "repo".into(),
         };
         let args = resolve_commit_args(&repo, "feature/test-1");
-        assert_eq!(args, vec!["api", "repos/owner/repo/commits/feature%2Ftest-1"]);
+        assert_eq!(
+            args,
+            vec!["api", "repos/owner/repo/commits/feature%2Ftest-1"]
+        );
     }
 
     #[test]
@@ -335,11 +337,7 @@ mod tests {
         )
         .unwrap();
 
-        let args = commit_status_args(
-            &repo,
-            "0123456789abcdef0123456789abcdef01234567",
-            &status,
-        );
+        let args = commit_status_args(&repo, "0123456789abcdef0123456789abcdef01234567", &status);
 
         assert_eq!(args[0], "api");
         assert_eq!(
