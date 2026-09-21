@@ -21,7 +21,7 @@ Phase 3 moves DragonForge Test Lab from bounded direct-child execution to explic
 - Aggregate Windows Job Object memory ceiling using the job's `max_memory_mib`.
 - Windows active-process ceiling using the job's `max_processes`.
 - Explicit Docker and Podman sandbox modes for Cargo project actions.
-- Fixed project-owned container image: `dragonforge/test-lab-rust:0.4.0`, built from `rust:1.96-bookworm` with `rustfmt` and `clippy` explicitly installed.
+- Fixed project-owned container image: `dragonforge/test-lab-rust:0.4.0`, built from `rust:1.96.0-bookworm` with `rustfmt` and `clippy` explicitly installed.
 - Container hardening:
   - `--cap-drop=ALL`;
   - `--security-opt=no-new-privileges`;
