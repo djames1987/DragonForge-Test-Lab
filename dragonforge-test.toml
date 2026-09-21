@@ -15,7 +15,7 @@ retain_workspace = false
 
 [sandbox]
 mode = "native"
-container_image = "rust:1.80-bookworm"
+container_image = "dragonforge/test-lab-rust:0.4.0"
 # Set this to a dedicated local account name on production workers.
 required_worker_user = ""
 
