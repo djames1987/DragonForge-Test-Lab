@@ -169,10 +169,7 @@ impl LocalExecutor {
 
                     let remaining = deadline.saturating_duration_since(Instant::now());
                     let fetch_step = self.run_command(
-                        CommandSpec::git_fetch_revision(
-                            &repository_dir,
-                            &job.repository.revision,
-                        ),
+                        CommandSpec::git_fetch_revision(&repository_dir, &job.repository.revision),
                         remaining,
                         cancellation,
                     )?;
@@ -708,19 +705,11 @@ mod tests {
         let fetch = CommandSpec::git_fetch_revision(repo, "phase-1-local-worker");
         assert_eq!(
             fetch.args,
-            vec![
-                "fetch",
-                "--no-tags",
-                "origin",
-                "phase-1-local-worker"
-            ]
+            vec!["fetch", "--no-tags", "origin", "phase-1-local-worker"]
         );
 
         let switch = CommandSpec::git_switch_fetch_head(repo);
-        assert_eq!(
-            switch.args,
-            vec!["switch", "--detach", "FETCH_HEAD"]
-        );
+        assert_eq!(switch.args, vec!["switch", "--detach", "FETCH_HEAD"]);
     }
 
     #[test]
