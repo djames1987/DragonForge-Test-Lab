@@ -1,7 +1,7 @@
 use df_test_protocol::{JobRequest, JobStatus, ResourceLimits, TestAction};
 use df_test_sandbox::{
-    sandbox_project_command, verify_worker_identity, ProcessTreeGuard, SandboxError, SandboxLimits,
-    SandboxMode,
+    sandbox_project_command, verify_worker_identity, ContainerCleanup, ProcessTreeGuard,
+    SandboxError, SandboxLimits, SandboxMode,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -309,6 +309,7 @@ impl LocalExecutor {
                 program: wrapped.program,
                 args: wrapped.args,
                 current_dir: wrapped.current_dir,
+                container_cleanup: wrapped.container_cleanup,
             }
         } else {
             spec
@@ -345,6 +346,7 @@ impl LocalExecutor {
             self.config.poll_interval,
             cancellation,
             &guard,
+            effective.container_cleanup.as_ref(),
         )?;
 
         // Closing the per-command Job Object kills any descendants that outlived
@@ -402,12 +404,13 @@ impl LocalExecutor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct CommandSpec {
     name: String,
     program: String,
     args: Vec<String>,
     current_dir: PathBuf,
+    container_cleanup: Option<ContainerCleanup>,
 }
 
 impl CommandSpec {
@@ -429,6 +432,7 @@ impl CommandSpec {
                 repository_dir.to_string_lossy().into_owned(),
             ],
             current_dir,
+            container_cleanup: None,
         }
     }
 
@@ -443,6 +447,7 @@ impl CommandSpec {
                 revision.into(),
             ],
             current_dir: repository_dir.to_path_buf(),
+            container_cleanup: None,
         }
     }
 
@@ -452,6 +457,7 @@ impl CommandSpec {
             program: "git".into(),
             args: vec!["switch".into(), "--detach".into(), "FETCH_HEAD".into()],
             current_dir: repository_dir.to_path_buf(),
+            container_cleanup: None,
         }
     }
 
@@ -495,6 +501,7 @@ impl CommandSpec {
             program: "cargo".into(),
             args,
             current_dir: repository_dir.to_path_buf(),
+            container_cleanup: None,
         })
     }
 }
@@ -528,17 +535,18 @@ fn wait_for_child(
     poll_interval: Duration,
     cancellation: &CancellationToken,
     guard: &ProcessTreeGuard,
+    container_cleanup: Option<&ContainerCleanup>,
 ) -> Result<(Option<ExitStatus>, StepStatus), ExecutorError> {
     let started = Instant::now();
 
     loop {
         if cancellation.is_cancelled() {
-            terminate_child(child, guard)?;
+            terminate_child(child, guard, container_cleanup)?;
             return Ok((None, StepStatus::Cancelled));
         }
 
         if started.elapsed() >= timeout {
-            terminate_child(child, guard)?;
+            terminate_child(child, guard, container_cleanup)?;
             return Ok((None, StepStatus::TimedOut));
         }
 
@@ -558,20 +566,24 @@ fn wait_for_child(
 fn terminate_child(
     child: &mut Child,
     guard: &ProcessTreeGuard,
+    container_cleanup: Option<&ContainerCleanup>,
 ) -> Result<(), ExecutorError> {
-    if guard.terminate_tree()? {
-        let _ = child.wait();
-        return Ok(());
+    let tree_terminated = guard.terminate_tree()?;
+
+    if !tree_terminated {
+        match child.kill() {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::InvalidInput => {}
+            Err(error) => return Err(ExecutorError::Io(error)),
+        }
     }
 
-    match child.kill() {
-        Ok(()) => {
-            let _ = child.wait();
-            Ok(())
-        }
-        Err(error) if error.kind() == io::ErrorKind::InvalidInput => Ok(()),
-        Err(error) => Err(ExecutorError::Io(error)),
+    if let Some(cleanup) = container_cleanup {
+        cleanup.force_remove()?;
     }
+
+    let _ = child.wait();
+    Ok(())
 }
 
 fn read_bounded(mut reader: impl Read, limit: usize) -> io::Result<(Vec<u8>, bool)> {
