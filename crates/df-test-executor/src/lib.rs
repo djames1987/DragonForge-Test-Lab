@@ -119,11 +119,8 @@ impl LocalExecutor {
         fs::create_dir_all(&workspace_path)?;
         fs::create_dir_all(&artifact_path)?;
 
-        // Windows process creation is much more reliable when current_dir is absolute.
-        // Canonicalizing here also prevents the clone destination from being interpreted
-        // relative to the per-job working directory a second time.
-        let workspace = fs::canonicalize(&workspace_path)?;
-        let artifact_dir = fs::canonicalize(&artifact_path)?;
+        let workspace = absolute_path(&workspace_path)?;
+        let artifact_dir = absolute_path(&artifact_path)?;
         let repository_dir = workspace.join("repository");
 
         let deadline = Instant::now() + Duration::from_secs(job.limits.timeout_seconds);
@@ -534,6 +531,14 @@ fn apply_sanitized_environment(command: &mut Command) {
     }
 }
 
+fn absolute_path(path: &Path) -> io::Result<PathBuf> {
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        Ok(std::env::current_dir()?.join(path))
+    }
+}
+
 fn directory_size(root: &Path) -> io::Result<u64> {
     let mut total = 0_u64;
     let mut pending = vec![root.to_path_buf()];
@@ -643,7 +648,8 @@ mod tests {
     fn git_clone_uses_workspace_as_absolute_working_directory() {
         let root = std::env::current_dir().unwrap();
         let repository_dir = root.join("workspace").join("repository");
-        let spec = CommandSpec::git_clone("https://github.com/example/project.git", &repository_dir);
+        let spec =
+            CommandSpec::git_clone("https://github.com/example/project.git", &repository_dir);
 
         assert_eq!(spec.current_dir, root.join("workspace"));
         assert!(spec.current_dir.is_absolute());
@@ -651,6 +657,16 @@ mod tests {
             spec.args.last().unwrap(),
             &repository_dir.to_string_lossy().into_owned()
         );
+    }
+
+    #[test]
+    fn absolute_path_does_not_require_canonicalization() {
+        let relative = Path::new(".dragonforge-test-lab").join("workspaces");
+        let absolute = absolute_path(&relative).unwrap();
+        assert!(absolute.is_absolute());
+
+        #[cfg(windows)]
+        assert!(!absolute.to_string_lossy().starts_with(r"\\?\"));
     }
 
     #[test]
