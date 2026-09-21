@@ -252,7 +252,7 @@ fn execute_local_job(
 
 fn sandbox_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mode = sandbox_mode(args)?;
-    let worker = current_worker_identity();
+    let worker = current_worker_identity()?;
 
     if let Some(expected) = value_after(args, "--worker-user") {
         verify_worker_identity(&expected)?;
