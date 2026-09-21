@@ -91,7 +91,12 @@ mod tests {
                 url: "https://github.com/djames1987/project.git".into(),
                 revision: "abc123".into(),
             },
-            vec![TestAction::Checkout, TestAction::CargoTest { all_features: false }],
+            vec![
+                TestAction::Checkout,
+                TestAction::CargoTest {
+                    all_features: false,
+                },
+            ],
         );
         assert_eq!(policy().authorize(&job), Ok(()));
     }
@@ -105,7 +110,10 @@ mod tests {
             },
             vec![TestAction::Checkout],
         );
-        assert_eq!(policy().authorize(&job), Err(PolicyError::RepositoryNotAllowed));
+        assert_eq!(
+            policy().authorize(&job),
+            Err(PolicyError::RepositoryNotAllowed)
+        );
     }
 
     #[test]
