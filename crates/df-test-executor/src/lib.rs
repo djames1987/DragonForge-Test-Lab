@@ -163,6 +163,7 @@ impl LocalExecutor {
                     }
 
                     let remaining = deadline.saturating_duration_since(Instant::now());
+                    validate_revision(&job.repository.revision)?;
                     let checkout_step = self.run_command(
                         CommandSpec::git_checkout(&repository_dir, &job.repository.revision),
                         remaining,
@@ -354,12 +355,7 @@ impl CommandSpec {
         Self {
             name: "git_checkout".into(),
             program: "git".into(),
-            args: vec![
-                "checkout".into(),
-                "--detach".into(),
-                "--".into(),
-                revision.into(),
-            ],
+            args: vec!["checkout".into(), "--detach".into(), revision.into()],
             current_dir: repository_dir.to_path_buf(),
         }
     }
@@ -405,6 +401,21 @@ impl CommandSpec {
             args,
             current_dir: repository_dir.to_path_buf(),
         })
+    }
+}
+
+fn validate_revision(revision: &str) -> Result<(), ExecutorError> {
+    let valid = !revision.is_empty()
+        && !revision.starts_with('-')
+        && revision.len() <= 256
+        && revision
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '/' | '-'));
+
+    if valid {
+        Ok(())
+    } else {
+        Err(ExecutorError::UnsafeRevision)
     }
 }
 
@@ -554,6 +565,8 @@ pub enum ExecutorError {
     RepositoryNotCheckedOut,
     #[error("unsupported test action")]
     UnsupportedAction,
+    #[error("repository revision contains unsafe characters or begins with '-'")]
+    UnsafeRevision,
     #[error("child process output pipe was unavailable")]
     MissingPipe,
     #[error("output reader thread panicked")]
@@ -614,10 +627,16 @@ mod tests {
     }
 
     #[test]
-    fn checkout_revision_is_passed_after_option_terminator() {
-        let spec = CommandSpec::git_checkout(Path::new("repo"), "-dangerous-looking-revision");
-        assert_eq!(spec.program, "git");
-        assert_eq!(spec.args[2], "--");
-        assert_eq!(spec.args[3], "-dangerous-looking-revision");
+    fn revision_validation_rejects_option_like_values() {
+        assert!(validate_revision("main").is_ok());
+        assert!(validate_revision("feature/test-1").is_ok());
+        assert!(matches!(
+            validate_revision("-dangerous-looking-revision"),
+            Err(ExecutorError::UnsafeRevision)
+        ));
+        assert!(matches!(
+            validate_revision("main;whoami"),
+            Err(ExecutorError::UnsafeRevision)
+        ));
     }
 }

@@ -2,36 +2,40 @@
 
 DragonForge Test Lab treats every remotely requested job as untrusted input.
 
-## Phase 0 invariants
+## Core invariants
 
 1. No API field accepts arbitrary shell or PowerShell command text.
 2. Workers advertise explicit capabilities.
 3. Workers independently authorize jobs; controller approval is insufficient.
 4. Repository access is allowlist based and HTTPS only.
-5. Resource requests are bounded before execution.
+5. Resource requests are bounded by policy before execution.
 6. Protocol versions must match before a worker is accepted.
-7. Artifacts are represented by relative paths; future implementations must canonicalize paths and prevent traversal.
-8. Secrets must never be placed in job payloads or logs.
+7. Secrets must never be placed in job payloads or logs.
+8. Executor commands are built from typed actions and fixed argument templates.
+9. Child processes run with a cleared and narrowly rebuilt environment.
+10. Captured stdout/stderr is size bounded and artifact paths stay beneath configured roots.
 
-## Future mandatory controls
+## Phase 1 execution boundary
 
-Before process execution is enabled:
-- dedicated low-privilege worker account;
-- workspace root canonicalization;
-- environment allowlist and secret scrubbing;
-- process tree termination on timeout;
-- CPU, memory, disk, and process limits;
-- outbound network policy;
-- immutable audit records;
-- authenticated controller-agent transport;
-- artifact size/hash validation.
+The local executor launches only executables required by supported typed actions:
 
-Before VM/GUI/MCP support:
-- short-lived credentials;
-- mutually authenticated transport;
-- replay protection;
-- explicit high-risk capability approvals;
-- VM snapshot rollback;
-- user-visible audit trail.
+- git for clone and checkout;
+- cargo for build, test, Clippy, and rustfmt.
+
+It does not invoke cmd.exe, PowerShell, sh, or another command shell.
+
+Repository revisions are validated before Git is invoked so option-like or command-looking values are rejected.
+
+Each job receives a UUID-named workspace beneath the configured workspace root. Artifacts are written beneath a separate artifact root. Completed workspaces are deleted unless retention is explicitly enabled.
+
+## Current enforcement
+
+Phase 1 enforces repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, one Test Lab-managed direct child at a time, sanitized environment, and cancellation of the direct child process.
+
+## Sandbox work still required
+
+Before untrusted third-party code is considered safely isolated, later phases must add a dedicated low-privilege worker identity, Windows Job Object or equivalent process-tree containment, kernel-enforced memory/process limits, live disk quotas or disposable filesystems, outbound network policy, authenticated controller-agent transport, immutable audit records, artifact hashing, and stronger sandbox/container/VM isolation.
+
+Before VM, GUI, or MCP support, also add short-lived credentials, mutually authenticated transport, replay protection, explicit high-risk capability approvals, VM snapshot rollback, and a user-visible audit trail.
 
 The project must not evolve into an unrestricted remote shell.

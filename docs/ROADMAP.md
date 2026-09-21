@@ -1,16 +1,16 @@
 # Roadmap
 
-## Phase 0 — Core Foundation
+## Phase 0 — Core Foundation — Complete
 Protocol, controller, agent, policy, manifests, tests, security model.
 
-## Phase 1 — Local Rust Worker
-Safe workspace creation, trusted repository checkout, fixed Cargo commands, bounded process execution, logs, artifacts, cancellation, and cleanup.
+## Phase 1 — Local Rust Worker — Complete
+Safe workspace creation, trusted repository checkout, fixed Cargo commands, bounded process execution, logs, artifacts, cancellation, cleanup, and local validation tooling.
 
 ## Phase 2 — GitHub Integration
 Repository/commit job submission, status reporting, and optional GitHub Actions handoff.
 
 ## Phase 3 — Sandboxing
-Dedicated Windows worker identity plus Docker/Podman isolation.
+Dedicated Windows worker identity, Windows Job Objects, resource enforcement, and Docker/Podman isolation.
 
 ## Phase 4 — VM Lab
 Hyper-V orchestration, clean snapshots, Windows/Linux test images, rollback.
