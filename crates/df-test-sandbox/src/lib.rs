@@ -5,7 +5,7 @@ use std::{
 };
 use thiserror::Error;
 
-pub const DEFAULT_CONTAINER_IMAGE: &str = "rust:1.96-bookworm";
+pub const DEFAULT_CONTAINER_IMAGE: &str = "rust:1.80-bookworm";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxMode {
@@ -48,6 +48,13 @@ pub struct SandboxLimits {
 }
 
 impl SandboxLimits {
+    pub fn validate(self) -> Result<Self, SandboxError> {
+        if self.max_memory_mib == 0 || self.max_processes == 0 {
+            return Err(SandboxError::InvalidLimits);
+        }
+        Ok(self)
+    }
+
     pub fn memory_bytes(self) -> usize {
         self.max_memory_mib
             .saturating_mul(1024 * 1024)
@@ -69,6 +76,7 @@ pub fn sandbox_project_command(
     repository_dir: &Path,
     limits: SandboxLimits,
 ) -> Result<SandboxedCommand, SandboxError> {
+    let limits = limits.validate()?;
     match mode {
         SandboxMode::Native => Ok(SandboxedCommand {
             program: program.to_owned(),
@@ -173,6 +181,8 @@ pub struct ProcessTreeGuard {
 
 impl ProcessTreeGuard {
     pub fn new(mode: SandboxMode, limits: SandboxLimits) -> Result<Self, SandboxError> {
+        let limits = limits.validate()?;
+
         #[cfg(windows)]
         {
             let _ = mode;
@@ -209,7 +219,7 @@ impl ProcessTreeGuard {
         #[cfg(windows)]
         {
             self.inner.terminate()?;
-            return Ok(true);
+            Ok(true)
         }
 
         #[cfg(not(windows))]
@@ -321,6 +331,8 @@ mod windows {
 pub enum SandboxError {
     #[error("unknown sandbox mode: {0}")]
     UnknownMode(String),
+    #[error("sandbox memory and process limits must both be greater than zero")]
+    InvalidLimits,
     #[error("container sandbox can only wrap fixed Cargo project actions, got {0}")]
     UnsupportedContainerProgram(String),
     #[error("worker identity mismatch: expected {expected}, running as {actual}")]
@@ -375,6 +387,26 @@ mod tests {
         assert!(command.args.contains(&"1024m".into()));
         assert!(command.args.contains(&"32".into()));
         assert_eq!(command.args.last().unwrap(), "--workspace");
+    }
+
+    #[test]
+    fn zero_resource_limits_are_rejected() {
+        assert!(matches!(
+            SandboxLimits {
+                max_memory_mib: 0,
+                max_processes: 1
+            }
+            .validate(),
+            Err(SandboxError::InvalidLimits)
+        ));
+        assert!(matches!(
+            SandboxLimits {
+                max_memory_mib: 1,
+                max_processes: 0
+            }
+            .validate(),
+            Err(SandboxError::InvalidLimits)
+        ));
     }
 
     #[test]
