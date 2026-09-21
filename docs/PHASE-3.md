@@ -16,7 +16,7 @@ Phase 3 moves DragonForge Test Lab from bounded direct-child execution to explic
   3. spawn the child suspended;
   4. assign it to the Job Object;
   5. resume the child thread.
-- Whole-tree termination on timeout/cancellation.
+- Whole-tree termination on timeout/cancellation, including fixed-name Docker/Podman cleanup so runtime-client termination cannot leave an orphaned Test Lab container.
 - Job Object close after leader exit so leftover descendants are reaped before output readers join.
 - Aggregate Windows Job Object memory ceiling using the job's `max_memory_mib`.
 - Windows active-process ceiling using the job's `max_processes`.
