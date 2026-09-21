@@ -1,5 +1,7 @@
 # Phase 1 — Local Rust Worker
 
+Status: implementation complete; local validation pending while hosted GitHub Actions minutes are unavailable.
+
 ## Goal
 
 Phase 1 turns the Phase 0 contracts into a useful local worker while preserving the rule that DragonForge Test Lab is not an unrestricted remote shell.
