@@ -1,8 +1,6 @@
 use df_test_agent::Agent;
 use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor};
-use df_test_github::{
-    CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository,
-};
+use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
 use df_test_policy::ExecutionPolicy;
 use df_test_protocol::{
     Capability, JobRequest, JobStatus, RepositorySpec, TestAction, WorkerRegistration,
@@ -90,8 +88,7 @@ fn run_local(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
 fn run_github(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let repo_url = value_after(args, "--repo").ok_or("missing --repo <github-https-url>")?;
-    let requested_revision =
-        value_after(args, "--revision").unwrap_or_else(|| "main".into());
+    let requested_revision = value_after(args, "--revision").unwrap_or_else(|| "main".into());
     let lab_root = lab_root(args);
     let retain_workspace = args.iter().any(|arg| arg == "--retain-workspace");
     let report_status = !args.iter().any(|arg| arg == "--no-status");
@@ -117,12 +114,7 @@ fn run_github(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         )?;
     }
 
-    let result = execute_local_job(
-        repo_url,
-        commit_sha.clone(),
-        lab_root,
-        retain_workspace,
-    );
+    let result = execute_local_job(repo_url, commit_sha.clone(), lab_root, retain_workspace);
 
     match result {
         Ok(report) => {
