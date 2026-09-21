@@ -18,8 +18,9 @@ $hyperVLines | ForEach-Object { Write-Host $_ }
 
 Write-Host ""
 Write-Host "[2/8] Hyper-V Windows feature"
-$feature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All
-Write-Host "State: $($feature.State)"
+$feature = Get-CimInstance -ClassName Win32_OptionalFeature -Filter "Name='Microsoft-Hyper-V-All'"
+$featureEnabled = ($null -ne $feature -and $feature.InstallState -eq 1)
+Write-Host "Enabled: $featureEnabled"
 
 Write-Host ""
 Write-Host "[3/8] Hyper-V PowerShell module"
@@ -81,7 +82,7 @@ else {
 }
 
 Write-Host ""
-if ($feature.State -ne "Enabled") {
+if (-not $featureEnabled) {
     throw "Hyper-V is not enabled."
 }
 if ($vmms.Status -ne "Running") {
