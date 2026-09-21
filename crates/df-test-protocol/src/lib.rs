@@ -137,11 +137,18 @@ mod tests {
                 url: "https://github.com/example/project.git".into(),
                 revision: "main".into(),
             },
-            vec![TestAction::Checkout, TestAction::CargoTest { all_features: true }],
+            vec![
+                TestAction::Checkout,
+                TestAction::CargoTest { all_features: true },
+            ],
         );
 
-        assert!(job.required_capabilities().contains(&Capability::CheckoutRepository));
-        assert!(job.required_capabilities().contains(&Capability::CargoTest));
+        assert!(job
+            .required_capabilities()
+            .contains(&Capability::CheckoutRepository));
+        assert!(job
+            .required_capabilities()
+            .contains(&Capability::CargoTest));
         assert_eq!(job.required_capabilities().len(), 2);
     }
 }

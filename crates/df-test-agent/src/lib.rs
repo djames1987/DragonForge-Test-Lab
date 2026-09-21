@@ -8,14 +8,20 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new(registration: WorkerRegistration, policy: ExecutionPolicy) -> Result<Self, AgentError> {
+    pub fn new(
+        registration: WorkerRegistration,
+        policy: ExecutionPolicy,
+    ) -> Result<Self, AgentError> {
         if registration.protocol_version != PROTOCOL_VERSION {
             return Err(AgentError::ProtocolMismatch {
                 expected: PROTOCOL_VERSION,
                 actual: registration.protocol_version,
             });
         }
-        Ok(Self { registration, policy })
+        Ok(Self {
+            registration,
+            policy,
+        })
     }
 
     pub fn registration(&self) -> &WorkerRegistration {
@@ -40,4 +46,28 @@ pub enum AgentError {
     Policy(#[from] PolicyError),
     #[error("worker does not advertise all capabilities required by job")]
     WorkerCapabilityMismatch,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use df_test_protocol::Capability;
+    use std::collections::BTreeSet;
+
+    fn registration(protocol_version: u16) -> WorkerRegistration {
+        WorkerRegistration {
+            worker_id: "worker-1".into(),
+            protocol_version,
+            os: "windows".into(),
+            arch: "x86_64".into(),
+            capabilities: BTreeSet::from([Capability::CargoTest]),
+        }
+    }
+
+    #[test]
+    fn rejects_protocol_mismatch_before_worker_is_created() {
+        let policy = ExecutionPolicy::new(Vec::new(), BTreeSet::new());
+        let result = Agent::new(registration(PROTOCOL_VERSION + 1), policy);
+        assert!(matches!(result, Err(AgentError::ProtocolMismatch { .. })));
+    }
 }
