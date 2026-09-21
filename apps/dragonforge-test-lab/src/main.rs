@@ -7,8 +7,8 @@ use df_test_protocol::{
     WorkerRegistration, PROTOCOL_VERSION,
 };
 use df_test_sandbox::{
-    current_worker_identity, runtime_version, verify_worker_identity, ProcessTreeGuard,
-    SandboxLimits, SandboxMode,
+    current_worker_identity, runtime_version, verify_container_image, verify_worker_identity,
+    ProcessTreeGuard, SandboxLimits, SandboxMode,
 };
 use std::{collections::BTreeSet, path::PathBuf, process::Command};
 
@@ -200,6 +200,8 @@ fn execute_local_job(
         return Err("--repo must be an HTTPS repository URL".into());
     }
 
+    verify_container_image(sandbox_mode)?;
+
     let capabilities: BTreeSet<Capability> = [
         Capability::CheckoutRepository,
         Capability::CargoBuild,
@@ -273,6 +275,8 @@ fn sandbox_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(version) = runtime_version(mode)? {
         println!("container_runtime={version}");
+        verify_container_image(mode)?;
+        println!("container_image={}", df_test_sandbox::DEFAULT_CONTAINER_IMAGE);
     }
 
     println!("status=sandbox_ready");
