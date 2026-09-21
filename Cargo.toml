@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "apps/dragonforge-test-lab",
+    "crates/df-test-protocol",
+    "crates/df-test-policy",
+    "crates/df-test-agent",
+    "crates/df-test-controller",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.80"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
