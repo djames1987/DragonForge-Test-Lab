@@ -7,5 +7,12 @@ name = "DragonForge Test Lab"
 actions = ["cargo_fmt_check", "cargo_clippy", "cargo_test"]
 timeout_seconds = 900
 
+[worker.local]
+workspace_root = ".dragonforge-test-lab/workspaces"
+artifact_root = ".dragonforge-test-lab/artifacts"
+output_limit_bytes = 2097152
+retain_workspace = false
+
 [security]
 allow_arbitrary_shell = false
+require_https_repositories = true

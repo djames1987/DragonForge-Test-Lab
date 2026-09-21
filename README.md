@@ -4,40 +4,51 @@ DragonForge Test Lab is a local-first, security-conscious test orchestration pla
 
 The long-term target is a reusable DragonForge engineering lab spanning Windows/Linux workers, containers, Hyper-V virtual machines, network fixtures, GUI automation, Rust fuzzing/sanitizers, hardware-in-the-loop testing, and an authenticated ChatGPT/MCP gateway.
 
-## Phase 0
+## Current status
 
-Phase 0 establishes the security and architectural foundation **without enabling arbitrary remote process execution**.
+Phase 1 — Local Rust Worker
 
-Current workspace:
+The lab can perform a controlled local Rust validation run against an authorized HTTPS Git repository. It creates a per-job workspace, checks out a requested revision, runs fixed Cargo validation actions, captures bounded output and artifacts, enforces a total timeout and post-step disk ceiling, writes a JSON report, and cleans up the workspace.
 
-```text
-apps/
-  dragonforge-test-lab/   operator CLI
-crates/
-  df-test-protocol/       shared versioned contracts
-  df-test-policy/         worker authorization policy
-  df-test-agent/          worker-side trust boundary
-  df-test-controller/     scheduling/controller core
-docs/
-  ARCHITECTURE.md
-  SECURITY.md
-  PHASE-0.md
-  ROADMAP.md
-```
+The executor never accepts arbitrary shell text.
 
-## Build
+## Workspace
 
-```bash
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-features
-cargo run -p dragonforge-test-lab -- doctor
-```
+    apps/
+      dragonforge-test-lab/   operator CLI
+    crates/
+      df-test-protocol/       shared versioned contracts
+      df-test-policy/         worker authorization policy
+      df-test-agent/          worker-side trust boundary
+      df-test-controller/     scheduling/controller core
+      df-test-executor/       local checkout/process/artifact execution
+    docs/
+      ARCHITECTURE.md
+      SECURITY.md
+      PHASE-0.md
+      PHASE-1.md
+      ROADMAP.md
+    scripts/
+      test-phase1.ps1
+
+## Local validation
+
+    .\scripts\test-phase1.ps1
+
+For a full end-to-end checkout and local worker run:
+
+    .\scripts\test-phase1.ps1 -RepositoryUrl https://github.com/djames1987/DragonForge-Test-Lab.git -Revision main
+
+You can also invoke the CLI directly:
+
+    cargo run -p dragonforge-test-lab -- doctor
+
+    cargo run -p dragonforge-test-lab -- run-local --repo https://github.com/djames1987/DragonForge-Test-Lab.git --revision main
 
 ## Security principle
 
-**The Test Lab is not a remote shell.**
+DragonForge Test Lab is not a remote shell.
 
-Remote callers submit typed actions. Workers independently enforce repository allowlists, capability restrictions, protocol compatibility, and resource ceilings. Real process execution will only be added behind this boundary.
+Remote callers submit typed actions. Workers independently enforce repository allowlists, capability restrictions, protocol compatibility, and resource ceilings. The Phase 1 executor maps those typed actions to fixed executable/argument combinations without invoking a shell.
 
-See [docs/SECURITY.md](docs/SECURITY.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
+See docs/SECURITY.md, docs/PHASE-1.md, and docs/ROADMAP.md.
