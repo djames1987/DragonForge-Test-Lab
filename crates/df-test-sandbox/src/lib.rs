@@ -607,6 +607,27 @@ mod tests {
         ));
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn windows_job_object_contains_real_child_process() {
+        let limits = SandboxLimits {
+            max_memory_mib: 512,
+            max_processes: 8,
+        };
+        let guard = ProcessTreeGuard::new(SandboxMode::Native, limits).unwrap();
+        let mut command = Command::new("rustc");
+        command.arg("--version");
+        command.stdin(std::process::Stdio::null());
+        command.stdout(std::process::Stdio::null());
+        command.stderr(std::process::Stdio::null());
+        guard.prepare_command(&mut command).unwrap();
+
+        let mut child = command.spawn().unwrap();
+        guard.attach(&mut child).unwrap();
+        let status = child.wait().unwrap();
+        assert!(status.success());
+    }
+
     #[test]
     fn container_mode_rejects_non_cargo_programs() {
         let result = sandbox_project_command(
