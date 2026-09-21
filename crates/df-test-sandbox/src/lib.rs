@@ -1,0 +1,397 @@
+use std::{
+    env, io,
+    path::{Path, PathBuf},
+    process::{Child, Command},
+};
+use thiserror::Error;
+
+pub const DEFAULT_CONTAINER_IMAGE: &str = "rust:1.96-bookworm";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SandboxMode {
+    Native,
+    Docker,
+    Podman,
+}
+
+impl SandboxMode {
+    pub fn parse(value: &str) -> Result<Self, SandboxError> {
+        match value {
+            "native" => Ok(Self::Native),
+            "docker" => Ok(Self::Docker),
+            "podman" => Ok(Self::Podman),
+            _ => Err(SandboxError::UnknownMode(value.to_owned())),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Native => "native",
+            Self::Docker => "docker",
+            Self::Podman => "podman",
+        }
+    }
+
+    pub fn container_program(self) -> Option<&'static str> {
+        match self {
+            Self::Native => None,
+            Self::Docker => Some("docker"),
+            Self::Podman => Some("podman"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SandboxLimits {
+    pub max_memory_mib: u64,
+    pub max_processes: u32,
+}
+
+impl SandboxLimits {
+    pub fn memory_bytes(self) -> usize {
+        self.max_memory_mib
+            .saturating_mul(1024 * 1024)
+            .min(usize::MAX as u64) as usize
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SandboxedCommand {
+    pub program: String,
+    pub args: Vec<String>,
+    pub current_dir: PathBuf,
+}
+
+pub fn sandbox_project_command(
+    mode: SandboxMode,
+    program: &str,
+    args: &[String],
+    repository_dir: &Path,
+    limits: SandboxLimits,
+) -> Result<SandboxedCommand, SandboxError> {
+    match mode {
+        SandboxMode::Native => Ok(SandboxedCommand {
+            program: program.to_owned(),
+            args: args.to_vec(),
+            current_dir: repository_dir.to_path_buf(),
+        }),
+        SandboxMode::Docker | SandboxMode::Podman => {
+            if program != "cargo" {
+                return Err(SandboxError::UnsupportedContainerProgram(program.to_owned()));
+            }
+
+            let runtime = mode
+                .container_program()
+                .expect("container mode must have a runtime program");
+            let mount = format!(
+                "type=bind,source={},target=/workspace",
+                repository_dir.to_string_lossy()
+            );
+
+            let mut wrapped = vec![
+                "run".into(),
+                "--rm".into(),
+                "--init".into(),
+                "--cap-drop=ALL".into(),
+                "--security-opt=no-new-privileges".into(),
+                "--memory".into(),
+                format!("{}m", limits.max_memory_mib),
+                "--pids-limit".into(),
+                limits.max_processes.to_string(),
+                "--mount".into(),
+                mount,
+                "-w".into(),
+                "/workspace".into(),
+                DEFAULT_CONTAINER_IMAGE.into(),
+                "cargo".into(),
+            ];
+            wrapped.extend(args.iter().cloned());
+
+            Ok(SandboxedCommand {
+                program: runtime.into(),
+                args: wrapped,
+                current_dir: repository_dir.to_path_buf(),
+            })
+        }
+    }
+}
+
+pub fn current_worker_identity() -> String {
+    if cfg!(windows) {
+        env::var("USERNAME").unwrap_or_else(|_| "unknown".into())
+    } else {
+        env::var("USER").unwrap_or_else(|_| "unknown".into())
+    }
+}
+
+pub fn verify_worker_identity(expected: &str) -> Result<(), SandboxError> {
+    let actual = current_worker_identity();
+    let matches = if cfg!(windows) {
+        actual.eq_ignore_ascii_case(expected)
+    } else {
+        actual == expected
+    };
+
+    if matches {
+        Ok(())
+    } else {
+        Err(SandboxError::WorkerIdentityMismatch {
+            expected: expected.to_owned(),
+            actual,
+        })
+    }
+}
+
+pub fn runtime_version(mode: SandboxMode) -> Result<Option<String>, SandboxError> {
+    let Some(program) = mode.container_program() else {
+        return Ok(None);
+    };
+
+    let output = Command::new(program)
+        .arg("--version")
+        .output()
+        .map_err(|source| SandboxError::SpawnRuntime {
+            program: program.to_owned(),
+            source,
+        })?;
+
+    if !output.status.success() {
+        return Err(SandboxError::RuntimeUnavailable(program.to_owned()));
+    }
+
+    Ok(Some(
+        String::from_utf8_lossy(&output.stdout).trim().to_owned(),
+    ))
+}
+
+pub struct ProcessTreeGuard {
+    #[cfg(windows)]
+    inner: windows::JobGuard,
+    #[cfg(not(windows))]
+    _mode: SandboxMode,
+}
+
+impl ProcessTreeGuard {
+    pub fn new(mode: SandboxMode, limits: SandboxLimits) -> Result<Self, SandboxError> {
+        #[cfg(windows)]
+        {
+            let _ = mode;
+            Ok(Self {
+                inner: windows::JobGuard::new(limits)?,
+            })
+        }
+
+        #[cfg(not(windows))]
+        {
+            if mode == SandboxMode::Native {
+                return Err(SandboxError::NativeContainmentUnsupported);
+            }
+            let _ = limits;
+            Ok(Self { _mode: mode })
+        }
+    }
+
+    pub fn attach(&self, child: &Child) -> Result<(), SandboxError> {
+        #[cfg(windows)]
+        {
+            self.inner.attach(child)?;
+        }
+
+        #[cfg(not(windows))]
+        {
+            let _ = child;
+        }
+
+        Ok(())
+    }
+
+    pub fn terminate_tree(&self) -> Result<bool, SandboxError> {
+        #[cfg(windows)]
+        {
+            self.inner.terminate()?;
+            return Ok(true);
+        }
+
+        #[cfg(not(windows))]
+        {
+            Ok(false)
+        }
+    }
+
+    pub fn mechanism(&self) -> &'static str {
+        #[cfg(windows)]
+        {
+            "windows_job_object"
+        }
+
+        #[cfg(not(windows))]
+        {
+            "container_runtime"
+        }
+    }
+}
+
+#[cfg(windows)]
+mod windows {
+    use super::{SandboxError, SandboxLimits};
+    use std::{
+        ffi::c_void,
+        io,
+        mem::size_of,
+        os::windows::io::AsRawHandle,
+        process::Child,
+        ptr,
+    };
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, HANDLE},
+        System::JobObjects::{
+            AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+            SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+            JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        },
+    };
+
+    pub struct JobGuard {
+        handle: HANDLE,
+    }
+
+    impl JobGuard {
+        pub fn new(limits: SandboxLimits) -> Result<Self, SandboxError> {
+            let handle = unsafe { CreateJobObjectW(ptr::null(), ptr::null()) };
+            if handle.is_null() {
+                return Err(SandboxError::WindowsJob(io::Error::last_os_error()));
+            }
+
+            let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+                | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+                | JOB_OBJECT_LIMIT_JOB_MEMORY;
+            info.BasicLimitInformation.ActiveProcessLimit = limits.max_processes;
+            info.JobMemoryLimit = limits.memory_bytes();
+
+            let configured = unsafe {
+                SetInformationJobObject(
+                    handle,
+                    JobObjectExtendedLimitInformation,
+                    (&info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast::<c_void>(),
+                    size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                )
+            };
+
+            if configured == 0 {
+                let error = io::Error::last_os_error();
+                unsafe {
+                    CloseHandle(handle);
+                }
+                return Err(SandboxError::WindowsJob(error));
+            }
+
+            Ok(Self { handle })
+        }
+
+        pub fn attach(&self, child: &Child) -> Result<(), SandboxError> {
+            let process = child.as_raw_handle() as HANDLE;
+            let assigned = unsafe { AssignProcessToJobObject(self.handle, process) };
+            if assigned == 0 {
+                return Err(SandboxError::WindowsJob(io::Error::last_os_error()));
+            }
+            Ok(())
+        }
+
+        pub fn terminate(&self) -> Result<(), SandboxError> {
+            let terminated = unsafe { TerminateJobObject(self.handle, 1) };
+            if terminated == 0 {
+                return Err(SandboxError::WindowsJob(io::Error::last_os_error()));
+            }
+            Ok(())
+        }
+    }
+
+    impl Drop for JobGuard {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.handle);
+            }
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum SandboxError {
+    #[error("unknown sandbox mode: {0}")]
+    UnknownMode(String),
+    #[error("container sandbox can only wrap fixed Cargo project actions, got {0}")]
+    UnsupportedContainerProgram(String),
+    #[error("worker identity mismatch: expected {expected}, running as {actual}")]
+    WorkerIdentityMismatch { expected: String, actual: String },
+    #[error("failed to start container runtime {program}: {source}")]
+    SpawnRuntime {
+        program: String,
+        #[source]
+        source: io::Error,
+    },
+    #[error("container runtime is unavailable: {0}")]
+    RuntimeUnavailable(String),
+    #[error("native process-tree containment is not yet supported on this platform; use docker or podman")]
+    NativeContainmentUnsupported,
+    #[cfg(windows)]
+    #[error("Windows Job Object operation failed: {0}")]
+    WindowsJob(io::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_supported_modes() {
+        assert_eq!(SandboxMode::parse("native").unwrap(), SandboxMode::Native);
+        assert_eq!(SandboxMode::parse("docker").unwrap(), SandboxMode::Docker);
+        assert_eq!(SandboxMode::parse("podman").unwrap(), SandboxMode::Podman);
+        assert!(SandboxMode::parse("shell").is_err());
+    }
+
+    #[test]
+    fn container_command_is_fixed_and_resource_bounded() {
+        let repo = Path::new("C:/lab/repo");
+        let command = sandbox_project_command(
+            SandboxMode::Docker,
+            "cargo",
+            &["test".into(), "--workspace".into()],
+            repo,
+            SandboxLimits {
+                max_memory_mib: 1024,
+                max_processes: 32,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(command.program, "docker");
+        assert!(command.args.contains(&"--cap-drop=ALL".into()));
+        assert!(command
+            .args
+            .contains(&"--security-opt=no-new-privileges".into()));
+        assert!(command.args.contains(&"1024m".into()));
+        assert!(command.args.contains(&"32".into()));
+        assert_eq!(command.args.last().unwrap(), "--workspace");
+    }
+
+    #[test]
+    fn container_mode_rejects_non_cargo_programs() {
+        let result = sandbox_project_command(
+            SandboxMode::Docker,
+            "git",
+            &[],
+            Path::new("."),
+            SandboxLimits {
+                max_memory_mib: 512,
+                max_processes: 8,
+            },
+        );
+        assert!(matches!(
+            result,
+            Err(SandboxError::UnsupportedContainerProgram(_))
+        ));
+    }
+}
