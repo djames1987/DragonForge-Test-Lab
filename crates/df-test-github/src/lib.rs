@@ -195,7 +195,7 @@ fn commit_status_args(
     sha: &str,
     status: &CommitStatus,
 ) -> Vec<String> {
-    let args = vec![
+    vec![
         "api".into(),
         format!(
             "repos/{}/{}/statuses/{}",
@@ -209,9 +209,7 @@ fn commit_status_args(
         format!("context={}", status.context),
         "-f".into(),
         format!("description={}", status.description),
-    ];
-
-    args
+    ]
 }
 
 fn validate_revision(revision: &str) -> Result<(), GitHubError> {
