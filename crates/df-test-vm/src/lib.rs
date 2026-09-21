@@ -163,8 +163,8 @@ impl HyperVClient {
         }
 
         let secure_boot = match spec.guest_os {
-            GuestOs::Windows => "$true",
-            GuestOs::Linux => "$false",
+            GuestOs::Windows => "On",
+            GuestOs::Linux => "Off",
         };
         let script = format!(
             concat!(
@@ -244,7 +244,7 @@ impl HyperVClient {
             concat!(
                 "$ErrorActionPreference='Stop';",
                 "$vm=Get-VM -Name '{name}' -ErrorAction Stop;",
-                "if($vm.State -ne 'Off'){{Stop-VM -Name '{name}' -Force -TurnOff | Out-Null}};",
+                "if($vm.State -ne 'Off'){{Stop-VM -Name '{name}' -TurnOff | Out-Null}};",
                 "Get-VMCheckpoint -VMName '{name}' -Name '{checkpoint}' -ErrorAction SilentlyContinue | Remove-VMCheckpoint -Confirm:$false -ErrorAction SilentlyContinue;",
                 "Checkpoint-VM -Name '{name}' -SnapshotName '{checkpoint}' | Out-Null"
             ),
