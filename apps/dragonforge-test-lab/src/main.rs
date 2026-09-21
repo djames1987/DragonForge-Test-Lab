@@ -249,7 +249,6 @@ fn execute_local_job(
     Ok(executor.execute(&job, &cancellation)?)
 }
 
-
 fn sandbox_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mode = sandbox_mode(args)?;
     let worker = current_worker_identity()?;
