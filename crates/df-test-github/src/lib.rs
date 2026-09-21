@@ -83,7 +83,6 @@ impl CommitStatus {
             description,
         })
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -196,7 +195,7 @@ fn commit_status_args(
     sha: &str,
     status: &CommitStatus,
 ) -> Vec<String> {
-    let mut args = vec![
+    let args = vec![
         "api".into(),
         format!(
             "repos/{}/{}/statuses/{}",
