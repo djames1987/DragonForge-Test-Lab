@@ -4,6 +4,7 @@ use std::{
     process::{Child, Command},
 };
 use thiserror::Error;
+use uuid::Uuid;
 
 pub const DEFAULT_CONTAINER_IMAGE: &str = "dragonforge/test-lab-rust:0.4.0";
 
@@ -61,11 +62,45 @@ impl SandboxLimits {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SandboxedCommand {
     pub program: String,
     pub args: Vec<String>,
     pub current_dir: PathBuf,
+    pub container_cleanup: Option<ContainerCleanup>,
+}
+
+#[derive(Debug)]
+pub struct ContainerCleanup {
+    runtime: String,
+    name: String,
+}
+
+impl ContainerCleanup {
+    pub fn force_remove(&self) -> Result<(), SandboxError> {
+        let output = Command::new(&self.runtime)
+            .args(["rm", "-f", &self.name])
+            .output()
+            .map_err(|source| SandboxError::SpawnRuntime {
+                program: self.runtime.clone(),
+                source,
+            })?;
+
+        if output.status.success() {
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("No such container") || stderr.contains("no container with name or ID") {
+            return Ok(());
+        }
+
+        Err(SandboxError::ContainerCleanupFailed {
+            runtime: self.runtime.clone(),
+            name: self.name.clone(),
+            output: stderr.trim().to_owned(),
+        })
+    }
 }
 
 pub fn sandbox_project_command(
@@ -81,6 +116,7 @@ pub fn sandbox_project_command(
             program: program.to_owned(),
             args: args.to_vec(),
             current_dir: repository_dir.to_path_buf(),
+            container_cleanup: None,
         }),
         SandboxMode::Docker | SandboxMode::Podman => {
             if program != "cargo" {
@@ -94,10 +130,13 @@ pub fn sandbox_project_command(
                 "type=bind,source={},target=/workspace",
                 repository_dir.to_string_lossy()
             );
+            let container_name = format!("dragonforge-testlab-{}", Uuid::new_v4());
 
             let mut wrapped = vec![
                 "run".into(),
                 "--rm".into(),
+                "--name".into(),
+                container_name.clone(),
                 "--init".into(),
                 "--cap-drop=ALL".into(),
                 "--security-opt=no-new-privileges".into(),
@@ -118,6 +157,10 @@ pub fn sandbox_project_command(
                 program: runtime.into(),
                 args: wrapped,
                 current_dir: repository_dir.to_path_buf(),
+                container_cleanup: Some(ContainerCleanup {
+                    runtime: runtime.into(),
+                    name: container_name,
+                }),
             })
         }
     }
@@ -457,6 +500,12 @@ pub enum SandboxError {
     RuntimeUnavailable(String),
     #[error("container image {image} is unavailable in {runtime}; build it with scripts/build-sandbox-image.ps1")]
     ContainerImageUnavailable { runtime: String, image: String },
+    #[error("failed to remove sandbox container {name} with {runtime}: {output}")]
+    ContainerCleanupFailed {
+        runtime: String,
+        name: String,
+        output: String,
+    },
     #[error("native process-tree containment is not yet supported on this platform; use docker or podman")]
     NativeContainmentUnsupported,
     #[cfg(windows)]
@@ -492,6 +541,12 @@ mod tests {
         .unwrap();
 
         assert_eq!(command.program, "docker");
+        assert!(command.args.contains(&"--name".into()));
+        assert!(command
+            .args
+            .iter()
+            .any(|value| value.starts_with("dragonforge-testlab-")));
+        assert!(command.container_cleanup.is_some());
         assert!(command.args.contains(&"--cap-drop=ALL".into()));
         assert!(command
             .args
