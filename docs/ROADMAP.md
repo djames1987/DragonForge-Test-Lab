@@ -3,7 +3,7 @@
 ## Phase 0 — Core Foundation — Complete
 Protocol, controller, agent, policy, manifests, tests, security model.
 
-## Phase 1 — Local Rust Worker — Complete
+## Phase 1 — Local Rust Worker — Implementation complete; local validation pending
 Safe workspace creation, trusted repository checkout, fixed Cargo commands, bounded process execution, logs, artifacts, cancellation, cleanup, and local validation tooling.
 
 ## Phase 2 — GitHub Integration
