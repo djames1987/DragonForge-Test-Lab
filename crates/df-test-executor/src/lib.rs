@@ -346,6 +346,10 @@ impl LocalExecutor {
             &guard,
         )?;
 
+        // Closing the per-command Job Object kills any descendants that outlived
+        // the command leader and releases inherited output-pipe handles.
+        drop(guard);
+
         let (stdout_bytes, stdout_truncated) = stdout_reader
             .join()
             .map_err(|_| ExecutorError::ReaderPanicked)??;
