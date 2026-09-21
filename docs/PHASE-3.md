@@ -1,6 +1,6 @@
 # Phase 3 — Sandboxing
 
-Status: implementation complete; Windows validation pending.
+Status: complete and locally validated on Windows with native Job Object containment.
 
 ## Goal
 
