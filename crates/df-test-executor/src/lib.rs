@@ -106,19 +106,25 @@ impl LocalExecutor {
         fs::create_dir_all(&self.config.workspace_root)?;
         fs::create_dir_all(&self.config.artifact_root)?;
 
-        let workspace = self.config.workspace_root.join(job.id.to_string());
+        let workspace_path = self.config.workspace_root.join(job.id.to_string());
+        let artifact_path = self.config.artifact_root.join(job.id.to_string());
+
+        if workspace_path.exists() {
+            fs::remove_dir_all(&workspace_path)?;
+        }
+        if artifact_path.exists() {
+            fs::remove_dir_all(&artifact_path)?;
+        }
+
+        fs::create_dir_all(&workspace_path)?;
+        fs::create_dir_all(&artifact_path)?;
+
+        // Windows process creation is much more reliable when current_dir is absolute.
+        // Canonicalizing here also prevents the clone destination from being interpreted
+        // relative to the per-job working directory a second time.
+        let workspace = fs::canonicalize(&workspace_path)?;
+        let artifact_dir = fs::canonicalize(&artifact_path)?;
         let repository_dir = workspace.join("repository");
-        let artifact_dir = self.config.artifact_root.join(job.id.to_string());
-
-        if workspace.exists() {
-            fs::remove_dir_all(&workspace)?;
-        }
-        if artifact_dir.exists() {
-            fs::remove_dir_all(&artifact_dir)?;
-        }
-
-        fs::create_dir_all(&workspace)?;
-        fs::create_dir_all(&artifact_dir)?;
 
         let deadline = Instant::now() + Duration::from_secs(job.limits.timeout_seconds);
         let mut steps = Vec::new();
@@ -274,10 +280,12 @@ impl LocalExecutor {
         let (status, step_status) =
             wait_for_child(&mut child, timeout, self.config.poll_interval, cancellation)?;
 
-        let (stdout_bytes, stdout_truncated) =
-            stdout_reader.join().map_err(|_| ExecutorError::ReaderPanicked)??;
-        let (stderr_bytes, stderr_truncated) =
-            stderr_reader.join().map_err(|_| ExecutorError::ReaderPanicked)??;
+        let (stdout_bytes, stdout_truncated) = stdout_reader
+            .join()
+            .map_err(|_| ExecutorError::ReaderPanicked)??;
+        let (stderr_bytes, stderr_truncated) = stderr_reader
+            .join()
+            .map_err(|_| ExecutorError::ReaderPanicked)??;
 
         Ok(StepReport {
             name: spec.name,
@@ -335,8 +343,10 @@ impl CommandSpec {
     fn git_clone(url: &str, repository_dir: &Path) -> Self {
         let current_dir = repository_dir
             .parent()
-            .unwrap_or_else(|| Path::new("."))
+            .expect("repository directory must have a workspace parent")
             .to_path_buf();
+        debug_assert!(current_dir.is_absolute());
+        debug_assert!(repository_dir.is_absolute());
         Self {
             name: "git_clone".into(),
             program: "git".into(),
@@ -627,6 +637,20 @@ mod tests {
         let (retained, truncated) = read_bounded(input.as_slice(), 128).unwrap();
         assert_eq!(retained.len(), 128);
         assert!(truncated);
+    }
+
+    #[test]
+    fn git_clone_uses_workspace_as_absolute_working_directory() {
+        let root = std::env::current_dir().unwrap();
+        let repository_dir = root.join("workspace").join("repository");
+        let spec = CommandSpec::git_clone("https://github.com/example/project.git", &repository_dir);
+
+        assert_eq!(spec.current_dir, root.join("workspace"));
+        assert!(spec.current_dir.is_absolute());
+        assert_eq!(
+            spec.args.last().unwrap(),
+            &repository_dir.to_string_lossy().into_owned()
+        );
     }
 
     #[test]
