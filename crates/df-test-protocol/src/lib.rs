@@ -146,9 +146,7 @@ mod tests {
         assert!(job
             .required_capabilities()
             .contains(&Capability::CheckoutRepository));
-        assert!(job
-            .required_capabilities()
-            .contains(&Capability::CargoTest));
+        assert!(job.required_capabilities().contains(&Capability::CargoTest));
         assert_eq!(job.required_capabilities().len(), 2);
     }
 }
