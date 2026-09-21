@@ -337,7 +337,7 @@ mod windows {
         ffi::c_void,
         io,
         mem::size_of,
-        os::windows::io::AsRawHandle,
+        os::windows::{io::AsRawHandle, process::CommandExt},
         process::Child,
         ptr,
     };
@@ -349,16 +349,15 @@ mod windows {
                 THREADENTRY32,
             },
             JobObjects::{
-            AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
-            SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-            JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
+                AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+                SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+                JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
                 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
             },
             Threading::{CREATE_SUSPENDED, OpenThread, ResumeThread, THREAD_SUSPEND_RESUME},
             WindowsProgramming::GetUserNameW,
         },
     };
-    use std::os::windows::process::CommandExt;
 
     pub fn current_username() -> Result<String, SandboxError> {
         let mut buffer = [0_u16; 257];
