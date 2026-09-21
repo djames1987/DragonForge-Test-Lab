@@ -4,8 +4,8 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitHubRepository {
-    pub owner: String,
-    pub name: String,
+    owner: String,
+    name: String,
 }
 
 impl GitHubRepository {
@@ -59,10 +59,9 @@ impl CommitStatusState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitStatus {
-    pub state: CommitStatusState,
-    pub context: String,
-    pub description: String,
-    pub target_url: Option<String>,
+    state: CommitStatusState,
+    context: String,
+    description: String,
 }
 
 impl CommitStatus {
@@ -82,14 +81,9 @@ impl CommitStatus {
             state,
             context,
             description,
-            target_url: None,
         })
     }
 
-    pub fn with_target_url(mut self, target_url: impl Into<String>) -> Self {
-        self.target_url = Some(target_url.into());
-        self
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -106,12 +100,6 @@ impl Default for GhGitHubClient {
 }
 
 impl GhGitHubClient {
-    pub fn new(program: impl Into<String>) -> Self {
-        Self {
-            program: program.into(),
-        }
-    }
-
     pub fn doctor(&self) -> Result<String, GitHubError> {
         let output = self.run(&auth_status_args())?;
         let text = combined_output(&output);
@@ -224,10 +212,6 @@ fn commit_status_args(
         format!("description={}", status.description),
     ];
 
-    if let Some(target_url) = &status.target_url {
-        args.extend(["-f".into(), format!("target_url={target_url}")]);
-    }
-
     args
 }
 
@@ -256,6 +240,8 @@ fn validate_commit_sha(sha: &str) -> Result<(), GitHubError> {
 
 fn valid_repository_component(value: &str) -> bool {
     !value.is_empty()
+        && value != "."
+        && value != ".."
         && value.len() <= 100
         && value
             .chars()
