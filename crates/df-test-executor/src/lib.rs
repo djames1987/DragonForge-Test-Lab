@@ -165,10 +165,29 @@ impl LocalExecutor {
                         break;
                     }
 
-                    let remaining = deadline.saturating_duration_since(Instant::now());
                     validate_revision(&job.repository.revision)?;
+
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    let fetch_step = self.run_command(
+                        CommandSpec::git_fetch_revision(
+                            &repository_dir,
+                            &job.repository.revision,
+                        ),
+                        remaining,
+                        cancellation,
+                    )?;
+                    self.write_step_logs(&artifact_dir, steps.len(), &fetch_step)?;
+                    let fetch_passed = fetch_step.status == StepStatus::Passed;
+                    final_status = status_from_step(fetch_step.status);
+                    steps.push(fetch_step);
+
+                    if !fetch_passed {
+                        break;
+                    }
+
+                    let remaining = deadline.saturating_duration_since(Instant::now());
                     let checkout_step = self.run_command(
-                        CommandSpec::git_checkout(&repository_dir, &job.repository.revision),
+                        CommandSpec::git_switch_fetch_head(&repository_dir),
                         remaining,
                         cancellation,
                     )?;
@@ -358,11 +377,25 @@ impl CommandSpec {
         }
     }
 
-    fn git_checkout(repository_dir: &Path, revision: &str) -> Self {
+    fn git_fetch_revision(repository_dir: &Path, revision: &str) -> Self {
         Self {
-            name: "git_checkout".into(),
+            name: "git_fetch_revision".into(),
             program: "git".into(),
-            args: vec!["checkout".into(), "--detach".into(), revision.into()],
+            args: vec![
+                "fetch".into(),
+                "--no-tags".into(),
+                "origin".into(),
+                revision.into(),
+            ],
+            current_dir: repository_dir.to_path_buf(),
+        }
+    }
+
+    fn git_switch_fetch_head(repository_dir: &Path) -> Self {
+        Self {
+            name: "git_switch_detached".into(),
+            program: "git".into(),
+            args: vec!["switch".into(), "--detach".into(), "FETCH_HEAD".into()],
             current_dir: repository_dir.to_path_buf(),
         }
     }
@@ -667,6 +700,27 @@ mod tests {
 
         #[cfg(windows)]
         assert!(!absolute.to_string_lossy().starts_with(r"\\?\"));
+    }
+
+    #[test]
+    fn remote_revision_flow_fetches_then_switches_fetch_head() {
+        let repo = Path::new("repo");
+        let fetch = CommandSpec::git_fetch_revision(repo, "phase-1-local-worker");
+        assert_eq!(
+            fetch.args,
+            vec![
+                "fetch",
+                "--no-tags",
+                "origin",
+                "phase-1-local-worker"
+            ]
+        );
+
+        let switch = CommandSpec::git_switch_fetch_head(repo);
+        assert_eq!(
+            switch.args,
+            vec!["switch", "--detach", "FETCH_HEAD"]
+        );
     }
 
     #[test]
