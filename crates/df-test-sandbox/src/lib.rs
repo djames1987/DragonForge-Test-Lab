@@ -340,7 +340,7 @@ mod windows {
         io,
         mem::size_of,
         os::windows::{io::AsRawHandle, process::CommandExt},
-        process::Child,
+        process::{Child, Command},
         ptr,
     };
     use windows_sys::Win32::{
