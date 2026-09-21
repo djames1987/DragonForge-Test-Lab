@@ -50,7 +50,7 @@ On Windows native mode, each fixed Git/Cargo command receives a fresh Job Object
 
 Docker/Podman mode wraps only fixed Cargo project actions. Test Lab supplies a fixed Rust image, drops all container capabilities, requests no-new-privileges, enforces memory/PID limits, and bind-mounts only the checked-out repository.
 
-Worker identity may be constrained with `--worker-user`. Test Lab compares the running account to that expected identity and fails before repository execution on mismatch. It does not create accounts, accept passwords, or impersonate users.
+Worker identity may be constrained with `--worker-user`. On Windows, Test Lab reads the process account from the operating system with `GetUserNameW` rather than trusting the `USERNAME` environment variable. It fails before repository execution on mismatch and does not create accounts, accept passwords, or impersonate users.
 
 Phase 3 does not claim outbound-network isolation. Native execution retains normal worker networking and containers use runtime-default networking so dependency resolution can function.
 
