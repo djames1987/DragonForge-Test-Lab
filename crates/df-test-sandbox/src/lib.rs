@@ -201,10 +201,28 @@ impl ProcessTreeGuard {
         }
     }
 
-    pub fn attach(&self, child: &Child) -> Result<(), SandboxError> {
+    pub fn prepare_command(&self, command: &mut Command) -> Result<(), SandboxError> {
         #[cfg(windows)]
         {
-            self.inner.attach(child)?;
+            self.inner.prepare(command);
+        }
+
+        #[cfg(not(windows))]
+        {
+            let _ = command;
+        }
+
+        Ok(())
+    }
+
+    pub fn attach(&self, child: &mut Child) -> Result<(), SandboxError> {
+        #[cfg(windows)]
+        {
+            if let Err(error) = self.inner.attach_and_resume(child) {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error);
+            }
         }
 
         #[cfg(not(windows))]
@@ -253,14 +271,22 @@ mod windows {
         ptr,
     };
     use windows_sys::Win32::{
-        Foundation::{CloseHandle, HANDLE},
-        System::JobObjects::{
+        Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
+        System::{
+            Diagnostics::ToolHelp::{
+                CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD,
+                THREADENTRY32,
+            },
+            JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
             SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
             JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
-            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            },
+            Threading::{CREATE_SUSPENDED, OpenThread, ResumeThread, THREAD_SUSPEND_RESUME},
         },
     };
+    use std::os::windows::process::CommandExt;
 
     pub struct JobGuard {
         handle: HANDLE,
@@ -300,12 +326,18 @@ mod windows {
             Ok(Self { handle })
         }
 
-        pub fn attach(&self, child: &Child) -> Result<(), SandboxError> {
+        pub fn prepare(&self, command: &mut Command) {
+            command.creation_flags(CREATE_SUSPENDED);
+        }
+
+        pub fn attach_and_resume(&self, child: &Child) -> Result<(), SandboxError> {
             let process = child.as_raw_handle() as HANDLE;
             let assigned = unsafe { AssignProcessToJobObject(self.handle, process) };
             if assigned == 0 {
                 return Err(SandboxError::WindowsJob(io::Error::last_os_error()));
             }
+
+            resume_process_threads(child.id())?;
             Ok(())
         }
 
@@ -316,6 +348,62 @@ mod windows {
             }
             Ok(())
         }
+    }
+
+    fn resume_process_threads(process_id: u32) -> Result<(), SandboxError> {
+        let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+        if snapshot == INVALID_HANDLE_VALUE {
+            return Err(SandboxError::WindowsJob(io::Error::last_os_error()));
+        }
+
+        let mut entry = THREADENTRY32 {
+            dwSize: size_of::<THREADENTRY32>() as u32,
+            ..Default::default()
+        };
+        let mut found = false;
+        let mut has_entry = unsafe { Thread32First(snapshot, &mut entry) } != 0;
+
+        while has_entry {
+            if entry.th32OwnerProcessID == process_id {
+                let thread =
+                    unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID) };
+                if thread.is_null() {
+                    let error = io::Error::last_os_error();
+                    unsafe {
+                        CloseHandle(snapshot);
+                    }
+                    return Err(SandboxError::WindowsJob(error));
+                }
+
+                let resumed = unsafe { ResumeThread(thread) };
+                unsafe {
+                    CloseHandle(thread);
+                }
+                if resumed == u32::MAX {
+                    let error = io::Error::last_os_error();
+                    unsafe {
+                        CloseHandle(snapshot);
+                    }
+                    return Err(SandboxError::WindowsJob(error));
+                }
+                found = true;
+            }
+
+            has_entry = unsafe { Thread32Next(snapshot, &mut entry) } != 0;
+        }
+
+        unsafe {
+            CloseHandle(snapshot);
+        }
+
+        if !found {
+            return Err(SandboxError::WindowsJob(io::Error::new(
+                io::ErrorKind::NotFound,
+                "suspended child process had no discoverable thread",
+            )));
+        }
+
+        Ok(())
     }
 
     impl Drop for JobGuard {
