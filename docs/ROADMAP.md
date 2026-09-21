@@ -9,7 +9,7 @@ Safe workspace creation, trusted repository checkout, fixed Cargo commands, boun
 ## Phase 2 — GitHub Integration — Complete
 GitHub repository/ref resolution to immutable commit SHAs, authenticated GitHub CLI integration, commit-status lifecycle reporting, GitHub-aware local execution, and validation tooling. GitHub Actions remains optional rather than being the Test Lab execution core.
 
-## Phase 3 — Sandboxing — Implementation complete; Windows validation pending
+## Phase 3 — Sandboxing — Complete
 Dedicated worker-identity enforcement, race-resistant Windows Job Object containment, whole-tree timeout/cancellation, aggregate memory/process ceilings, Docker/Podman Cargo isolation, sandbox preflight, and validation tooling.
 
 ## Phase 4 — VM Lab
