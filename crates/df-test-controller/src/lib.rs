@@ -31,9 +31,10 @@ impl Controller {
             .get(worker_id)
             .ok_or(ControllerError::UnknownWorker)?;
 
-        let position = self.queued.iter().position(|job| {
-            job.required_capabilities().is_subset(&worker.capabilities)
-        });
+        let position = self
+            .queued
+            .iter()
+            .position(|job| job.required_capabilities().is_subset(&worker.capabilities));
 
         Ok(position.and_then(|index| self.queued.remove(index)))
     }
@@ -84,7 +85,9 @@ mod tests {
                 url: "https://github.com/example/b.git".into(),
                 revision: "main".into(),
             },
-            vec![TestAction::CargoTest { all_features: false }],
+            vec![TestAction::CargoTest {
+                all_features: false,
+            }],
         ));
 
         let assigned = controller.assign_next("linux-1").unwrap().unwrap();
