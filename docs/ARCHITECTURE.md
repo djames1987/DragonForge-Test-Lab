@@ -13,6 +13,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-executor: local workspace, fixed-command process execution, cancellation, output capture, artifact generation, and cleanup.
 - df-test-github: typed GitHub repository/ref resolution and commit-status reporting through the authenticated gh CLI.
 - df-test-sandbox: native/container sandbox selection, Windows Job Object containment, resource ceilings, worker-identity enforcement, and fixed Docker/Podman wrapping.
+- df-test-vm: typed Hyper-V host checks, golden-image differencing VM creation, managed lifecycle, checkpoints, and rollback.
 - dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
@@ -47,6 +48,22 @@ GitHub Actions is optional. A self-hosted Actions runner may later invoke Test L
       -> cleanup
 
 Windows native mode is the default on the current worker platform. Non-Windows native mode fails closed until a native containment implementation exists; Docker/Podman remain available as the portable project-code sandbox path.
+
+## Phase 4 VM flow
+
+    validated VM request
+      -> require DragonForge-* managed name
+      -> validate switch/resources/base VHDX
+      -> create differencing child disk
+      -> create Generation 2 Hyper-V VM
+      -> configure CPU/memory/firmware/checkpoint type
+      -> optional per-instance setup
+      -> create DragonForge-Baseline
+      -> destructive/integration test
+      -> restore baseline
+      -> repeat or destroy managed VM
+
+Golden images live outside the Git repository. Managed VM storage is separate from the immutable parent image root. The VM adapter never accepts arbitrary PowerShell text.
 
 ## Distributed target
 
