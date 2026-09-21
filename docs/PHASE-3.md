@@ -21,7 +21,7 @@ Phase 3 moves DragonForge Test Lab from bounded direct-child execution to explic
 - Aggregate Windows Job Object memory ceiling using the job's `max_memory_mib`.
 - Windows active-process ceiling using the job's `max_processes`.
 - Explicit Docker and Podman sandbox modes for Cargo project actions.
-- Fixed container image: `rust:1.80-bookworm`.
+- Fixed project-owned container image: `dragonforge/test-lab-rust:0.4.0`, built from `rust:1.80-bookworm` with `rustfmt` and `clippy` explicitly installed.
 - Container hardening:
   - `--cap-drop=ALL`;
   - `--security-opt=no-new-privileges`;
@@ -63,11 +63,19 @@ For local development, omitting `--worker-user` keeps the identity check optiona
 
 ## Container modes
 
+Build the fixed sandbox image first:
+
+    .\scripts\build-sandbox-image.ps1 -Runtime docker
+
 Select Docker:
 
     --sandbox docker
 
-or Podman:
+For Podman, build the same Dockerfile with:
+
+    .\scripts\build-sandbox-image.ps1 -Runtime podman
+
+then select:
 
     --sandbox podman
 
