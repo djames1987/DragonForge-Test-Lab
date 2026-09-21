@@ -1,6 +1,6 @@
 # Phase 1 — Local Rust Worker
 
-Status: implementation complete; local validation pending while hosted GitHub Actions minutes are unavailable.
+Status: complete and locally validated on Windows. Hosted GitHub Actions remain unavailable until a self-hosted runner is connected.
 
 ## Goal
 
