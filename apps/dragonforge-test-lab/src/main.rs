@@ -10,9 +10,7 @@ use df_test_sandbox::{
     current_worker_identity, runtime_version, verify_container_image, verify_worker_identity,
     ProcessTreeGuard, SandboxLimits, SandboxMode,
 };
-use df_test_vm::{
-    GuestOs, HyperVClient, VmCreateSpec, VmLabConfig, DEFAULT_BASELINE_CHECKPOINT,
-};
+use df_test_vm::{GuestOs, HyperVClient, VmCreateSpec, VmLabConfig, DEFAULT_BASELINE_CHECKPOINT};
 use std::{collections::BTreeSet, path::PathBuf, process::Command};
 
 const GITHUB_STATUS_CONTEXT: &str = "dragonforge/test-lab";
@@ -296,7 +294,6 @@ fn sandbox_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
 fn vm_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let config = vm_config(args);
     let client = HyperVClient::default();
@@ -331,8 +328,7 @@ fn vm_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn vm_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let _config = vm_config(args);
+fn vm_list(_args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let client = HyperVClient::default();
     println!("{}", serde_json::to_string_pretty(&client.list_managed()?)?);
     Ok(())
