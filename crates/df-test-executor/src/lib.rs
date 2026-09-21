@@ -324,12 +324,13 @@ impl LocalExecutor {
             .stderr(Stdio::piped());
 
         apply_sanitized_environment(&mut command);
+        guard.prepare_command(&mut command)?;
 
         let mut child = command.spawn().map_err(|source| ExecutorError::Spawn {
             program: effective.program.clone(),
             source,
         })?;
-        guard.attach(&child)?;
+        guard.attach(&mut child)?;
 
         let stdout = child.stdout.take().ok_or(ExecutorError::MissingPipe)?;
         let stderr = child.stderr.take().ok_or(ExecutorError::MissingPipe)?;
