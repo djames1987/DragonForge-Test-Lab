@@ -57,11 +57,15 @@ Native Windows Job Object:
 
     cargo run -p dragonforge-test-lab -- run-local --repo https://github.com/djames1987/DragonForge-Test-Lab.git --revision phase-3-sandboxing --sandbox native
 
-Docker:
+Docker (build the fixed worker image once first):
+
+    .\scripts\build-sandbox-image.ps1 -Runtime docker
 
     cargo run -p dragonforge-test-lab -- run-local --repo https://github.com/djames1987/DragonForge-Test-Lab.git --revision phase-3-sandboxing --sandbox docker
 
 Podman:
+
+    .\scripts\build-sandbox-image.ps1 -Runtime podman
 
     cargo run -p dragonforge-test-lab -- run-local --repo https://github.com/djames1987/DragonForge-Test-Lab.git --revision phase-3-sandboxing --sandbox podman
 
