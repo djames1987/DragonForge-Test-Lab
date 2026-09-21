@@ -16,6 +16,9 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 10. Captured stdout/stderr is size bounded and artifact paths stay beneath configured roots.
 11. GitHub integration does not accept tokens or arbitrary gh/API arguments from jobs.
 12. Mutable GitHub refs are resolved to exact commit SHAs before Test Lab execution.
+13. Windows native execution is assigned to a Job Object before the suspended child is resumed.
+14. Memory and active-process ceilings are kernel-enforced for Windows native jobs and runtime-enforced for Docker/Podman project actions.
+15. Dedicated worker identity can be required without placing account passwords in Test Lab configuration or job payloads.
 
 ## Local execution boundary
 
@@ -41,13 +44,23 @@ Allowed GitHub operations are deliberately narrow:
 
 The adapter does not expose arbitrary GitHub API endpoints, workflow commands, shell commands, or arbitrary gh arguments. Authentication comes from the operator machine's existing GitHub CLI configuration and is not copied into Test Lab payloads or artifacts.
 
+## Phase 3 sandbox boundary
+
+On Windows native mode, each fixed Git/Cargo command receives a fresh Job Object configured with kill-on-close, the job memory limit, and the active-process limit. The command is created suspended, assigned to the Job Object, and only then resumed. Timeout/cancellation terminates the entire Job Object. When the leader exits, closing the Job Object reaps descendants that remain alive.
+
+Docker/Podman mode wraps only fixed Cargo project actions. Test Lab supplies a fixed Rust image, drops all container capabilities, requests no-new-privileges, enforces memory/PID limits, and bind-mounts only the checked-out repository.
+
+Worker identity may be constrained with `--worker-user`. Test Lab compares the running account to that expected identity and fails before repository execution on mismatch. It does not create accounts, accept passwords, or impersonate users.
+
+Phase 3 does not claim outbound-network isolation. Native execution retains normal worker networking and containers use runtime-default networking so dependency resolution can function.
+
 ## Current enforcement
 
-Phases 1-2 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, one Test Lab-managed direct child at a time, sanitized executor environments, direct-child cancellation, GitHub repository/ref validation, immutable commit resolution, and typed commit-status reporting.
+Phases 1-3 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, and Docker/Podman project-code isolation.
 
 ## Sandbox and distributed-node work still required
 
-Before untrusted third-party code is considered safely isolated, later phases must add a dedicated low-privilege worker identity, Windows Job Object or equivalent process-tree containment, kernel-enforced memory/process limits, live disk quotas or disposable filesystems, outbound network policy, authenticated controller-agent transport, immutable audit records, artifact hashing, and stronger sandbox/container/VM isolation.
+Before truly hostile third-party code is considered safely isolated, later phases must add disposable VM boundaries, live disk quotas or disposable filesystems, outbound network policy, authenticated controller-agent transport, immutable audit records, artifact hashing, and stronger privilege/network isolation. Phase 3 provides meaningful process/container containment but Phase 4 VMs remain the preferred hostile-code boundary.
 
 Before distributed nodes are enabled, add mutual controller/agent authentication, short-lived node credentials, replay protection, node identity, connection health/lease expiry, explicit high-risk capability approvals, and encrypted transport. Nodes should not expose a general remote shell.
 
