@@ -5,7 +5,7 @@ use std::{
 };
 use thiserror::Error;
 
-pub const DEFAULT_CONTAINER_IMAGE: &str = "rust:1.80-bookworm";
+pub const DEFAULT_CONTAINER_IMAGE: &str = "dragonforge/test-lab-rust:0.4.0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxMode {
@@ -56,9 +56,8 @@ impl SandboxLimits {
     }
 
     pub fn memory_bytes(self) -> usize {
-        self.max_memory_mib
-            .saturating_mul(1024 * 1024)
-            .min(usize::MAX as u64) as usize
+        let bytes = self.max_memory_mib.saturating_mul(1024 * 1024);
+        usize::try_from(bytes).unwrap_or(usize::MAX)
     }
 }
 
@@ -170,6 +169,29 @@ pub fn runtime_version(mode: SandboxMode) -> Result<Option<String>, SandboxError
     Ok(Some(
         String::from_utf8_lossy(&output.stdout).trim().to_owned(),
     ))
+}
+
+pub fn verify_container_image(mode: SandboxMode) -> Result<(), SandboxError> {
+    let Some(program) = mode.container_program() else {
+        return Ok(());
+    };
+
+    let output = Command::new(program)
+        .args(["image", "inspect", DEFAULT_CONTAINER_IMAGE])
+        .output()
+        .map_err(|source| SandboxError::SpawnRuntime {
+            program: program.to_owned(),
+            source,
+        })?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(SandboxError::ContainerImageUnavailable {
+            runtime: program.to_owned(),
+            image: DEFAULT_CONTAINER_IMAGE.to_owned(),
+        })
+    }
 }
 
 pub struct ProcessTreeGuard {
@@ -433,6 +455,8 @@ pub enum SandboxError {
     },
     #[error("container runtime is unavailable: {0}")]
     RuntimeUnavailable(String),
+    #[error("container image {image} is unavailable in {runtime}; build it with scripts/build-sandbox-image.ps1")]
+    ContainerImageUnavailable { runtime: String, image: String },
     #[error("native process-tree containment is not yet supported on this platform; use docker or podman")]
     NativeContainmentUnsupported,
     #[cfg(windows)]
