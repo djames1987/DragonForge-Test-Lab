@@ -3,8 +3,12 @@ use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, Local
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
 use df_test_policy::ExecutionPolicy;
 use df_test_protocol::{
-    Capability, JobRequest, JobStatus, RepositorySpec, TestAction, WorkerRegistration,
-    PROTOCOL_VERSION,
+    Capability, JobRequest, JobStatus, RepositorySpec, ResourceLimits, TestAction,
+    WorkerRegistration, PROTOCOL_VERSION,
+};
+use df_test_sandbox::{
+    current_worker_identity, runtime_version, verify_container_image, verify_worker_identity,
+    ProcessTreeGuard, SandboxLimits, SandboxMode,
 };
 use std::{collections::BTreeSet, path::PathBuf, process::Command};
 
@@ -24,6 +28,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     match command {
         "doctor" => doctor(),
         "github-doctor" => github_doctor(),
+        "sandbox-doctor" => sandbox_doctor(&args[2..]),
         "run-local" => run_local(&args[2..]),
         "run-github" => run_github(&args[2..]),
         "--version" | "-V" | "version" => {
@@ -43,7 +48,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=2");
+    println!("phase=3");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -75,8 +80,17 @@ fn run_local(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let revision = value_after(args, "--revision").unwrap_or_else(|| "main".into());
     let lab_root = lab_root(args);
     let retain_workspace = args.iter().any(|arg| arg == "--retain-workspace");
+    let sandbox_mode = sandbox_mode(args)?;
+    let worker_user = value_after(args, "--worker-user");
 
-    let report = execute_local_job(repo, revision, lab_root, retain_workspace)?;
+    let report = execute_local_job(
+        repo,
+        revision,
+        lab_root,
+        retain_workspace,
+        sandbox_mode,
+        worker_user,
+    )?;
     println!("{}", serde_json::to_string_pretty(&report)?);
 
     if report.status != JobStatus::Passed {
@@ -92,6 +106,8 @@ fn run_github(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let lab_root = lab_root(args);
     let retain_workspace = args.iter().any(|arg| arg == "--retain-workspace");
     let report_status = !args.iter().any(|arg| arg == "--no-status");
+    let sandbox_mode = sandbox_mode(args)?;
+    let worker_user = value_after(args, "--worker-user");
 
     let repository = GitHubRepository::parse_https(&repo_url)?;
     let github = GhGitHubClient::default();
@@ -114,7 +130,14 @@ fn run_github(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         )?;
     }
 
-    let result = execute_local_job(repo_url, commit_sha.clone(), lab_root, retain_workspace);
+    let result = execute_local_job(
+        repo_url,
+        commit_sha.clone(),
+        lab_root,
+        retain_workspace,
+        sandbox_mode,
+        worker_user,
+    );
 
     match result {
         Ok(report) => {
@@ -170,10 +193,14 @@ fn execute_local_job(
     revision: String,
     lab_root: PathBuf,
     retain_workspace: bool,
+    sandbox_mode: SandboxMode,
+    expected_worker_user: Option<String>,
 ) -> Result<ExecutionReport, Box<dyn std::error::Error>> {
     if !repo.starts_with("https://") {
         return Err("--repo must be an HTTPS repository URL".into());
     }
+
+    verify_container_image(sandbox_mode)?;
 
     let capabilities: BTreeSet<Capability> = [
         Capability::CheckoutRepository,
@@ -215,9 +242,52 @@ fn execute_local_job(
 
     let mut config = ExecutorConfig::under(lab_root);
     config.retain_workspace = retain_workspace;
+    config.sandbox_mode = sandbox_mode;
+    config.expected_worker_user = expected_worker_user;
     let executor = LocalExecutor::new(config);
     let cancellation = CancellationToken::new();
     Ok(executor.execute(&job, &cancellation)?)
+}
+
+fn sandbox_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let mode = sandbox_mode(args)?;
+    let worker = current_worker_identity()?;
+
+    if let Some(expected) = value_after(args, "--worker-user") {
+        verify_worker_identity(&expected)?;
+        println!("required_worker_user={expected}");
+    }
+
+    let defaults = ResourceLimits::default();
+    let limits = SandboxLimits {
+        max_memory_mib: defaults.max_memory_mib,
+        max_processes: defaults.max_processes,
+    };
+    let guard = ProcessTreeGuard::new(mode, limits)?;
+
+    println!("DragonForge Test Lab sandbox doctor");
+    println!("sandbox_mode={}", mode.as_str());
+    println!("worker_identity={worker}");
+    println!("containment={}", guard.mechanism());
+    println!("max_memory_mib={}", limits.max_memory_mib);
+    println!("max_processes={}", limits.max_processes);
+
+    if let Some(version) = runtime_version(mode)? {
+        println!("container_runtime={version}");
+        verify_container_image(mode)?;
+        println!(
+            "container_image={}",
+            df_test_sandbox::DEFAULT_CONTAINER_IMAGE
+        );
+    }
+
+    println!("status=sandbox_ready");
+    Ok(())
+}
+
+fn sandbox_mode(args: &[String]) -> Result<SandboxMode, Box<dyn std::error::Error>> {
+    let value = value_after(args, "--sandbox").unwrap_or_else(|| "native".into());
+    Ok(SandboxMode::parse(&value)?)
 }
 
 fn lab_root(args: &[String]) -> PathBuf {
@@ -246,7 +316,8 @@ fn print_help() {
     println!("Usage:");
     println!("  dragonforge-test-lab doctor");
     println!("  dragonforge-test-lab github-doctor");
+    println!("  dragonforge-test-lab sandbox-doctor [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab version");
-    println!("  dragonforge-test-lab run-local --repo <https-url> [--revision <ref>] [--lab-root <path>] [--retain-workspace]");
-    println!("  dragonforge-test-lab run-github --repo <github-https-url> [--revision <ref>] [--lab-root <path>] [--retain-workspace] [--no-status]");
+    println!("  dragonforge-test-lab run-local --repo <https-url> [--revision <ref>] [--lab-root <path>] [--retain-workspace] [--sandbox native|docker|podman] [--worker-user <name>]");
+    println!("  dragonforge-test-lab run-github --repo <github-https-url> [--revision <ref>] [--lab-root <path>] [--retain-workspace] [--sandbox native|docker|podman] [--worker-user <name>] [--no-status]");
 }

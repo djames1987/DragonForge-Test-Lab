@@ -1,4 +1,8 @@
-use df_test_protocol::{JobRequest, JobStatus, TestAction};
+use df_test_protocol::{JobRequest, JobStatus, ResourceLimits, TestAction};
+use df_test_sandbox::{
+    sandbox_project_command, verify_worker_identity, ContainerCleanup, ProcessTreeGuard,
+    SandboxError, SandboxLimits, SandboxMode,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -45,6 +49,8 @@ pub struct ExecutorConfig {
     pub output_limit_bytes: usize,
     pub poll_interval: Duration,
     pub retain_workspace: bool,
+    pub sandbox_mode: SandboxMode,
+    pub expected_worker_user: Option<String>,
 }
 
 impl ExecutorConfig {
@@ -56,6 +62,8 @@ impl ExecutorConfig {
             output_limit_bytes: DEFAULT_OUTPUT_LIMIT_BYTES,
             poll_interval: Duration::from_millis(DEFAULT_POLL_INTERVAL_MS),
             retain_workspace: false,
+            sandbox_mode: SandboxMode::Native,
+            expected_worker_user: None,
         }
     }
 }
@@ -87,6 +95,7 @@ pub struct ExecutionReport {
     pub summary: String,
     pub steps: Vec<StepReport>,
     pub artifact_directory: String,
+    pub sandbox_mode: String,
 }
 
 pub struct LocalExecutor {
@@ -103,6 +112,10 @@ impl LocalExecutor {
         job: &JobRequest,
         cancellation: &CancellationToken,
     ) -> Result<ExecutionReport, ExecutorError> {
+        if let Some(expected) = &self.config.expected_worker_user {
+            verify_worker_identity(expected)?;
+        }
+
         fs::create_dir_all(&self.config.workspace_root)?;
         fs::create_dir_all(&self.config.artifact_root)?;
 
@@ -155,6 +168,8 @@ impl LocalExecutor {
                         CommandSpec::git_clone(&job.repository.url, &repository_dir),
                         remaining,
                         cancellation,
+                        &job.limits,
+                        false,
                     )?;
                     self.write_step_logs(&artifact_dir, steps.len(), &clone_step)?;
                     let clone_passed = clone_step.status == StepStatus::Passed;
@@ -172,6 +187,8 @@ impl LocalExecutor {
                         CommandSpec::git_fetch_revision(&repository_dir, &job.repository.revision),
                         remaining,
                         cancellation,
+                        &job.limits,
+                        false,
                     )?;
                     self.write_step_logs(&artifact_dir, steps.len(), &fetch_step)?;
                     let fetch_passed = fetch_step.status == StepStatus::Passed;
@@ -187,6 +204,8 @@ impl LocalExecutor {
                         CommandSpec::git_switch_fetch_head(&repository_dir),
                         remaining,
                         cancellation,
+                        &job.limits,
+                        false,
                     )?;
                     self.write_step_logs(&artifact_dir, steps.len(), &checkout_step)?;
                     let checkout_passed = checkout_step.status == StepStatus::Passed;
@@ -208,7 +227,8 @@ impl LocalExecutor {
 
                     let spec = CommandSpec::for_action(action, &repository_dir)
                         .ok_or(ExecutorError::UnsupportedAction)?;
-                    let step = self.run_command(spec, remaining, cancellation)?;
+                    let step =
+                        self.run_command(spec, remaining, cancellation, &job.limits, true)?;
                     self.write_step_logs(&artifact_dir, steps.len(), &step)?;
                     self.enforce_disk_limit(&workspace, job.limits.max_disk_mib)?;
                     final_status = status_from_step(step.status);
@@ -239,6 +259,7 @@ impl LocalExecutor {
             summary,
             steps,
             artifact_directory: artifact_dir.to_string_lossy().into_owned(),
+            sandbox_mode: self.config.sandbox_mode.as_str().to_owned(),
         };
 
         fs::write(
@@ -266,22 +287,51 @@ impl LocalExecutor {
         spec: CommandSpec,
         timeout: Duration,
         cancellation: &CancellationToken,
+        limits: &ResourceLimits,
+        project_action: bool,
     ) -> Result<StepReport, ExecutorError> {
         let started = Instant::now();
-        let mut command = Command::new(&spec.program);
+        let sandbox_limits = SandboxLimits {
+            max_memory_mib: limits.max_memory_mib,
+            max_processes: limits.max_processes,
+        };
+
+        let effective = if project_action {
+            let wrapped = sandbox_project_command(
+                self.config.sandbox_mode,
+                &spec.program,
+                &spec.args,
+                &spec.current_dir,
+                sandbox_limits,
+            )?;
+            CommandSpec {
+                name: spec.name,
+                program: wrapped.program,
+                args: wrapped.args,
+                current_dir: wrapped.current_dir,
+                container_cleanup: wrapped.container_cleanup,
+            }
+        } else {
+            spec
+        };
+
+        let guard = ProcessTreeGuard::new(self.config.sandbox_mode, sandbox_limits)?;
+        let mut command = Command::new(&effective.program);
         command
-            .args(&spec.args)
-            .current_dir(&spec.current_dir)
+            .args(&effective.args)
+            .current_dir(&effective.current_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
         apply_sanitized_environment(&mut command);
+        guard.prepare_command(&mut command)?;
 
         let mut child = command.spawn().map_err(|source| ExecutorError::Spawn {
-            program: spec.program.clone(),
+            program: effective.program.clone(),
             source,
         })?;
+        guard.attach(&mut child)?;
 
         let stdout = child.stdout.take().ok_or(ExecutorError::MissingPipe)?;
         let stderr = child.stderr.take().ok_or(ExecutorError::MissingPipe)?;
@@ -290,8 +340,18 @@ impl LocalExecutor {
         let stdout_reader = thread::spawn(move || read_bounded(stdout, output_limit));
         let stderr_reader = thread::spawn(move || read_bounded(stderr, output_limit));
 
-        let (status, step_status) =
-            wait_for_child(&mut child, timeout, self.config.poll_interval, cancellation)?;
+        let (status, step_status) = wait_for_child(
+            &mut child,
+            timeout,
+            self.config.poll_interval,
+            cancellation,
+            &guard,
+            effective.container_cleanup.as_ref(),
+        )?;
+
+        // Closing the per-command Job Object kills any descendants that outlived
+        // the command leader and releases inherited output-pipe handles.
+        drop(guard);
 
         let (stdout_bytes, stdout_truncated) = stdout_reader
             .join()
@@ -301,7 +361,7 @@ impl LocalExecutor {
             .map_err(|_| ExecutorError::ReaderPanicked)??;
 
         Ok(StepReport {
-            name: spec.name,
+            name: effective.name,
             exit_code: status.and_then(|value| value.code()),
             duration_ms: started.elapsed().as_millis(),
             stdout: String::from_utf8_lossy(&stdout_bytes).into_owned(),
@@ -344,12 +404,13 @@ impl LocalExecutor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct CommandSpec {
     name: String,
     program: String,
     args: Vec<String>,
     current_dir: PathBuf,
+    container_cleanup: Option<ContainerCleanup>,
 }
 
 impl CommandSpec {
@@ -371,6 +432,7 @@ impl CommandSpec {
                 repository_dir.to_string_lossy().into_owned(),
             ],
             current_dir,
+            container_cleanup: None,
         }
     }
 
@@ -385,6 +447,7 @@ impl CommandSpec {
                 revision.into(),
             ],
             current_dir: repository_dir.to_path_buf(),
+            container_cleanup: None,
         }
     }
 
@@ -394,6 +457,7 @@ impl CommandSpec {
             program: "git".into(),
             args: vec!["switch".into(), "--detach".into(), "FETCH_HEAD".into()],
             current_dir: repository_dir.to_path_buf(),
+            container_cleanup: None,
         }
     }
 
@@ -437,6 +501,7 @@ impl CommandSpec {
             program: "cargo".into(),
             args,
             current_dir: repository_dir.to_path_buf(),
+            container_cleanup: None,
         })
     }
 }
@@ -469,17 +534,19 @@ fn wait_for_child(
     timeout: Duration,
     poll_interval: Duration,
     cancellation: &CancellationToken,
+    guard: &ProcessTreeGuard,
+    container_cleanup: Option<&ContainerCleanup>,
 ) -> Result<(Option<ExitStatus>, StepStatus), ExecutorError> {
     let started = Instant::now();
 
     loop {
         if cancellation.is_cancelled() {
-            terminate_child(child)?;
+            terminate_child(child, guard, container_cleanup)?;
             return Ok((None, StepStatus::Cancelled));
         }
 
         if started.elapsed() >= timeout {
-            terminate_child(child)?;
+            terminate_child(child, guard, container_cleanup)?;
             return Ok((None, StepStatus::TimedOut));
         }
 
@@ -496,15 +563,27 @@ fn wait_for_child(
     }
 }
 
-fn terminate_child(child: &mut Child) -> Result<(), ExecutorError> {
-    match child.kill() {
-        Ok(()) => {
-            let _ = child.wait();
-            Ok(())
+fn terminate_child(
+    child: &mut Child,
+    guard: &ProcessTreeGuard,
+    container_cleanup: Option<&ContainerCleanup>,
+) -> Result<(), ExecutorError> {
+    let tree_terminated = guard.terminate_tree()?;
+
+    if !tree_terminated {
+        match child.kill() {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::InvalidInput => {}
+            Err(error) => return Err(ExecutorError::Io(error)),
         }
-        Err(error) if error.kind() == io::ErrorKind::InvalidInput => Ok(()),
-        Err(error) => Err(ExecutorError::Io(error)),
     }
+
+    if let Some(cleanup) = container_cleanup {
+        cleanup.force_remove()?;
+    }
+
+    let _ = child.wait();
+    Ok(())
 }
 
 fn read_bounded(mut reader: impl Read, limit: usize) -> io::Result<(Vec<u8>, bool)> {
@@ -622,6 +701,8 @@ pub enum ExecutorError {
     #[error("workspace disk limit exceeded: used {used} bytes, limit {limit} bytes")]
     DiskLimitExceeded { used: u64, limit: u64 },
     #[error(transparent)]
+    Sandbox(#[from] SandboxError),
+    #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
@@ -710,6 +791,13 @@ mod tests {
 
         let switch = CommandSpec::git_switch_fetch_head(repo);
         assert_eq!(switch.args, vec!["switch", "--detach", "FETCH_HEAD"]);
+    }
+
+    #[test]
+    fn executor_defaults_to_native_sandboxing() {
+        let config = ExecutorConfig::under("lab");
+        assert_eq!(config.sandbox_mode, SandboxMode::Native);
+        assert!(config.expected_worker_user.is_none());
     }
 
     #[test]

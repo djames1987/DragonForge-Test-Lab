@@ -13,6 +13,13 @@ artifact_root = ".dragonforge-test-lab/artifacts"
 output_limit_bytes = 2097152
 retain_workspace = false
 
+[sandbox]
+mode = "native"
+container_image = "dragonforge/test-lab-rust:0.4.0"
+# Set this to a dedicated local account name on production workers.
+required_worker_user = ""
+
 [security]
 allow_arbitrary_shell = false
 require_https_repositories = true
+require_process_tree_containment = true
