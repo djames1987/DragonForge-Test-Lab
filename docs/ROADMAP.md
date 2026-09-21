@@ -6,8 +6,8 @@ Protocol, controller, agent, policy, manifests, tests, security model.
 ## Phase 1 — Local Rust Worker — Complete
 Safe workspace creation, trusted repository checkout, fixed Cargo commands, bounded process execution, logs, artifacts, cancellation, cleanup, and local validation tooling.
 
-## Phase 2 — GitHub Integration
-Repository/commit job submission, status reporting, and optional GitHub Actions handoff.
+## Phase 2 — GitHub Integration — Complete
+GitHub repository/ref resolution to immutable commit SHAs, authenticated GitHub CLI integration, commit-status lifecycle reporting, GitHub-aware local execution, and validation tooling. GitHub Actions remains optional rather than being the Test Lab execution core.
 
 ## Phase 3 — Sandboxing
 Dedicated Windows worker identity, Windows Job Objects, resource enforcement, and Docker/Podman isolation.
@@ -25,7 +25,7 @@ Services, Event Log, registry, process/network fixtures, installers, permissions
 Windows UI Automation, screenshots, crash capture, deterministic interaction scripts.
 
 ## Phase 8 — Multi-machine & Network Lab
-Coordinated TCP/UDP/DNS fixtures, fault injection, multi-agent scenarios.
+Turn DragonForge Test Lab into a distributed capability-based test cluster. Authorized physical machines, VMs, container hosts, Raspberry Pi systems, Linux servers, Windows machines, and other supported hardware can register as worker nodes and receive only jobs matching their capabilities and policy. Add authenticated controller/agent transport, node lifecycle and health, capability/load-aware scheduling, artifact/result return, coordinated multi-node jobs, TCP/UDP/DNS fixtures, fault injection, hardware-in-the-loop support, and network-isolated test scenarios. Nodes should initiate authenticated outbound connections where practical; Test Lab must not become a general remote shell.
 
 ## Phase 9 — ChatGPT/MCP Gateway
 Authenticated high-level tool surface for job submission, status, and artifact/result retrieval.
