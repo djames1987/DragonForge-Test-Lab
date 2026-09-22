@@ -663,10 +663,7 @@ fn phase16_fixture_plan() -> TestPlan {
                 retry: RetryPolicy::bounded(2, 5, 30, false)
                     .expect("fixture retry policy is valid"),
                 target_os: TargetOs::Windows,
-                node_labels: std::collections::BTreeMap::from([(
-                    "tier".into(),
-                    "primary".into(),
-                )]),
+                node_labels: std::collections::BTreeMap::from([("tier".into(), "primary".into())]),
             },
         ],
     }
@@ -725,7 +722,10 @@ fn plan_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
     let controller = DurableController::open(&state_db)?;
-    println!("{}", serde_json::to_string_pretty(&controller.list_test_plans()?)?);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&controller.list_test_plans()?)?
+    );
     println!("status=test_plan_list_ready");
     Ok(())
 }
