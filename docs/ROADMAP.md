@@ -12,8 +12,8 @@ GitHub repository/ref resolution to immutable commit SHAs, authenticated GitHub 
 ## Phase 3 — Sandboxing — Complete
 Dedicated worker-identity enforcement, race-resistant Windows Job Object containment, whole-tree timeout/cancellation, aggregate memory/process ceilings, Docker/Podman Cargo isolation, sandbox preflight, and validation tooling.
 
-## Phase 4 — VM Lab — Implementation complete; host/lifecycle validation pending
-Typed Hyper-V orchestration, Generation 2 Windows/Linux guest profiles, golden-image differencing disks, clean baseline checkpoints, rollback, managed lifecycle commands, host readiness tooling, and detailed setup documentation.
+## Phase 4 — VM Lab — Complete
+Typed Hyper-V orchestration, Generation 2 Windows/Linux guest profiles, golden-image differencing disks, clean baseline checkpoints, rollback, managed lifecycle commands, host readiness tooling, and detailed setup documentation. Full Windows Hyper-V lifecycle validation passed on 2026-09-22.
 
 ## Phase 5 — Deep Rust Testing
 Coverage, nextest, Miri, sanitizers, fuzzing, benchmarks, property testing.
