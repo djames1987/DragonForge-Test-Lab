@@ -129,8 +129,6 @@ pub struct WorkerRegistration {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-
     use proptest::prelude::*;
 
     proptest! {
@@ -190,6 +188,7 @@ mod tests {
             prop_assert_eq!(decoded, job);
         }
     }
+
     #[test]
     fn capabilities_are_derived_from_typed_actions() {
         let job = JobRequest::new(
