@@ -48,8 +48,8 @@ Controller schema v2, hash-chained durable audit events, redacted structured log
 ## Phase 15 — Recovery / Retry / Job Lifecycle — Complete
 Controller schema v3, explicit failure classification, persisted bounded retry policies, retry-pending/exhausted states, due-time retry scheduling, interrupted restart decisions, manual interrupted-job rescheduling with a global attempt ceiling, retry cancellation, lifecycle query tooling, and audit integration. Windows host validation passed on 2026-09-22.
 
-## Phase 16 — Test Plans — Implementation complete; validation pending
-Versioned declarative test plans with schema v4 persistence, typed executable profiles/actions, dependency DAG validation, conditions, resource limits, capability enforcement, typed artifact requests, Phase 15 retry policy, target OS/node-label predicates, plan auditing, checked-in examples, and operator tooling.
+## Phase 16 — Test Plans — Complete
+Versioned declarative test plans with schema v4 persistence, typed executable profiles/actions, dependency DAG validation, conditions, resource limits, capability enforcement, typed artifact requests, Phase 15 retry policy, target OS/node-label predicates, plan auditing, checked-in examples, and operator tooling. Windows host validation passed on 2026-09-22.
 
 ## Phase 17 — Intelligence Integration
 Connect Test Intelligence to real Git changes, durable historical failures, live worker capacity, advisory/automatic modes, and auditable decision explanations.
