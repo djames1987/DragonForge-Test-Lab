@@ -51,8 +51,8 @@ Controller schema v3, explicit failure classification, persisted bounded retry p
 ## Phase 16 — Test Plans — Complete
 Versioned declarative test plans with schema v4 persistence, typed executable profiles/actions, dependency DAG validation, conditions, resource limits, capability enforcement, typed artifact requests, Phase 15 retry policy, target OS/node-label predicates, plan auditing, checked-in examples, and operator tooling. Windows host validation passed on 2026-09-22.
 
-## Phase 17 — Intelligence Integration
-Connect Test Intelligence to real Git changes, durable historical failures, live worker capacity, advisory/automatic modes, and auditable decision explanations.
+## Phase 17 — Intelligence Integration — Complete
+Real GitHub compare input, controller schema v5 intelligence job context, durable historical test-failure reconstruction, online worker capability/slot capacity, stored-plan matching, advisory and bounded automatic modes, immutable head-SHA job compilation, durable intelligence history, and hash-chained decision audits.
 
 ## Phase 18 — Dashboard
 Local operator web dashboard for jobs, workers, test plans, artifacts, failure clusters, audit history, and settings without exposing arbitrary terminal access.

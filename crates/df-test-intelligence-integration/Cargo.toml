@@ -1,18 +1,20 @@
 [package]
-name = "df-test-controller"
+name = "df-test-intelligence-integration"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-df-test-protocol = { path = "../df-test-protocol" }
+df-test-controller = { path = "../df-test-controller" }
+df-test-github = { path = "../df-test-github" }
 df-test-intelligence = { path = "../df-test-intelligence" }
-df-test-observability = { path = "../df-test-observability" }
-df-test-lifecycle = { path = "../df-test-lifecycle" }
 df-test-plans = { path = "../df-test-plans" }
-uuid.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-rusqlite.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+df-test-lifecycle = { path = "../df-test-lifecycle" }
+df-test-protocol = { path = "../df-test-protocol" }

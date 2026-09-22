@@ -347,3 +347,23 @@ Schema v3 stores retry policy, failure class, retry due time, retry reason, and 
 Controller schema v4 persists validated plans in test_plans and writes create/update events into the existing hash-chained audit stream. Plan persistence does not authorize execution.
 
 The legacy durable worker table does not contain node-label inventory. Phase 16 therefore exposes target predicates on CompiledPlanStep and requires plan/distributed orchestration to apply them before selecting a node; it does not falsely claim the older assign_next method enforces labels.
+
+
+## Phase 17 intelligence integration
+
+Phase 17 adds `df-test-intelligence-integration` between the deterministic intelligence engine and the existing durable controller/plan boundary.
+
+Data flow:
+
+    GitHub compare -> ChangeSet
+    controller intelligence_job_context + failed jobs -> HistoricalFailure
+    online durable workers + assigned/running slots -> WorkerCapacity
+    Phase 10 analyze -> IntelligenceReport
+    stored Phase 16 plan -> exact executable profile match
+    advisory mode -> decision only
+    automatic mode -> bounded typed root-step enqueue
+    decision -> intelligence_history + hash-chained audit
+
+Automatic mode is intentionally narrower than advisory recommendations. Only exact `rust_fast` and `rust_standard` plan profiles are executable through this bridge. Dependency-bearing or OS/label-constrained steps are not auto-enqueued because the legacy durable queue does not represent a full plan-run dependency/routing state machine.
+
+Every automatically generated JobRequest is pinned to the immutable compared head SHA before persistence.
