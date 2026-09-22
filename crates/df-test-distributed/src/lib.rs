@@ -6,7 +6,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::{Read, Write},
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use thiserror::Error;
 use uuid::Uuid;
@@ -577,6 +577,105 @@ impl OutboundAgentClient {
     }
 }
 
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ControllerAck {
+    pub node_id: String,
+    pub accepted: bool,
+    pub lease_seconds: u64,
+}
+
+pub fn connect_registration_probe(
+    controller: SocketAddr,
+    registration: NodeRegistration,
+    key_id: &str,
+    secret: &[u8],
+    now_secs: u64,
+    timeout: Duration,
+) -> Result<ControllerAck, DistributedError> {
+    registration.validate()?;
+    if registration.key_id != key_id {
+        return Err(DistributedError::KeyIdentityMismatch);
+    }
+
+    let envelope =
+        AuthenticatedEnvelope::sign(key_id.to_string(), secret, now_secs, registration)?;
+    let mut client = OutboundAgentClient::connect(controller, timeout)?;
+    client.send(&envelope)?;
+    let ack_envelope: AuthenticatedEnvelope<ControllerAck> = client.receive()?;
+
+    let mut verifier = EnvelopeVerifier::new(30)?;
+    verifier.add_key(key_id.to_string(), secret)?;
+    verifier.verify(&ack_envelope, now_secs)?;
+
+    if !ack_envelope.payload.accepted {
+        return Err(DistributedError::RegistrationRejected);
+    }
+    Ok(ack_envelope.payload)
+}
+
+pub fn serve_registration_probe_once(
+    bind: SocketAddr,
+    key_id: &str,
+    secret: &[u8],
+    now_secs: u64,
+    timeout: Duration,
+) -> Result<NodeRegistration, DistributedError> {
+    validate_controller_addr(bind)?;
+    validate_identifier(key_id, 64)?;
+    if secret.len() < 32 {
+        return Err(DistributedError::WeakSharedSecret);
+    }
+    if timeout.is_zero() || timeout > Duration::from_secs(300) {
+        return Err(DistributedError::InvalidConnectTimeout);
+    }
+
+    let listener = TcpListener::bind(bind)?;
+    listener.set_nonblocking(true)?;
+    let deadline = Instant::now() + timeout;
+    let (mut stream, _) = loop {
+        match listener.accept() {
+            Ok(pair) => break pair,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    return Err(DistributedError::RegistrationProbeTimeout);
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
+
+    stream.set_read_timeout(Some(timeout))?;
+    stream.set_write_timeout(Some(timeout))?;
+    let envelope: AuthenticatedEnvelope<NodeRegistration> = read_frame(&mut stream)?;
+
+    let mut verifier = EnvelopeVerifier::new(30)?;
+    verifier.add_key(key_id.to_string(), secret)?;
+    verifier.verify(&envelope, now_secs)?;
+    envelope.payload.validate()?;
+    if envelope.key_id != key_id || envelope.payload.key_id != key_id {
+        return Err(DistributedError::KeyIdentityMismatch);
+    }
+
+    let ack = ControllerAck {
+        node_id: envelope.payload.profile.node_id.clone(),
+        accepted: true,
+        lease_seconds: DEFAULT_LEASE_SECONDS,
+    };
+    let ack_envelope =
+        AuthenticatedEnvelope::sign(key_id.to_string(), secret, now_secs, ack)?;
+    let bytes = serde_json::to_vec(&ack_envelope)?;
+    if bytes.len() > MAX_FRAME_BYTES {
+        return Err(DistributedError::FrameTooLarge);
+    }
+    stream.write_all(&(bytes.len() as u32).to_be_bytes())?;
+    stream.write_all(&bytes)?;
+    stream.flush()?;
+
+    Ok(envelope.payload)
+}
+
 pub fn read_frame<T: DeserializeOwned, R: Read>(reader: &mut R) -> Result<T, DistributedError> {
     let mut length = [0u8; 4];
     reader.read_exact(&mut length)?;
@@ -948,6 +1047,10 @@ pub enum DistributedError {
     FrameTooLarge,
     #[error("fixture thread panicked")]
     FixtureThreadPanicked,
+    #[error("controller rejected node registration")]
+    RegistrationRejected,
+    #[error("registration probe timed out waiting for an outbound node connection")]
+    RegistrationProbeTimeout,
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
