@@ -567,6 +567,30 @@ impl OutboundAgentClient {
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum DistributedTask {
+    NetworkFixtureSuite,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NodeCommand {
+    pub job_id: Uuid,
+    pub task: DistributedTask,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CrossNodeClientResult {
+    pub ack: ControllerAck,
+    pub result: NodeResultManifest,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CrossNodeServerResult {
+    pub registration: NodeRegistration,
+    pub result: NodeResultManifest,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControllerAck {
     pub node_id: String,
     pub accepted: bool,
@@ -580,26 +604,43 @@ pub fn connect_registration_probe(
     secret: &[u8],
     now_secs: u64,
     timeout: Duration,
-) -> Result<ControllerAck, DistributedError> {
+) -> Result<CrossNodeClientResult, DistributedError> {
     registration.validate()?;
     if registration.key_id != key_id {
         return Err(DistributedError::KeyIdentityMismatch);
     }
 
+    let node_id = registration.profile.node_id.clone();
     let envelope =
         AuthenticatedEnvelope::sign(key_id.to_string(), secret, now_secs, registration)?;
     let mut client = OutboundAgentClient::connect(controller, timeout)?;
     client.send(&envelope)?;
-    let ack_envelope: AuthenticatedEnvelope<ControllerAck> = client.receive()?;
 
     let mut verifier = EnvelopeVerifier::new(30)?;
     verifier.add_key(key_id.to_string(), secret)?;
-    verifier.verify(&ack_envelope, now_secs)?;
 
-    if !ack_envelope.payload.accepted {
+    let ack_envelope: AuthenticatedEnvelope<ControllerAck> = client.receive()?;
+    verifier.verify(&ack_envelope, current_unix_time_secs()?)?;
+    if !ack_envelope.payload.accepted || ack_envelope.payload.node_id != node_id {
         return Err(DistributedError::RegistrationRejected);
     }
-    Ok(ack_envelope.payload)
+
+    let command_envelope: AuthenticatedEnvelope<NodeCommand> = client.receive()?;
+    verifier.verify(&command_envelope, current_unix_time_secs()?)?;
+    let result = execute_distributed_task(&node_id, &command_envelope.payload)?;
+
+    let result_envelope = AuthenticatedEnvelope::sign(
+        key_id.to_string(),
+        secret,
+        current_unix_time_secs()?,
+        result.clone(),
+    )?;
+    client.send(&result_envelope)?;
+
+    Ok(CrossNodeClientResult {
+        ack: ack_envelope.payload,
+        result,
+    })
 }
 
 pub fn serve_registration_probe_once(
@@ -608,7 +649,7 @@ pub fn serve_registration_probe_once(
     secret: &[u8],
     _now_secs: u64,
     timeout: Duration,
-) -> Result<NodeRegistration, DistributedError> {
+) -> Result<CrossNodeServerResult, DistributedError> {
     validate_controller_addr(bind)?;
     validate_identifier(key_id, 64)?;
     if secret.len() < 32 {
@@ -636,33 +677,83 @@ pub fn serve_registration_probe_once(
 
     stream.set_read_timeout(Some(timeout))?;
     stream.set_write_timeout(Some(timeout))?;
-    let envelope: AuthenticatedEnvelope<NodeRegistration> = read_frame(&mut stream)?;
+    let registration_envelope: AuthenticatedEnvelope<NodeRegistration> = read_frame(&mut stream)?;
 
     let current_time = current_unix_time_secs()?;
     let mut verifier = EnvelopeVerifier::new(30)?;
     verifier.add_key(key_id.to_string(), secret)?;
-    verifier.verify(&envelope, current_time)?;
-    envelope.payload.validate()?;
-    if envelope.key_id != key_id || envelope.payload.key_id != key_id {
+    verifier.verify(&registration_envelope, current_time)?;
+    registration_envelope.payload.validate()?;
+    if registration_envelope.key_id != key_id || registration_envelope.payload.key_id != key_id {
         return Err(DistributedError::KeyIdentityMismatch);
     }
 
     let ack = ControllerAck {
-        node_id: envelope.payload.profile.node_id.clone(),
+        node_id: registration_envelope.payload.profile.node_id.clone(),
         accepted: true,
         lease_seconds: DEFAULT_LEASE_SECONDS,
     };
     let ack_envelope =
         AuthenticatedEnvelope::sign(key_id.to_string(), secret, current_time, ack)?;
-    let bytes = serde_json::to_vec(&ack_envelope)?;
-    if bytes.len() > MAX_FRAME_BYTES {
+    write_frame(&mut stream, &ack_envelope)?;
+
+    let command = NodeCommand {
+        job_id: Uuid::new_v4(),
+        task: DistributedTask::NetworkFixtureSuite,
+    };
+    let command_envelope =
+        AuthenticatedEnvelope::sign(key_id.to_string(), secret, current_unix_time_secs()?, command)?;
+    write_frame(&mut stream, &command_envelope)?;
+
+    let result_envelope: AuthenticatedEnvelope<NodeResultManifest> = read_frame(&mut stream)?;
+    verifier.verify(&result_envelope, current_unix_time_secs()?)?;
+    result_envelope.payload.validate()?;
+    if result_envelope.payload.node_id != registration_envelope.payload.profile.node_id {
+        return Err(DistributedError::ResultNodeMismatch);
+    }
+    if result_envelope.payload.status != JobStatus::Passed {
+        return Err(DistributedError::RemoteTaskFailed);
+    }
+
+    Ok(CrossNodeServerResult {
+        registration: registration_envelope.payload,
+        result: result_envelope.payload,
+    })
+}
+
+pub fn execute_distributed_task(
+    node_id: &str,
+    command: &NodeCommand,
+) -> Result<NodeResultManifest, DistributedError> {
+    validate_identifier(node_id, 64)?;
+    match command.task {
+        DistributedTask::NetworkFixtureSuite => {
+            let report = run_network_fixtures()?;
+            let bytes = serde_json::to_vec_pretty(&report)?;
+            let artifact = DistributedArtifact::from_bytes("network-report.json", &bytes)?;
+            Ok(NodeResultManifest {
+                job_id: command.job_id,
+                node_id: node_id.to_string(),
+                status: JobStatus::Passed,
+                summary: "typed Phase 8 network fixture suite passed".into(),
+                artifacts: vec![artifact],
+            })
+        }
+    }
+}
+
+pub fn write_frame<T: Serialize, W: Write>(
+    writer: &mut W,
+    value: &T,
+) -> Result<(), DistributedError> {
+    let bytes = serde_json::to_vec(value)?;
+    if bytes.is_empty() || bytes.len() > MAX_FRAME_BYTES {
         return Err(DistributedError::FrameTooLarge);
     }
-    stream.write_all(&(bytes.len() as u32).to_be_bytes())?;
-    stream.write_all(&bytes)?;
-    stream.flush()?;
-
-    Ok(envelope.payload)
+    writer.write_all(&(bytes.len() as u32).to_be_bytes())?;
+    writer.write_all(&bytes)?;
+    writer.flush()?;
+    Ok(())
 }
 
 pub fn read_frame<T: DeserializeOwned, R: Read>(reader: &mut R) -> Result<T, DistributedError> {
@@ -1049,6 +1140,10 @@ pub enum DistributedError {
     RegistrationProbeTimeout,
     #[error("system clock is before the Unix epoch")]
     SystemClockBeforeUnixEpoch,
+    #[error("remote result node does not match the authenticated registration")]
+    ResultNodeMismatch,
+    #[error("remote typed task failed")]
+    RemoteTaskFailed,
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
