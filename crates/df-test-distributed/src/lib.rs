@@ -697,6 +697,7 @@ fn serve_registration_probe_listener(
 
         match listener.accept() {
             Ok((mut candidate, _peer)) => {
+                candidate.set_nonblocking(false)?;
                 let remaining = deadline.saturating_duration_since(Instant::now());
                 let per_connection_timeout = remaining.min(Duration::from_secs(5));
                 candidate.set_read_timeout(Some(per_connection_timeout))?;
