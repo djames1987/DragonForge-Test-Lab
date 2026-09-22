@@ -1,4 +1,6 @@
-use df_test_intelligence::{ChangeSet, HistoricalFailure, TestProfile, WorkerCapacity, MAX_HISTORY_RECORDS};
+use df_test_intelligence::{
+    ChangeSet, HistoricalFailure, TestProfile, WorkerCapacity, MAX_HISTORY_RECORDS,
+};
 use df_test_lifecycle::{decide_failure, FailureClass, LifecycleDecision, RetryPolicy};
 use df_test_observability::{next_audit_digest, LogLevel, MetricPoint, StructuredLogEvent};
 use df_test_plans::TestPlan;
@@ -1356,7 +1358,12 @@ impl DurableController {
                 profile_json = excluded.profile_json,
                 changed_files_json = excluded.changed_files_json,
                 created_at_secs = excluded.created_at_secs",
-            params![job_id.to_string(), profile_json, files_json, to_i64(now_secs)?],
+            params![
+                job_id.to_string(),
+                profile_json,
+                files_json,
+                to_i64(now_secs)?
+            ],
         )?;
         Ok(())
     }
@@ -1377,15 +1384,18 @@ impl DurableController {
              ORDER BY j.updated_at_secs DESC
              LIMIT ?1",
         )?;
-        let rows = statement.query_map([i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<String>>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, i64>(4)?,
-            ))
-        })?;
+        let rows = statement.query_map(
+            [i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            },
+        )?;
         let mut failures = Vec::new();
         for row in rows {
             let (job_id, profile_json, message, changed_files_json, updated_at) = row?;
@@ -1459,7 +1469,9 @@ impl DurableController {
         now_secs: u64,
     ) -> Result<i64, DurableControllerError> {
         let report_json = serde_json::to_string(report)?;
-        let tx = self.connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
         tx.execute(
             "INSERT INTO intelligence_history(report_json, created_at_secs)
              VALUES (?1, ?2)",
