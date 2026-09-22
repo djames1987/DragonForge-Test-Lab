@@ -24,6 +24,7 @@ df-test-sandbox = { path = "../../crates/df-test-sandbox" }
 df-test-vm = { path = "../../crates/df-test-vm" }
 df-test-windows = { path = "../../crates/df-test-windows" }
 serde_json.workspace = true
+uuid.workspace = true
 
 
 [target.'cfg(windows)'.dependencies]
