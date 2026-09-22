@@ -144,12 +144,9 @@ fn controller_state_fixture() -> Result<(), Box<dyn std::error::Error>> {
         protocol_version: PROTOCOL_VERSION,
         os: std::env::consts::OS.into(),
         arch: std::env::consts::ARCH.into(),
-        capabilities: [
-            Capability::CheckoutRepository,
-            Capability::CargoTest,
-        ]
-        .into_iter()
-        .collect(),
+        capabilities: [Capability::CheckoutRepository, Capability::CargoTest]
+            .into_iter()
+            .collect(),
     };
 
     {
