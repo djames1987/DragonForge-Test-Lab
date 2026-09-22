@@ -12,8 +12,17 @@ function Test-CargoSubcommand {
         [string]$Label
     )
 
-    & cargo @Arguments *> $null
-    $ok = ($LASTEXITCODE -eq 0)
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & cargo @Arguments *> $null
+        $code = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+
+    $ok = ($code -eq 0)
     Write-Host ("{0}: {1}" -f $Label, $ok)
     return $ok
 }
@@ -25,7 +34,7 @@ Write-Host ""
 
 cargo --version
 rustc --version
-rustup --version
+rustup show active-toolchain
 
 $nextest = Test-CargoSubcommand -Arguments @("nextest", "--version") -Label "cargo-nextest"
 $coverage = Test-CargoSubcommand -Arguments @("llvm-cov", "--version") -Label "cargo-llvm-cov"
