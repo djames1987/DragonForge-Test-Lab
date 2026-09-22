@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 5 — Deep Rust Testing — Implementation complete
+Phase 5 — Deep Rust Testing — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration for disposable Windows/Linux test machines and passed full Windows lifecycle validation on 2026-09-22. Phase 5 adds nextest, LLVM coverage, property testing, Criterion benchmarks, Miri, sanitizers, and bounded cargo-fuzz support with explicit platform-aware validation lanes.
+Phase 4 added typed Hyper-V VM orchestration for disposable Windows/Linux test machines and passed full Windows lifecycle validation on 2026-09-22. Phase 5 adds nextest, LLVM coverage, property testing, Criterion benchmarks, Miri, sanitizers, and bounded cargo-fuzz support with explicit platform-aware validation lanes. The mandatory Windows host Phase 5 validation passed on 2026-09-22.
 
 ## Workspace
 
