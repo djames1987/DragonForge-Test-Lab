@@ -243,7 +243,11 @@ impl WorkerServiceRuntime {
         )?;
         metrics.set_gauge(
             "dragonforge_worker_draining",
-            if self.snapshot.drain_requested { 1.0 } else { 0.0 },
+            if self.snapshot.drain_requested {
+                1.0
+            } else {
+                0.0
+            },
         )?;
         metrics.set_gauge(
             "dragonforge_worker_reconnect_attempt",
@@ -800,17 +804,17 @@ mod tests {
         runtime.mark_connected(100);
         runtime.start_job().unwrap();
         let metrics = runtime.observability_snapshot(101).unwrap();
-        assert!(metrics.iter().any(|point| {
-            point.name == "dragonforge_worker_active_jobs" && point.value == 1.0
-        }));
+        assert!(metrics
+            .iter()
+            .any(|point| { point.name == "dragonforge_worker_active_jobs" && point.value == 1.0 }));
         assert!(metrics.iter().any(|point| {
             point.name == "dragonforge_worker_accepting_jobs" && point.value == 1.0
         }));
         runtime.request_drain();
         let metrics = runtime.observability_snapshot(102).unwrap();
-        assert!(metrics.iter().any(|point| {
-            point.name == "dragonforge_worker_draining" && point.value == 1.0
-        }));
+        assert!(metrics
+            .iter()
+            .any(|point| { point.name == "dragonforge_worker_draining" && point.value == 1.0 }));
     }
 
     #[test]
