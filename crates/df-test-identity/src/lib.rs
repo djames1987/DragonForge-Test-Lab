@@ -235,6 +235,30 @@ impl IdentityTrustStore {
     pub fn is_revoked(&self, fingerprint: &CertificateFingerprint) -> bool {
         self.revoked_fingerprints.contains(fingerprint)
     }
+
+    pub fn to_json(&self) -> Result<String, IdentityError> {
+        serde_json::to_string_pretty(self).map_err(IdentityError::Json)
+    }
+
+    pub fn from_json(json: &str) -> Result<Self, IdentityError> {
+        let store: Self = serde_json::from_str(json).map_err(IdentityError::Json)?;
+        if store.identities.len() > MAX_TRUSTED_IDENTITIES {
+            return Err(IdentityError::TooManyIdentities);
+        }
+        for (node_id, identity) in &store.identities {
+            validate_identifier(node_id)?;
+            if identity.node_id != *node_id {
+                return Err(IdentityError::InvalidIdentity);
+            }
+            if identity.certificates.len() > MAX_CERTIFICATES_PER_IDENTITY {
+                return Err(IdentityError::TooManyCertificates);
+            }
+            for certificate in &identity.certificates {
+                certificate.validate()?;
+            }
+        }
+        Ok(store)
+    }
 }
 
 pub struct CertificateMaterial {
@@ -545,6 +569,8 @@ pub enum IdentityError {
     Fixture(String),
     #[error("fixture thread panicked")]
     FixtureThreadPanicked,
+    #[error("JSON serialization error: {0}")]
+    Json(serde_json::Error),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -591,6 +617,17 @@ mod tests {
             store.verify_peer("node-a", b"cert-1", 50),
             Err(IdentityError::CertificateRevoked)
         ));
+    }
+
+    #[test]
+    fn trust_store_round_trips_without_private_keys() {
+        let mut store = IdentityTrustStore::default();
+        let certificate = store.enroll("node-a", b"cert-1", 1, 100).unwrap();
+        store.revoke_certificate(&certificate.fingerprint).unwrap();
+        let json = store.to_json().unwrap();
+        assert!(!json.contains("PRIVATE KEY"));
+        let restored = IdentityTrustStore::from_json(&json).unwrap();
+        assert!(restored.is_revoked(&certificate.fingerprint));
     }
 
     #[test]
