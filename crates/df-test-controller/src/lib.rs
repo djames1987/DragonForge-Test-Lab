@@ -33,6 +33,466 @@ impl Controller {
         self.queued.len()
     }
 
+    pub fn assign_next(&mut self, worker_id: &str) -> Result<Option<JobRequest>, ControllerError> {
+        let worker = self
+            .workers
+            .get(worker_id)
+            .ok_or(ControllerError::UnknownWorker)?;
+
+        let position = self
+            .queued
+            .iter()
+            .position(|job| job.required_capabilities().is_subset(&worker.capabilities));
+
+        Ok(position.and_then(|index| self.queued.remove(index)))
+    }
+
+    pub fn cancel(&mut self, job_id: Uuid) -> bool {
+        if let Some(index) = self.queued.iter().position(|job| job.id == job_id) {
+            self.queued.remove(index);
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControllerError {
+    ProtocolMismatch,
+    UnknownWorker,
+}
+
+pub const SCHEMA_VERSION: i64 = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DurableJobState {
+    Queued,
+    Assigned,
+    Running,
+    Passed,
+    Failed,
+    Rejected,
+    Cancelled,
+    Interrupted,
+    RetryPending,
+    Exhausted,
+}
+
+impl DurableJobState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Queued => "queued",
+            Self::Assigned => "assigned",
+            Self::Running => "running",
+            Self::Passed => "passed",
+            Self::Failed => "failed",
+            Self::Rejected => "rejected",
+            Self::Cancelled => "cancelled",
+            Self::Interrupted => "interrupted",
+            Self::RetryPending => "retry_pending",
+            Self::Exhausted => "exhausted",
+        }
+    }
+
+    fn parse(value: &str) -> Result<Self, DurableControllerError> {
+        match value {
+            "queued" => Ok(Self::Queued),
+            "assigned" => Ok(Self::Assigned),
+            "running" => Ok(Self::Running),
+            "passed" => Ok(Self::Passed),
+            "failed" => Ok(Self::Failed),
+            "rejected" => Ok(Self::Rejected),
+            "cancelled" => Ok(Self::Cancelled),
+            "interrupted" => Ok(Self::Interrupted),
+            "retry_pending" => Ok(Self::RetryPending),
+            "exhausted" => Ok(Self::Exhausted),
+            _ => Err(DurableControllerError::InvalidStoredState(value.to_owned())),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableJobRecord {
+    pub job: JobRequest,
+    pub state: DurableJobState,
+    pub assigned_worker: Option<String>,
+    pub created_at_secs: u64,
+    pub updated_at_secs: u64,
+    pub last_error: Option<String>,
+    pub retry_policy: RetryPolicy,
+    pub failure_class: Option<FailureClass>,
+    pub next_retry_at_secs: Option<u64>,
+    pub retry_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableAttemptRecord {
+    pub attempt_id: i64,
+    pub job_id: Uuid,
+    pub attempt_number: u32,
+    pub worker_id: Option<String>,
+    pub state: DurableJobState,
+    pub started_at_secs: Option<u64>,
+    pub finished_at_secs: Option<u64>,
+    pub summary: Option<String>,
+    pub failure_class: Option<FailureClass>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableWorkerRecord {
+    pub registration: WorkerRegistration,
+    pub last_seen_secs: u64,
+    pub online: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditEvent {
+    pub id: i64,
+    pub unix_time_secs: u64,
+    pub kind: String,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub detail: serde_json::Value,
+    pub previous_sha256: Option<String>,
+    pub event_sha256: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DurableLogRecord {
+    pub id: i64,
+    pub event: StructuredLogEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DurableMetricRecord {
+    pub id: i64,
+    pub point: MetricPoint,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableArtifactRecord {
+    pub id: i64,
+    pub job_id: Uuid,
+    pub artifact: ArtifactRef,
+    pub created_at_secs: u64,
+    pub retained_until_secs: Option<u64>,
+}
+
+pub struct DurableController {
+    connection: Connection,
+}
+
+impl DurableController {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, DurableControllerError> {
+        let connection = Connection::open(path)?;
+        Self::from_connection(connection)
+    }
+
+    pub fn open_in_memory() -> Result<Self, DurableControllerError> {
+        let connection = Connection::open_in_memory()?;
+        Self::from_connection(connection)
+    }
+
+    fn from_connection(connection: Connection) -> Result<Self, DurableControllerError> {
+        connection.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             PRAGMA busy_timeout = 5000;",
+        )?;
+        let mut controller = Self { connection };
+        controller.migrate()?;
+        Ok(controller)
+    }
+
+    pub fn schema_version(&self) -> Result<i64, DurableControllerError> {
+        Ok(self
+            .connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))?)
+    }
+
+    pub fn migrate(&mut self) -> Result<(), DurableControllerError> {
+        let current = self.schema_version()?;
+        if current > SCHEMA_VERSION {
+            return Err(DurableControllerError::SchemaTooNew {
+                current,
+                supported: SCHEMA_VERSION,
+            });
+        }
+
+        if current < 1 {
+            let tx = self
+                .connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute_batch(
+                "CREATE TABLE IF NOT EXISTS jobs (
+                    job_id TEXT PRIMARY KEY NOT NULL,
+                    request_json TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    assigned_worker TEXT,
+                    created_at_secs INTEGER NOT NULL,
+                    updated_at_secs INTEGER NOT NULL,
+                    last_error TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS job_attempts (
+                    attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT NOT NULL,
+                    attempt_number INTEGER NOT NULL,
+                    worker_id TEXT,
+                    state TEXT NOT NULL,
+                    started_at_secs INTEGER,
+                    finished_at_secs INTEGER,
+                    summary TEXT,
+                    FOREIGN KEY(job_id) REFERENCES jobs(job_id) ON DELETE CASCADE,
+                    UNIQUE(job_id, attempt_number)
+                );
+
+                CREATE TABLE IF NOT EXISTS workers (
+                    worker_id TEXT PRIMARY KEY NOT NULL,
+                    registration_json TEXT NOT NULL,
+                    last_seen_secs INTEGER NOT NULL,
+                    online INTEGER NOT NULL CHECK(online IN (0, 1))
+                );
+
+                CREATE TABLE IF NOT EXISTS intelligence_history (
+                    intelligence_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_json TEXT NOT NULL,
+                    created_at_secs INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS artifact_metadata (
+                    artifact_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    relative_path TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL,
+                    sha256 TEXT,
+                    FOREIGN KEY(job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    unix_time_secs INTEGER NOT NULL,
+                    kind TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    detail_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS controller_config (
+                    config_key TEXT PRIMARY KEY NOT NULL,
+                    config_value TEXT NOT NULL,
+                    updated_at_secs INTEGER NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_jobs_state_created
+                    ON jobs(state, created_at_secs);
+                CREATE INDEX IF NOT EXISTS idx_attempts_job
+                    ON job_attempts(job_id, attempt_number);
+                CREATE INDEX IF NOT EXISTS idx_audit_entity
+                    ON audit_events(entity_type, entity_id, unix_time_secs);
+
+                PRAGMA user_version = 1;",
+            )?;
+            tx.commit()?;
+        }
+
+        if current < 2 {
+            let tx = self
+                .connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute_batch(
+                "ALTER TABLE artifact_metadata
+                    ADD COLUMN created_at_secs INTEGER NOT NULL DEFAULT 0;
+                 ALTER TABLE artifact_metadata
+                    ADD COLUMN retained_until_secs INTEGER;
+                 ALTER TABLE audit_events
+                    ADD COLUMN previous_sha256 TEXT;
+                 ALTER TABLE audit_events
+                    ADD COLUMN event_sha256 TEXT;
+
+                 CREATE TABLE IF NOT EXISTS structured_logs (
+                    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    unix_time_secs INTEGER NOT NULL,
+                    level TEXT NOT NULL,
+                    component TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    fields_json TEXT NOT NULL,
+                    job_id TEXT,
+                    worker_id TEXT
+                 );
+
+                 CREATE TABLE IF NOT EXISTS metric_samples (
+                    metric_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    unix_time_secs INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    value REAL NOT NULL,
+                    labels_json TEXT NOT NULL
+                 );
+
+                 CREATE INDEX IF NOT EXISTS idx_artifacts_created
+                    ON artifact_metadata(created_at_secs, artifact_id);
+                 CREATE INDEX IF NOT EXISTS idx_logs_time
+                    ON structured_logs(unix_time_secs, log_id);
+                 CREATE INDEX IF NOT EXISTS idx_logs_job
+                    ON structured_logs(job_id, unix_time_secs);
+                 CREATE INDEX IF NOT EXISTS idx_metrics_name_time
+                    ON metric_samples(name, unix_time_secs);
+
+                 PRAGMA user_version = 2;",
+            )?;
+            tx.commit()?;
+        }
+
+        if current < 3 {
+            let tx = self
+                .connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute_batch(
+                "ALTER TABLE jobs ADD COLUMN retry_policy_json TEXT;
+                 ALTER TABLE jobs ADD COLUMN failure_class TEXT;
+                 ALTER TABLE jobs ADD COLUMN next_retry_at_secs INTEGER;
+                 ALTER TABLE jobs ADD COLUMN retry_reason TEXT;
+                 ALTER TABLE job_attempts ADD COLUMN failure_class TEXT;
+
+                 CREATE INDEX IF NOT EXISTS idx_jobs_retry_ready
+                    ON jobs(state, next_retry_at_secs, created_at_secs);
+
+                 PRAGMA user_version = 3;",
+            )?;
+            tx.commit()?;
+        }
+
+        Ok(())
+    }
+
+    pub fn enqueue_job(
+        &mut self,
+        job: &JobRequest,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        self.enqueue_job_with_retry(job, RetryPolicy::no_retry(), now_secs)
+    }
+
+    pub fn enqueue_job_with_retry(
+        &mut self,
+        job: &JobRequest,
+        retry_policy: RetryPolicy,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        retry_policy.validate()?;
+        let job_json = serde_json::to_string(job)?;
+        let retry_policy_json = serde_json::to_string(&retry_policy)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
+            "INSERT INTO jobs (
+                job_id, request_json, state, created_at_secs, updated_at_secs, retry_policy_json
+             ) VALUES (?1, ?2, ?3, ?4, ?4, ?5)",
+            params![
+                job.id.to_string(),
+                job_json,
+                DurableJobState::Queued.as_str(),
+                to_i64(now_secs)?,
+                retry_policy_json
+            ],
+        )?;
+        insert_audit(
+            &tx,
+            now_secs,
+            "job_enqueued",
+            "job",
+            &job.id.to_string(),
+            &serde_json::json!({
+                "state":"queued",
+                "retry_policy": retry_policy
+            }),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn register_worker(
+        &mut self,
+        worker: &WorkerRegistration,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        if worker.protocol_version != PROTOCOL_VERSION {
+            return Err(DurableControllerError::ProtocolMismatch);
+        }
+        let worker_json = serde_json::to_string(worker)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
+            "INSERT INTO workers(worker_id, registration_json, last_seen_secs, online)
+             VALUES (?1, ?2, ?3, 1)
+             ON CONFLICT(worker_id) DO UPDATE SET
+                registration_json = excluded.registration_json,
+                last_seen_secs = excluded.last_seen_secs,
+                online = 1",
+            params![worker.worker_id, worker_json, to_i64(now_secs)?],
+        )?;
+        insert_audit(
+            &tx,
+            now_secs,
+            "worker_registered",
+            "worker",
+            &worker.worker_id,
+            &serde_json::json!({
+                "os": worker.os,
+                "arch": worker.arch,
+                "protocol_version": worker.protocol_version
+            }),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn heartbeat_worker(
+        &mut self,
+        worker_id: &str,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        let changed = self.connection.execute(
+            "UPDATE workers SET last_seen_secs = ?2, online = 1 WHERE worker_id = ?1",
+            params![worker_id, to_i64(now_secs)?],
+        )?;
+        if changed == 0 {
+            return Err(DurableControllerError::UnknownWorker);
+        }
+        Ok(())
+    }
+
+    pub fn set_worker_offline(
+        &mut self,
+        worker_id: &str,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE workers SET online = 0, last_seen_secs = ?2 WHERE worker_id = ?1",
+            params![worker_id, to_i64(now_secs)?],
+        )?;
+        if changed == 0 {
+            return Err(DurableControllerError::UnknownWorker);
+        }
+        insert_audit(
+            &tx,
+            now_secs,
+            "worker_offline",
+            "worker",
+            worker_id,
+            &serde_json::json!({}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn assign_next(
         &mut self,
         worker_id: &str,
@@ -316,7 +776,13 @@ impl Controller {
                 result.job_id.to_string(),
                 final_state.as_str(),
                 to_i64(now_secs)?,
-                if matches!(final_state, DurableJobState::Failed | DurableJobState::Exhausted | DurableJobState::Interrupted | DurableJobState::RetryPending) {
+                if matches!(
+                    final_state,
+                    DurableJobState::Failed
+                        | DurableJobState::Exhausted
+                        | DurableJobState::Interrupted
+                        | DurableJobState::RetryPending
+                ) {
                     Some(result.summary.as_str())
                 } else {
                     None
