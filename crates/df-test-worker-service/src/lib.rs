@@ -340,7 +340,7 @@ impl WindowsServiceSpec {
 
     pub fn command_line(&self) -> String {
         format!(
-            "\"{}\" worker-service-run --config \"{}\" --service-mode",
+            "\"{}\" worker-service-windows --config \"{}\"",
             self.executable.display(),
             self.config_path.display()
         )
@@ -367,7 +367,7 @@ impl SystemdServiceSpec {
 
     pub fn render_unit(&self) -> String {
         format!(
-            "[Unit]\nDescription=DragonForge Test Worker\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart={} worker-service-run --config {} --service-mode\nRestart=on-failure\nRestartSec=5\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=true\n\n[Install]\nWantedBy=multi-user.target\n",
+            "[Unit]\nDescription=DragonForge Test Worker\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart={} worker-service-run --config {}\nRestart=on-failure\nRestartSec=5\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=true\n\n[Install]\nWantedBy=multi-user.target\n",
             systemd_escape_path(&self.executable),
             systemd_escape_path(&self.config_path)
         )
