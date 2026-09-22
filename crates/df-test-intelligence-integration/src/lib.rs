@@ -270,9 +270,7 @@ pub enum IntegrationError {
 mod tests {
     use super::*;
     use df_test_lifecycle::FailureClass;
-    use df_test_plans::{
-        ArtifactKind, PlanCondition, PlanStep, TEST_PLAN_VERSION,
-    };
+    use df_test_plans::{ArtifactKind, PlanCondition, PlanStep, TEST_PLAN_VERSION};
     use df_test_protocol::{
         Capability, JobRequest, JobResult, JobStatus, RepositorySpec, ResourceLimits, TestAction,
         WorkerRegistration, PROTOCOL_VERSION,
