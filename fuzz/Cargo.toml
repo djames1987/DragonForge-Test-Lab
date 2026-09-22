@@ -1,0 +1,23 @@
+[package]
+name = "df-test-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+df-test-protocol = { path = "../crates/df-test-protocol" }
+
+[[bin]]
+name = "job_request_json"
+path = "fuzz_targets/job_request_json.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]
