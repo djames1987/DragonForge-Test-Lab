@@ -218,7 +218,9 @@ fn identity_doctor() -> Result<(), Box<dyn std::error::Error>> {
     validate_private_controller_address(loopback)?;
     validate_private_controller_address(private)?;
     if validate_private_controller_address(public).is_ok() {
-        return Err("mTLS identity controller address policy unexpectedly allowed a public IP".into());
+        return Err(
+            "mTLS identity controller address policy unexpectedly allowed a public IP".into(),
+        );
     }
 
     println!("DragonForge Test Lab identity doctor");
