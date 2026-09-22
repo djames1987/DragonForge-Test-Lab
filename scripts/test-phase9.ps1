@@ -98,8 +98,9 @@ try {
     Assert-LastExitCode "cargo fmt"
 
     Write-Host "[2/10] cargo clippy"
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
-    Assert-LastExitCode "cargo clippy"
+    Invoke-CargoCaptured -Step "cargo clippy" -Arguments @(
+        "clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"
+    )
 
     Write-Host "[3/10] cargo test"
     Invoke-CargoCaptured -Step "cargo test" -Arguments @("test", "--workspace", "--all-features")
