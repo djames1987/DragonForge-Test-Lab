@@ -240,3 +240,29 @@ The database is controller-owned state only. A persisted assignment still has to
 The TLS layer provides encryption plus certificate authentication. DragonForge authorization additionally maps the presented end-entity certificate fingerprint to the claimed node ID. A CA-issued certificate therefore does not automatically authorize every node identity.
 
 Certificate trust metadata is serializable without private keys. Rotation uses overlapping certificate generations so a new key can become active before the old generation is retired. Revocation fails closed. The Phase 8 HMAC transport remains available for compatibility/private-lab debugging; Phase 13 service-oriented workers should prefer mTLS.
+
+
+## Phase 13 worker-service flow
+
+    OS service manager
+       |          |
+    Windows      systemd
+      SCM          |
+       \          /
+        worker-service runtime
+              |
+       recover local snapshot
+              |
+       outbound mTLS connect
+              |
+       typed registration
+              |
+       typed heartbeats
+              |
+       online / draining
+              |
+       disconnect -> bounded backoff -> reconnect
+
+Windows uses a native Service Control Manager dispatcher and Stop control handling. Linux uses the same foreground worker runtime beneath a hardened systemd unit. Service installation/upgrade packaging is reserved for Phase 21; the Phase 13 executable and service definitions are service-manager capable now.
+
+Drain mode prevents new work while retaining existing active-job state. Runtime snapshots contain no certificate or private-key bytes. A restart never trusts a previously online session and reconnects before advertising availability.
