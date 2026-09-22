@@ -56,12 +56,16 @@ impl PlanProfile {
             Self::RustFast => vec![
                 TestAction::Checkout,
                 TestAction::CargoFmtCheck,
-                TestAction::CargoTest { all_features: false },
+                TestAction::CargoTest {
+                    all_features: false,
+                },
             ],
             Self::RustStandard => vec![
                 TestAction::Checkout,
                 TestAction::CargoFmtCheck,
-                TestAction::CargoClippy { deny_warnings: true },
+                TestAction::CargoClippy {
+                    deny_warnings: true,
+                },
                 TestAction::CargoTest { all_features: true },
             ],
             Self::RustRelease => vec![
@@ -125,18 +129,13 @@ pub struct CompiledPlanStep {
 }
 
 impl CompiledPlanStep {
-    pub fn matches_target(
-        &self,
-        worker_os: &str,
-        labels: &BTreeMap<String, String>,
-    ) -> bool {
+    pub fn matches_target(&self, worker_os: &str, labels: &BTreeMap<String, String>) -> bool {
         let os_matches = match self.target_os {
             TargetOs::Any => true,
             TargetOs::Windows => worker_os.eq_ignore_ascii_case("windows"),
             TargetOs::Linux => worker_os.eq_ignore_ascii_case("linux"),
             TargetOs::Macos => {
-                worker_os.eq_ignore_ascii_case("macos")
-                    || worker_os.eq_ignore_ascii_case("darwin")
+                worker_os.eq_ignore_ascii_case("macos") || worker_os.eq_ignore_ascii_case("darwin")
             }
         };
         os_matches
@@ -181,7 +180,8 @@ impl TestPlan {
                 .iter()
                 .map(TestAction::required_capability)
                 .collect::<BTreeSet<_>>();
-            if !derived.is_subset(&step.required_capabilities) && !step.required_capabilities.is_empty()
+            if !derived.is_subset(&step.required_capabilities)
+                && !step.required_capabilities.is_empty()
             {
                 return Err(PlanError::MissingDeclaredCapability);
             }
@@ -204,7 +204,12 @@ impl TestPlan {
         let mut remaining = self
             .steps
             .iter()
-            .map(|step| (step.id.clone(), step.depends_on.iter().cloned().collect::<BTreeSet<_>>()))
+            .map(|step| {
+                (
+                    step.id.clone(),
+                    step.depends_on.iter().cloned().collect::<BTreeSet<_>>(),
+                )
+            })
             .collect::<BTreeMap<_, _>>();
         let mut ordered = Vec::with_capacity(remaining.len());
 
@@ -239,8 +244,7 @@ impl TestPlan {
         job.extra_required_capabilities = step.required_capabilities.clone();
         job.limits = step.limits.clone();
         let derived = job.required_capabilities();
-        if !step.required_capabilities.is_empty()
-            && !derived.is_subset(&step.required_capabilities)
+        if !step.required_capabilities.is_empty() && !derived.is_subset(&step.required_capabilities)
         {
             return Err(PlanError::MissingDeclaredCapability);
         }
@@ -416,7 +420,10 @@ mod tests {
             .actions
             .iter()
             .all(|action| !format!("{action:?}").is_empty()));
-        assert!(step.job.required_capabilities().contains(&Capability::CargoTest));
+        assert!(step
+            .job
+            .required_capabilities()
+            .contains(&Capability::CargoTest));
         assert!(step
             .job
             .required_capabilities()
