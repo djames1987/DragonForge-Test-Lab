@@ -359,6 +359,9 @@ fn worker_service_run_loop(
                             return Ok(());
                         }
                         let now = unix_time_secs()?;
+                        if runtime.refresh_persisted_control()? {
+                            runtime.persist()?;
+                        }
                         if let Err(error) = session.send_heartbeat(&runtime) {
                             eprintln!("worker heartbeat failed: {error}");
                             runtime.mark_disconnected();
