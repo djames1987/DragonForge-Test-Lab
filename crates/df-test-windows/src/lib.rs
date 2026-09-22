@@ -164,12 +164,13 @@ impl WindowsIntegrationClient {
             return Err(WindowsError::MissingSystemBinary(bin_path));
         }
 
+        let bin_path_text = bin_path.to_string_lossy().into_owned();
         let create = Command::new("sc.exe")
             .args([
                 "create",
                 &name,
                 "binPath=",
-                bin_path.to_string_lossy().as_ref(),
+                &bin_path_text,
                 "start=",
                 "demand",
                 "DisplayName=",
