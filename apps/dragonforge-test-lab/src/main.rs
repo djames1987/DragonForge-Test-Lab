@@ -329,14 +329,10 @@ fn lifecycle_fixture() -> Result<(), Box<dyn std::error::Error>> {
             TestAction::CargoTest { all_features: true },
         ],
     );
-    controller.enqueue_job_with_retry(
-        &retry_job,
-        RetryPolicy::bounded(3, 5, 30, false)?,
-        2,
-    )?;
-    controller.assign_next(&worker.worker_id, 3)?.ok_or(
-        "Phase 15 fixture did not assign initial retry job",
-    )?;
+    controller.enqueue_job_with_retry(&retry_job, RetryPolicy::bounded(3, 5, 30, false)?, 2)?;
+    controller
+        .assign_next(&worker.worker_id, 3)?
+        .ok_or("Phase 15 fixture did not assign initial retry job")?;
     controller.mark_running(retry_job.id, 4)?;
 
     let retry_decision = controller.complete_job_with_classification(
@@ -353,9 +349,7 @@ fn lifecycle_fixture() -> Result<(), Box<dyn std::error::Error>> {
         == LifecycleDecision::RetryScheduled {
             next_retry_at_secs: 10,
         };
-    let retry_not_early = controller
-        .assign_next(&worker.worker_id, 9)?
-        .is_none();
+    let retry_not_early = controller.assign_next(&worker.worker_id, 9)?.is_none();
     let retry_assigned_when_due = controller
         .assign_next(&worker.worker_id, 10)?
         .map(|job| job.id)
@@ -372,8 +366,7 @@ fn lifecycle_fixture() -> Result<(), Box<dyn std::error::Error>> {
         12,
     )?;
     let test_failure_terminal = test_failure_decision == LifecycleDecision::TerminalFailed
-        && controller.get_job(retry_job.id)?.map(|job| job.state)
-            == Some(DurableJobState::Failed);
+        && controller.get_job(retry_job.id)?.map(|job| job.state) == Some(DurableJobState::Failed);
     let attempt_history_preserved = controller.list_attempts(retry_job.id)?.len() == 2;
 
     let recovery_job = JobRequest::new(
@@ -383,14 +376,10 @@ fn lifecycle_fixture() -> Result<(), Box<dyn std::error::Error>> {
         },
         vec![TestAction::Checkout],
     );
-    controller.enqueue_job_with_retry(
-        &recovery_job,
-        RetryPolicy::bounded(2, 7, 30, true)?,
-        20,
-    )?;
-    controller.assign_next(&worker.worker_id, 21)?.ok_or(
-        "Phase 15 fixture did not assign recovery job",
-    )?;
+    controller.enqueue_job_with_retry(&recovery_job, RetryPolicy::bounded(2, 7, 30, true)?, 20)?;
+    controller
+        .assign_next(&worker.worker_id, 21)?
+        .ok_or("Phase 15 fixture did not assign recovery job")?;
     controller.mark_running(recovery_job.id, 22)?;
     controller.recover_after_restart(30)?;
     let recovered = controller
@@ -408,21 +397,16 @@ fn lifecycle_fixture() -> Result<(), Box<dyn std::error::Error>> {
         vec![TestAction::Checkout],
     );
     controller.enqueue_job(&manual_job, 31)?;
-    controller.assign_next(&worker.worker_id, 32)?.ok_or(
-        "Phase 15 fixture did not assign manual recovery job",
-    )?;
+    controller
+        .assign_next(&worker.worker_id, 32)?
+        .ok_or("Phase 15 fixture did not assign manual recovery job")?;
     controller.mark_running(manual_job.id, 33)?;
     controller.recover_after_restart(34)?;
-    let manual_interrupted = controller
-        .get_job(manual_job.id)?
-        .map(|job| job.state)
+    let manual_interrupted = controller.get_job(manual_job.id)?.map(|job| job.state)
         == Some(DurableJobState::Interrupted);
     controller.reschedule_interrupted_job(manual_job.id, 35)?;
     let manual_interrupted_reschedule = manual_interrupted
-        && controller
-            .get_job(manual_job.id)?
-            .map(|job| job.state)
-            == Some(DurableJobState::Queued);
+        && controller.get_job(manual_job.id)?.map(|job| job.state) == Some(DurableJobState::Queued);
 
     let audit_chain_verified = controller.verify_audit_chain()?;
     let schema_v3 = controller.schema_version()? == 3;
@@ -461,9 +445,8 @@ fn lifecycle_status(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let path = value_after(args, "--state-db")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
-    let job_id = uuid::Uuid::parse_str(
-        &value_after(args, "--job-id").ok_or("missing --job-id <uuid>")?,
-    )?;
+    let job_id =
+        uuid::Uuid::parse_str(&value_after(args, "--job-id").ok_or("missing --job-id <uuid>")?)?;
     let controller = DurableController::open(&path)?;
     let job = controller
         .get_job(job_id)?
@@ -471,10 +454,13 @@ fn lifecycle_status(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let attempts = controller.list_attempts(job_id)?;
     println!("DragonForge Test Lab lifecycle status");
     println!("database={}", path.display());
-    println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-        "job": job,
-        "attempts": attempts
-    }))?);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "job": job,
+            "attempts": attempts
+        }))?
+    );
     println!("status=lifecycle_status_ready");
     Ok(())
 }
