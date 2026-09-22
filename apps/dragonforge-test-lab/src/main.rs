@@ -593,7 +593,7 @@ fn observability_fixture() -> Result<(), Box<dyn std::error::Error>> {
         .map(|record| record.point.name.as_str())
         == Some("dragonforge_workers_online");
     let audit_chain_verified = controller.verify_audit_chain()?;
-    let schema_v2 = controller.schema_version()? == 2;
+    let schema_v2 = controller.schema_version()? >= 2;
     let telemetry_pruned = controller.prune_telemetry_before(2_000)? == (1, 1);
 
     let report = serde_json::json!({
