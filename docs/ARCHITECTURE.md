@@ -14,6 +14,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-github: typed GitHub repository/ref resolution and commit-status reporting through the authenticated gh CLI.
 - df-test-sandbox: native/container sandbox selection, Windows Job Object containment, resource ceilings, worker-identity enforcement, and fixed Docker/Podman wrapping.
 - df-test-vm: typed Hyper-V host checks, golden-image differencing VM creation, managed lifecycle, checkpoints, and rollback.
+- df-test-windows: typed Windows registry/process/network/service/Event Log/installer fixtures with privilege separation.
 - dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, deep-Rust tool readiness, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
@@ -79,6 +80,21 @@ Golden images live outside the Git repository. Managed VM storage is separate fr
       -> transcript / regression artifacts
 
 Phase 5 keeps the remote job protocol typed. The deep-testing scripts are repository-maintained fixed workflows rather than caller-supplied command strings. Nightly and fuzz lanes are explicit opt-ins and are intended for disposable Linux workers/VMs when testing untrusted repositories.
+
+## Phase 6 Windows integration flow
+
+    Windows worker / VM
+      -> read-only Windows doctor
+      -> safe HKCU registry fixture
+      -> fixed direct process fixture
+      -> TCP/UDP loopback fixtures
+      -> Windows Installer discovery
+      -> optional MSI signature inspection
+      -> optional elevated service create/query/delete
+      -> optional elevated Application Event Log write
+      -> cleanup / transcript
+
+Safe and privileged fixtures are deliberately separated. Privileged mutation requires an elevated token and explicit CLI confirmation. Fixture names and registry locations are DragonForge-managed and generated internally; callers cannot supply service binary paths, registry scripts, Event Log commands, or arbitrary PowerShell.
 
 ## Distributed target
 

@@ -11,6 +11,7 @@ use df_test_sandbox::{
     ProcessTreeGuard, SandboxLimits, SandboxMode,
 };
 use df_test_vm::{GuestOs, HyperVClient, VmCreateSpec, VmLabConfig, DEFAULT_BASELINE_CHECKPOINT};
+use df_test_windows::WindowsIntegrationClient;
 use std::{collections::BTreeSet, path::PathBuf, process::Command};
 
 const GITHUB_STATUS_CONTEXT: &str = "dragonforge/test-lab";
@@ -31,6 +32,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "github-doctor" => github_doctor(),
         "sandbox-doctor" => sandbox_doctor(&args[2..]),
         "rust-doctor" => rust_doctor(),
+        "windows-doctor" => windows_doctor(),
+        "windows-fixtures" => windows_fixtures(),
+        "windows-privileged-fixtures" => windows_privileged_fixtures(&args[2..]),
+        "windows-installer-info" => windows_installer_info(&args[2..]),
         "vm-doctor" => vm_doctor(&args[2..]),
         "vm-list" => vm_list(&args[2..]),
         "vm-create" => vm_create(&args[2..]),
@@ -58,7 +63,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=5");
+    println!("phase=6");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -111,6 +116,49 @@ fn rust_doctor() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("status=deep_rust_ready");
+    Ok(())
+}
+
+fn windows_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let report = WindowsIntegrationClient.doctor()?;
+    println!("DragonForge Test Lab Windows doctor");
+    println!("{}", serde_json::to_string_pretty(&report)?);
+
+    if !report.event_log_readable
+        || !report.registry_hkcu_readable
+        || !report.scm_readable
+        || !report.windows_installer_service_present
+        || !report.msiexec_present
+    {
+        return Err("one or more required Windows integration surfaces are unavailable".into());
+    }
+
+    println!("status=windows_integration_ready");
+    Ok(())
+}
+
+fn windows_fixtures() -> Result<(), Box<dyn std::error::Error>> {
+    let report = WindowsIntegrationClient.run_safe_fixtures()?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    println!("status=windows_safe_fixtures_passed");
+    Ok(())
+}
+
+fn windows_privileged_fixtures(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if !args.iter().any(|arg| arg == "--confirm") {
+        return Err("windows-privileged-fixtures requires --confirm".into());
+    }
+
+    let report = WindowsIntegrationClient.run_privileged_fixtures()?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    println!("status=windows_privileged_fixtures_passed");
+    Ok(())
+}
+
+fn windows_installer_info(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--path").ok_or("missing --path <installer.msi>")?;
+    let info = WindowsIntegrationClient.inspect_msi(&PathBuf::from(path))?;
+    println!("{}", serde_json::to_string_pretty(&info)?);
     Ok(())
 }
 
@@ -501,6 +549,10 @@ fn print_help() {
     println!("  dragonforge-test-lab github-doctor");
     println!("  dragonforge-test-lab sandbox-doctor [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab rust-doctor");
+    println!("  dragonforge-test-lab windows-doctor");
+    println!("  dragonforge-test-lab windows-fixtures");
+    println!("  dragonforge-test-lab windows-privileged-fixtures --confirm");
+    println!("  dragonforge-test-lab windows-installer-info --path <installer.msi>");
     println!("  dragonforge-test-lab vm-doctor [--vm-root <path>] [--switch <name>]");
     println!("  dragonforge-test-lab vm-list");
     println!("  dragonforge-test-lab vm-create --name <DragonForge-...> --guest-os windows|linux --base-vhdx <path> [--memory-mib 4096] [--processors 2] [--switch <name>]");

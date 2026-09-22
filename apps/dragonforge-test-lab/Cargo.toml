@@ -13,4 +13,5 @@ df-test-policy = { path = "../../crates/df-test-policy" }
 df-test-protocol = { path = "../../crates/df-test-protocol" }
 df-test-sandbox = { path = "../../crates/df-test-sandbox" }
 df-test-vm = { path = "../../crates/df-test-vm" }
+df-test-windows = { path = "../../crates/df-test-windows" }
 serde_json.workspace = true

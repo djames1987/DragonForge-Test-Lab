@@ -18,8 +18,8 @@ Typed Hyper-V orchestration, Generation 2 Windows/Linux guest profiles, golden-i
 ## Phase 5 — Deep Rust Testing — Complete
 Nextest workspace execution, LLVM coverage, deterministic property tests, Criterion benchmark targets, platform-neutral Miri checks, Linux sanitizer lanes, bounded cargo-fuzz targets, readiness tooling, and uploadable validation logs. Mandatory Windows host validation passed on 2026-09-22.
 
-## Phase 6 — Windows Integration
-Services, Event Log, registry, process/network fixtures, installers, permissions.
+## Phase 6 — Windows Integration — Complete
+Typed Windows doctor and fixtures for registry, processes, TCP/UDP loopback networking, Service Control Manager, Application Event Log writes, Windows Installer discovery, MSI Authenticode inspection, elevation detection, explicit privileged confirmation, readiness tooling, and uploadable validation logs. Safe and privileged validation passed on both the Windows host and Windows VM on 2026-09-22.
 
 ## Phase 7 — GUI Automation
 Windows UI Automation, screenshots, crash capture, deterministic interaction scripts.
