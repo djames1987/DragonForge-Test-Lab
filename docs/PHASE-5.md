@@ -1,6 +1,6 @@
 # Phase 5 — Deep Rust Testing
 
-Status: implementation complete; host validation pending.
+Status: complete; mandatory Windows host deep-Rust validation passed on 2026-09-22.
 
 ## Goal
 
@@ -152,4 +152,4 @@ Linux deep lane:
 
     pwsh ./scripts/test-phase5.ps1 -IncludeMiri -IncludeSanitizer -IncludeFuzz -FuzzSeconds 60
 
-Upload the generated `test-logs/phase5-validation-*.log` for review before Phase 5 is merged.
+Mandatory Windows host validation passed on 2026-09-22, including fmt, Clippy, workspace tests, rust-doctor, nextest, property tests, LLVM coverage, Criterion benchmark compilation, and the GitHub-aware native worker regression. Optional Miri, sanitizer, and fuzz lanes remain available for deeper target-specific validation.
