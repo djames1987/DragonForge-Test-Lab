@@ -21,6 +21,10 @@ use df_test_sandbox::{
 };
 use df_test_vm::{GuestOs, HyperVClient, VmCreateSpec, VmLabConfig, DEFAULT_BASELINE_CHECKPOINT};
 use df_test_windows::WindowsIntegrationClient;
+use df_test_worker_service::{
+    load_worker_config, run_worker_service_fixture, MtlsWorkerSession, SystemdServiceSpec,
+    WindowsServiceSpec, WorkerServiceRuntime,
+};
 use std::{collections::BTreeSet, path::PathBuf, process::Command};
 
 const GITHUB_STATUS_CONTEXT: &str = "dragonforge/test-lab";
@@ -43,6 +47,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
         "identity-fixture" => identity_fixture(),
+        "worker-service-doctor" => worker_service_doctor(),
+        "worker-service-fixture" => worker_service_fixture(),
+        "worker-service-run" => worker_service_run(&args[2..]),
+        "worker-service-drain" => worker_service_drain(&args[2..]),
+        "worker-service-resume" => worker_service_resume(&args[2..]),
+        "worker-service-specs" => worker_service_specs(&args[2..]),
         "distributed-doctor" => distributed_doctor(),
         "distributed-fixtures" => distributed_fixtures(),
         "distributed-controller-once" => distributed_controller_once(&args[2..]),
@@ -89,7 +99,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=12");
+    println!("phase=13");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -249,6 +259,154 @@ fn identity_fixture() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Phase 12 mTLS identity fixture failed".into());
     }
     println!("status=mtls_identity_fixture_passed");
+    Ok(())
+}
+
+fn worker_service_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let report = run_worker_service_fixture()?;
+    if !report.mtls_registration
+        || !report.heartbeat_received
+        || !report.drain_blocks_new_jobs
+        || !report.restart_state_recovered
+        || !report.windows_service_spec_valid
+        || !report.systemd_unit_valid
+    {
+        return Err("worker service fixture failed during doctor".into());
+    }
+    println!("DragonForge Test Lab worker service doctor");
+    println!("transport=outbound_mutual_tls");
+    println!("heartbeat=typed");
+    println!("drain=graceful");
+    println!("restart_state=persistent_non_secret_snapshot");
+    println!("windows_service_spec=enabled");
+    println!("systemd_unit=enabled");
+    println!("status=worker_service_ready");
+    Ok(())
+}
+
+fn worker_service_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let report = run_worker_service_fixture()?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !report.mtls_registration
+        || !report.heartbeat_received
+        || !report.drain_blocks_new_jobs
+        || !report.restart_state_recovered
+        || !report.windows_service_spec_valid
+        || !report.systemd_unit_valid
+    {
+        return Err("one or more worker service fixtures failed".into());
+    }
+    println!("status=worker_service_fixture_passed");
+    Ok(())
+}
+
+fn worker_service_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = value_after(args, "--config").ok_or("missing --config <worker.json>")?;
+    let once = args.iter().any(|arg| arg == "--once");
+    let config = load_worker_config(&config_path)?;
+    let client_config = config.load_client_config()?;
+    let mut runtime = WorkerServiceRuntime::recover(config.clone())?;
+
+    loop {
+        runtime.mark_connecting();
+        runtime.persist()?;
+        match MtlsWorkerSession::connect(
+            &config,
+            client_config.clone(),
+            std::time::Duration::from_secs(10),
+        ) {
+            Ok(mut session) => {
+                match session.register(&runtime) {
+                    Ok(_) => {
+                        let now = unix_time_secs()?;
+                        runtime.mark_connected(now);
+                        runtime.persist()?;
+                        session.send_heartbeat(&runtime)?;
+                        runtime.mark_heartbeat_sent(now);
+                        runtime.persist()?;
+                        println!("worker_id={}", config.worker_id);
+                        println!("controller={}", config.controller);
+                        println!("state={:?}", runtime.snapshot().state);
+                        println!("accepting_jobs={}", runtime.can_accept_job());
+                        println!("status=worker_service_online");
+                        if once {
+                            return Ok(());
+                        }
+
+                        loop {
+                            std::thread::sleep(std::time::Duration::from_secs(
+                                config.heartbeat_seconds,
+                            ));
+                            let now = unix_time_secs()?;
+                            if let Err(error) = session.send_heartbeat(&runtime) {
+                                eprintln!("worker heartbeat failed: {error}");
+                                runtime.mark_disconnected();
+                                runtime.persist()?;
+                                break;
+                            }
+                            runtime.mark_heartbeat_sent(now);
+                            runtime.persist()?;
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!("worker registration failed: {error}");
+                        runtime.mark_disconnected();
+                        runtime.persist()?;
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("worker connection failed: {error}");
+                runtime.mark_disconnected();
+                runtime.persist()?;
+            }
+        }
+
+        if once {
+            return Err("worker service could not establish its one-shot session".into());
+        }
+        std::thread::sleep(runtime.reconnect_delay());
+    }
+}
+
+fn worker_service_drain(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = value_after(args, "--config").ok_or("missing --config <worker.json>")?;
+    let config = load_worker_config(config_path)?;
+    let mut runtime = WorkerServiceRuntime::recover(config)?;
+    runtime.request_drain();
+    runtime.persist()?;
+    println!("worker_id={}", runtime.snapshot().worker_id);
+    println!("active_jobs={}", runtime.snapshot().active_jobs);
+    println!("state=draining");
+    println!("status=worker_service_drain_requested");
+    Ok(())
+}
+
+fn worker_service_resume(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = value_after(args, "--config").ok_or("missing --config <worker.json>")?;
+    let config = load_worker_config(config_path)?;
+    let mut runtime = WorkerServiceRuntime::recover(config)?;
+    runtime.cancel_drain();
+    runtime.persist()?;
+    println!("worker_id={}", runtime.snapshot().worker_id);
+    println!("state=connecting");
+    println!("status=worker_service_resume_requested");
+    Ok(())
+}
+
+fn worker_service_specs(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let executable = value_after(args, "--executable").ok_or("missing --executable <absolute-path>")?;
+    let config_path = value_after(args, "--config").ok_or("missing --config <worker.json>")?;
+    let windows =
+        WindowsServiceSpec::new(PathBuf::from(&executable), PathBuf::from(&config_path))?;
+    let systemd =
+        SystemdServiceSpec::new(PathBuf::from(&executable), PathBuf::from(&config_path))?;
+    println!("windows_service={}", serde_json::to_string_pretty(&windows)?);
+    println!("systemd_unit_name={}", systemd.unit_name);
+    println!("systemd_unit_begin");
+    print!("{}", systemd.render_unit());
+    println!("systemd_unit_end");
+    println!("status=worker_service_specs_ready");
     Ok(())
 }
 
@@ -1123,6 +1281,12 @@ fn print_help() {
     println!("  dragonforge-test-lab github-doctor");
     println!("  dragonforge-test-lab identity-doctor");
     println!("  dragonforge-test-lab identity-fixture");
+    println!("  dragonforge-test-lab worker-service-doctor");
+    println!("  dragonforge-test-lab worker-service-fixture");
+    println!("  dragonforge-test-lab worker-service-run --config <worker.json> [--once] [--service-mode]");
+    println!("  dragonforge-test-lab worker-service-drain --config <worker.json>");
+    println!("  dragonforge-test-lab worker-service-resume --config <worker.json>");
+    println!("  dragonforge-test-lab worker-service-specs --executable <absolute-path> --config <worker.json>");
     println!("  dragonforge-test-lab controller-state-doctor [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-fixture");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
