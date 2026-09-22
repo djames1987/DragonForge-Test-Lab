@@ -1,72 +1,79 @@
 param()
 
 $ErrorActionPreference = "Stop"
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
 
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "DragonForge-GUI-Fixture"
-$form.Width = 520
-$form.Height = 260
-$form.StartPosition = "CenterScreen"
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
 
-$label = New-Object System.Windows.Forms.Label
-$label.Text = "Input"
-$label.Left = 24
-$label.Top = 25
-$label.Width = 80
-$form.Controls.Add($label)
+[xml]$xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DragonForge-GUI-Fixture"
+        Width="520"
+        Height="260"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize">
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="80"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
 
-$input = New-Object System.Windows.Forms.TextBox
-$input.Name = "inputBox"
-$input.AccessibleName = "inputBox"
-$input.AccessibleDescription = "inputBox"
-$input.Left = 110
-$input.Top = 20
-$input.Width = 350
-$form.Controls.Add($input)
+    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,4,10,12" Text="Input"/>
+    <TextBox x:Name="inputBox"
+             AutomationProperties.AutomationId="inputBox"
+             Grid.Row="0"
+             Grid.Column="1"
+             Height="28"
+             Margin="0,0,0,12"/>
 
-$outputLabel = New-Object System.Windows.Forms.Label
-$outputLabel.Text = "Output"
-$outputLabel.Left = 24
-$outputLabel.Top = 72
-$outputLabel.Width = 80
-$form.Controls.Add($outputLabel)
+    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4,10,12" Text="Output"/>
+    <TextBox x:Name="outputBox"
+             AutomationProperties.AutomationId="outputBox"
+             Grid.Row="1"
+             Grid.Column="1"
+             Height="28"
+             Margin="0,0,0,12"
+             IsReadOnly="True"/>
 
-$output = New-Object System.Windows.Forms.TextBox
-$output.Name = "outputBox"
-$output.AccessibleName = "outputBox"
-$output.AccessibleDescription = "outputBox"
-$output.Left = 110
-$output.Top = 67
-$output.Width = 350
-$output.ReadOnly = $true
-$form.Controls.Add($output)
+    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+      <Button x:Name="applyButton"
+              AutomationProperties.AutomationId="applyButton"
+              Width="110"
+              Height="32"
+              Margin="0,0,14,0"
+              Content="Apply"/>
+      <Button x:Name="crashButton"
+              AutomationProperties.AutomationId="crashButton"
+              Width="130"
+              Height="32"
+              Content="Crash Fixture"/>
+    </StackPanel>
+  </Grid>
+</Window>
+"@
 
-$apply = New-Object System.Windows.Forms.Button
-$apply.Name = "applyButton"
-$apply.AccessibleName = "applyButton"
-$apply.AccessibleDescription = "applyButton"
-$apply.Text = "Apply"
-$apply.Left = 110
-$apply.Top = 120
-$apply.Width = 110
+$reader = New-Object System.Xml.XmlNodeReader $xaml
+$window = [Windows.Markup.XamlReader]::Load($reader)
+
+$input = $window.FindName("inputBox")
+$output = $window.FindName("outputBox")
+$apply = $window.FindName("applyButton")
+$crash = $window.FindName("crashButton")
+
 $apply.Add_Click({
     $output.Text = $input.Text
 })
-$form.Controls.Add($apply)
 
-$crash = New-Object System.Windows.Forms.Button
-$crash.Name = "crashButton"
-$crash.AccessibleName = "crashButton"
-$crash.AccessibleDescription = "crashButton"
-$crash.Text = "Crash Fixture"
-$crash.Left = 240
-$crash.Top = 120
-$crash.Width = 130
 $crash.Add_Click({
     [Environment]::Exit(23)
 })
-$form.Controls.Add($crash)
 
-[void]$form.ShowDialog()
+[void]$window.ShowDialog()
