@@ -628,6 +628,25 @@ fn apply_sanitized_environment(command: &mut Command) {
         "LANG",
         "LC_ALL",
         "TERM",
+        // Native Windows Rust/MSVC builds need the Visual Studio and Windows SDK
+        // discovery roots after env_clear(). These are fixed host/toolchain
+        // variables, not caller-controlled command text.
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "ProgramW6432",
+        "CommonProgramFiles",
+        "CommonProgramFiles(x86)",
+        "CommonProgramW6432",
+        "VSINSTALLDIR",
+        "VCINSTALLDIR",
+        "VCToolsInstallDir",
+        "WindowsSdkDir",
+        "WindowsSDKVersion",
+        "UniversalCRTSdkDir",
+        "UCRTVersion",
+        "INCLUDE",
+        "LIB",
+        "LIBPATH",
     ];
 
     let current: BTreeMap<String, String> = std::env::vars().collect();
