@@ -154,6 +154,7 @@ impl TestPlan {
             {
                 return Err(PlanError::PlanBoundsExceeded);
             }
+            validate_limits(&step.limits)?;
             let actions = step.profile.actions()?;
             let derived = actions
                 .iter()
@@ -214,6 +215,7 @@ impl TestPlan {
             .find(|step| step.id == step_id)
             .ok_or_else(|| PlanError::UnknownStep(step_id.to_owned()))?;
         let mut job = JobRequest::new(self.repository.clone(), step.profile.actions()?);
+        job.extra_required_capabilities = step.required_capabilities.clone();
         job.limits = step.limits.clone();
         let derived = job.required_capabilities();
         if !step.required_capabilities.is_empty()
@@ -275,6 +277,21 @@ impl TestPlan {
     }
 }
 
+fn validate_limits(limits: &ResourceLimits) -> Result<(), PlanError> {
+    if limits.timeout_seconds == 0
+        || limits.timeout_seconds > 86_400
+        || limits.max_memory_mib < 128
+        || limits.max_memory_mib > 131_072
+        || limits.max_disk_mib < 128
+        || limits.max_disk_mib > 1_048_576
+        || limits.max_processes == 0
+        || limits.max_processes > 4_096
+    {
+        return Err(PlanError::InvalidResourceLimits);
+    }
+    Ok(())
+}
+
 fn validate_identifier(value: &str, max: usize) -> Result<(), PlanError> {
     if value.is_empty()
         || value.len() > max
@@ -305,6 +322,8 @@ pub enum PlanError {
     DependencyCycle,
     #[error("invalid typed profile actions")]
     InvalidProfileActions,
+    #[error("invalid plan resource limits")]
+    InvalidResourceLimits,
     #[error("declared capability set does not cover typed actions")]
     MissingDeclaredCapability,
     #[error("unknown plan step: {0}")]
@@ -377,6 +396,10 @@ mod tests {
             .iter()
             .all(|action| !format!("{action:?}").is_empty()));
         assert!(step.job.required_capabilities().contains(&Capability::CargoTest));
+        assert!(step
+            .job
+            .required_capabilities()
+            .contains(&Capability::CargoClippy));
         assert_eq!(step.retry.max_attempts, 2);
     }
 
