@@ -29,6 +29,9 @@ use std::{collections::BTreeSet, path::PathBuf, process::Command};
 
 const GITHUB_STATUS_CONTEXT: &str = "dragonforge/test-lab";
 
+#[cfg(windows)]
+windows_service::define_windows_service!(ffi_worker_service_main, windows_worker_service_main);
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("error: {error}");
@@ -50,6 +53,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "worker-service-doctor" => worker_service_doctor(),
         "worker-service-fixture" => worker_service_fixture(),
         "worker-service-run" => worker_service_run(&args[2..]),
+        "worker-service-windows" => worker_service_windows(&args[2..]),
         "worker-service-drain" => worker_service_drain(&args[2..]),
         "worker-service-resume" => worker_service_resume(&args[2..]),
         "worker-service-specs" => worker_service_specs(&args[2..]),
@@ -301,6 +305,13 @@ fn worker_service_fixture() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn worker_service_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    worker_service_run_loop(args, None)
+}
+
+fn worker_service_run_loop(
+    args: &[String],
+    stop_requested: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let config_path = value_after(args, "--config").ok_or("missing --config <worker.json>")?;
     let once = args.iter().any(|arg| arg == "--once");
     let config = load_worker_config(&config_path)?;
@@ -308,6 +319,12 @@ fn worker_service_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>>
     let mut runtime = WorkerServiceRuntime::recover(config.clone())?;
 
     loop {
+        if service_stop_requested(stop_requested.as_ref()) {
+            runtime.request_drain();
+            runtime.persist()?;
+            return Ok(());
+        }
+
         runtime.mark_connecting();
         runtime.persist()?;
         match MtlsWorkerSession::connect(
@@ -315,46 +332,49 @@ fn worker_service_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>>
             client_config.clone(),
             std::time::Duration::from_secs(10),
         ) {
-            Ok(mut session) => {
-                match session.register(&runtime) {
-                    Ok(_) => {
-                        let now = unix_time_secs()?;
-                        runtime.mark_connected(now);
-                        runtime.persist()?;
-                        session.send_heartbeat(&runtime)?;
-                        runtime.mark_heartbeat_sent(now);
-                        runtime.persist()?;
-                        println!("worker_id={}", config.worker_id);
-                        println!("controller={}", config.controller);
-                        println!("state={:?}", runtime.snapshot().state);
-                        println!("accepting_jobs={}", runtime.can_accept_job());
-                        println!("status=worker_service_online");
-                        if once {
+            Ok(mut session) => match session.register(&runtime) {
+                Ok(_) => {
+                    let now = unix_time_secs()?;
+                    runtime.mark_connected(now);
+                    runtime.persist()?;
+                    session.send_heartbeat(&runtime)?;
+                    runtime.mark_heartbeat_sent(now);
+                    runtime.persist()?;
+                    println!("worker_id={}", config.worker_id);
+                    println!("controller={}", config.controller);
+                    println!("state={:?}", runtime.snapshot().state);
+                    println!("accepting_jobs={}", runtime.can_accept_job());
+                    println!("status=worker_service_online");
+                    if once {
+                        return Ok(());
+                    }
+
+                    loop {
+                        if interruptible_sleep(
+                            std::time::Duration::from_secs(config.heartbeat_seconds),
+                            stop_requested.as_ref(),
+                        ) {
+                            runtime.request_drain();
+                            runtime.persist()?;
                             return Ok(());
                         }
-
-                        loop {
-                            std::thread::sleep(std::time::Duration::from_secs(
-                                config.heartbeat_seconds,
-                            ));
-                            let now = unix_time_secs()?;
-                            if let Err(error) = session.send_heartbeat(&runtime) {
-                                eprintln!("worker heartbeat failed: {error}");
-                                runtime.mark_disconnected();
-                                runtime.persist()?;
-                                break;
-                            }
-                            runtime.mark_heartbeat_sent(now);
+                        let now = unix_time_secs()?;
+                        if let Err(error) = session.send_heartbeat(&runtime) {
+                            eprintln!("worker heartbeat failed: {error}");
+                            runtime.mark_disconnected();
                             runtime.persist()?;
+                            break;
                         }
-                    }
-                    Err(error) => {
-                        eprintln!("worker registration failed: {error}");
-                        runtime.mark_disconnected();
+                        runtime.mark_heartbeat_sent(now);
                         runtime.persist()?;
                     }
                 }
-            }
+                Err(error) => {
+                    eprintln!("worker registration failed: {error}");
+                    runtime.mark_disconnected();
+                    runtime.persist()?;
+                }
+            },
             Err(error) => {
                 eprintln!("worker connection failed: {error}");
                 runtime.mark_disconnected();
@@ -365,8 +385,108 @@ fn worker_service_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>>
         if once {
             return Err("worker service could not establish its one-shot session".into());
         }
-        std::thread::sleep(runtime.reconnect_delay());
+        if interruptible_sleep(runtime.reconnect_delay(), stop_requested.as_ref()) {
+            runtime.request_drain();
+            runtime.persist()?;
+            return Ok(());
+        }
     }
+}
+
+fn service_stop_requested(
+    flag: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) -> bool {
+    flag.map(|value| value.load(std::sync::atomic::Ordering::SeqCst))
+        .unwrap_or(false)
+}
+
+fn interruptible_sleep(
+    duration: std::time::Duration,
+    stop_requested: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) -> bool {
+    let deadline = std::time::Instant::now() + duration;
+    while std::time::Instant::now() < deadline {
+        if service_stop_requested(stop_requested) {
+            return true;
+        }
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        std::thread::sleep(remaining.min(std::time::Duration::from_millis(250)));
+    }
+    service_stop_requested(stop_requested)
+}
+
+#[cfg(windows)]
+fn worker_service_windows(_args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    windows_service::service_dispatcher::start(
+        df_test_worker_service::WINDOWS_SERVICE_NAME,
+        ffi_worker_service_main,
+    )?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn worker_service_windows(_args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    Err("worker-service-windows is only available on Windows".into())
+}
+
+#[cfg(windows)]
+fn windows_worker_service_main(_arguments: Vec<std::ffi::OsString>) {
+    if let Err(error) = run_windows_worker_service() {
+        eprintln!("DragonForge Windows worker service failed: {error}");
+    }
+}
+
+#[cfg(windows)]
+fn run_windows_worker_service() -> Result<(), Box<dyn std::error::Error>> {
+    use windows_service::{
+        service::{
+            ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus,
+            ServiceType,
+        },
+        service_control_handler::{self, ServiceControlHandlerResult},
+    };
+
+    let stop_requested = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let handler_stop = stop_requested.clone();
+    let event_handler = move |event| -> ServiceControlHandlerResult {
+        match event {
+            ServiceControl::Stop => {
+                handler_stop.store(true, std::sync::atomic::Ordering::SeqCst);
+                ServiceControlHandlerResult::NoError
+            }
+            ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
+            _ => ServiceControlHandlerResult::NotImplemented,
+        }
+    };
+
+    let status_handle = service_control_handler::register(
+        df_test_worker_service::WINDOWS_SERVICE_NAME,
+        event_handler,
+    )?;
+    status_handle.set_service_status(ServiceStatus {
+        service_type: ServiceType::OWN_PROCESS,
+        current_state: ServiceState::Running,
+        controls_accepted: ServiceControlAccept::STOP,
+        exit_code: ServiceExitCode::Win32(0),
+        checkpoint: 0,
+        wait_hint: std::time::Duration::default(),
+        process_id: None,
+    })?;
+
+    let args: Vec<String> = std::env::args().skip(2).collect();
+    let result = worker_service_run_loop(&args, Some(stop_requested));
+
+    status_handle.set_service_status(ServiceStatus {
+        service_type: ServiceType::OWN_PROCESS,
+        current_state: ServiceState::Stopped,
+        controls_accepted: ServiceControlAccept::empty(),
+        exit_code: ServiceExitCode::Win32(if result.is_ok() { 0 } else { 1 }),
+        checkpoint: 0,
+        wait_hint: std::time::Duration::default(),
+        process_id: None,
+    })?;
+
+    result
 }
 
 fn worker_service_drain(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -1284,6 +1404,7 @@ fn print_help() {
     println!("  dragonforge-test-lab worker-service-doctor");
     println!("  dragonforge-test-lab worker-service-fixture");
     println!("  dragonforge-test-lab worker-service-run --config <worker.json> [--once] [--service-mode]");
+    println!("  dragonforge-test-lab worker-service-windows --config <worker.json>");
     println!("  dragonforge-test-lab worker-service-drain --config <worker.json>");
     println!("  dragonforge-test-lab worker-service-resume --config <worker.json>");
     println!("  dragonforge-test-lab worker-service-specs --executable <absolute-path> --config <worker.json>");
