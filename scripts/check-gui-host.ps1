@@ -38,6 +38,18 @@ catch {
 }
 Write-Host "drawing_available=$drawing"
 
+$wpf = $false
+try {
+    Add-Type -AssemblyName PresentationFramework -ErrorAction Stop
+    Add-Type -AssemblyName PresentationCore -ErrorAction Stop
+    Add-Type -AssemblyName WindowsBase -ErrorAction Stop
+    $wpf = $true
+}
+catch {
+    throw "WPF assemblies are unavailable: $($_.Exception.Message)"
+}
+Write-Host "wpf_available=$wpf"
+
 Add-Type -AssemblyName System.Windows.Forms
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen
 if (-not $screen) {
