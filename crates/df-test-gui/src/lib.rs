@@ -540,7 +540,9 @@ fn ps_literal(value: &str) -> String {
 }
 
 fn ps_literal_path(path: &Path) -> String {
-    ps_literal(&path.to_string_lossy())
+    let text = path.to_string_lossy();
+    let normalized = text.strip_prefix(r"\\?\").unwrap_or(&text);
+    ps_literal(normalized)
 }
 
 fn command_failed(operation: &str, output: &Output) -> GuiError {
