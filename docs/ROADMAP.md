@@ -33,7 +33,7 @@ Loopback-only authenticated MCP HTTP gateway with modern 2026-07-28 discovery an
 ## Phase 10 — Test Intelligence — Complete
 Deterministic change-aware profile scoring, historical regression targeting from changed-file overlap, normalized failure fingerprint clustering, explicit regression target selection, and resource-aware scheduling based on worker profile support, free memory, job slots, and load. Intelligence produces explainable recommendations only and never bypasses existing typed execution/policy boundaries. Windows host validation passed on 2026-09-22.
 
-## Phase 11 — Durable Controller & State
+## Phase 11 — Durable Controller & State — Implementation complete; validation pending
 Persistent controller state, SQLite migrations, restart recovery, durable jobs/attempts/workers/intelligence/artifact metadata/audit/configuration, and recovery validation.
 
 ## Phase 12 — mTLS / Node Identity
