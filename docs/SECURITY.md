@@ -46,6 +46,10 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 40. MCP result retrieval excludes raw filesystem access and returns SHA-256 artifact metadata only.
 41. The MCP gateway permits at most four queued/running jobs and rejects new submissions above that limit.
 42. The MCP HTTP parser rejects duplicate headers and transfer-encoding to avoid ambiguous request framing.
+43. Phase 10 intelligence accepts only bounded typed change/history/worker data and never accepts command text.
+44. Intelligence recommendations cannot execute jobs or bypass worker capability/policy checks.
+45. Resource-aware scheduling must explicitly report unscheduled profiles rather than silently weakening requested coverage.
+46. Failure clustering fingerprints normalized bounded text with SHA-256 and does not treat historical failure text as executable input.
 
 ## Local execution boundary
 
@@ -143,9 +147,15 @@ The MCP result surface exposes job status, bounded step metadata, and artifact m
 
 The gateway is intentionally local. Its static bearer authentication is defense-in-depth for a loopback service, not a standards-compliant Internet-facing OAuth deployment. Remote exposure requires a separate future design with OAuth/resource metadata, TLS or an authenticated tunnel, credential rotation, and durable auditing.
 
+## Phase 10 intelligence boundary
+
+Phase 10 is advisory. It scores typed TestProfile values, clusters historical failures, and suggests eligible workers. It does not create process argument vectors, execute commands, authenticate nodes, mutate VMs, or authorize repositories. Any recommendation that later becomes a real job must still pass the existing Agent/Policy/Executor and distributed-worker boundaries.
+
+Changed-file paths and historical records are bounded and validated before analysis. Scheduling uses declared support, free memory, parallel-job slots, and load; if no worker satisfies those constraints the profile remains explicitly unscheduled.
+
 ## Current enforcement
 
-Phases 1-9 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-10 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 
