@@ -217,7 +217,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-agent"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "df-test-policy",
  "df-test-protocol",
@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-controller"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "df-test-protocol",
  "uuid",
@@ -234,7 +234,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-distributed"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "df-test-protocol",
  "hex",
@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-executor"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "df-test-protocol",
  "df-test-sandbox",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-github"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-gui"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -277,8 +277,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-test-mcp"
+version = "0.10.0"
+dependencies = [
+ "df-test-agent",
+ "df-test-executor",
+ "df-test-policy",
+ "df-test-protocol",
+ "df-test-sandbox",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "df-test-policy"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "df-test-protocol",
  "thiserror",
@@ -286,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-protocol"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "criterion",
  "proptest",
@@ -297,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-sandbox"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "thiserror",
  "uuid",
@@ -306,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-vm"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -315,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-windows"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -336,13 +353,14 @@ dependencies = [
 
 [[package]]
 name = "dragonforge-test-lab"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "df-test-agent",
  "df-test-distributed",
  "df-test-executor",
  "df-test-github",
  "df-test-gui",
+ "df-test-mcp",
  "df-test-policy",
  "df-test-protocol",
  "df-test-sandbox",
