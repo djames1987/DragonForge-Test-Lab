@@ -22,6 +22,8 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 16. Hyper-V management accepts only validated typed VM operations; arbitrary PowerShell is not exposed.
 17. Destructive VM operations are limited to the DragonForge-* namespace and explicit confirmation.
 18. Golden VHDX parents must remain beneath the configured image root and are consumed through differencing children.
+19. Phase 5 deep-test profiles remain repository-maintained fixed commands; fuzz bytes never become command text.
+20. Nightly Miri/sanitizer and cargo-fuzz lanes are explicit opt-ins and should run in disposable workers/VMs for untrusted repositories.
 
 ## Local execution boundary
 
@@ -69,9 +71,17 @@ Standard Hyper-V checkpoints are used for the DragonForge-Baseline rollback poin
 
 The VM layer does not expose a general host-to-guest shell. Guest execution remains a later typed/authenticated transport problem.
 
+## Phase 5 deep Rust testing boundary
+
+Phase 5 adds deeper local validation without adding a generic command field to the protocol. nextest, llvm-cov, property tests, benchmarks, Miri, sanitizer, and fuzz lanes are invoked through repository-maintained fixed scripts and known Cargo subcommands.
+
+The fuzz harness consumes arbitrary bytes only as serialized JobRequest input. Valid decoded requests may be inspected, have capabilities derived, and be reserialized; fuzz data is never interpreted as a shell command, program name, or argument vector.
+
+Miri and sanitizer runs require a nightly Rust toolchain and are opt-in. The AddressSanitizer lane is restricted to documented supported Linux targets in the Phase 5 script. cargo-fuzz execution is likewise intended for a disposable Linux worker/VM when the repository under test is untrusted.
+
 ## Current enforcement
 
-Phases 1-4 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-5 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 
