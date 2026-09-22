@@ -1169,7 +1169,7 @@ fn tool_definitions() -> Vec<Value> {
 fn constant_time_equal(left: &[u8; 32], right: &[u8; 32]) -> bool {
     let mut difference = 0u8;
     for (left_byte, right_byte) in left.iter().zip(right.iter()) {
-        difference |= left_byte ^ right_byte;
+        difference |= *left_byte ^ *right_byte;
     }
     difference == 0
 }
