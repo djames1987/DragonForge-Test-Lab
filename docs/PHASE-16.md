@@ -139,10 +139,8 @@ Artifact requests are typed:
 
     step_logs
     execution_report
-    coverage_summary
-    screenshot
 
-These are declarative requested artifact classes, not arbitrary filesystem paths or glob patterns.
+These map to outputs already produced by the current Rust executor. Plans do not accept arbitrary filesystem paths or glob patterns.
 
 ## Retry policy
 
