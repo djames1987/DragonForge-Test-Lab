@@ -321,7 +321,8 @@ impl GuiAutomationClient {
                 expected,
             } => {
                 let body = format!(
-                    "$pattern=$control.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern);$actual=([System.Windows.Automation.ValuePattern]$pattern).Current.Value;if($actual -ne '{}'){{throw ('value mismatch: '+$actual)}}",
+                    "$deadline=[DateTime]::UtcNow.AddSeconds(3);$actual='';do{{$pattern=$control.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern);$actual=([System.Windows.Automation.ValuePattern]$pattern).Current.Value;if($actual -eq '{}'){{break}};Start-Sleep -Milliseconds 50}}while([DateTime]::UtcNow -lt $deadline);if($actual -ne '{}'){{throw ('value mismatch after wait: '+$actual)}}",
+                    ps_literal(expected),
                     ps_literal(expected)
                 );
                 let script = element_script(title, automation_id, &body);
