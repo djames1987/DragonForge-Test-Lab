@@ -678,31 +678,47 @@ pub fn serve_registration_probe_once(
     let listener = TcpListener::bind(bind)?;
     listener.set_nonblocking(true)?;
     let deadline = Instant::now() + timeout;
-    let (mut stream, _) = loop {
+    let mut verifier = EnvelopeVerifier::new(30)?;
+    verifier.add_key(key_id.to_string(), secret)?;
+
+    let (mut stream, registration_envelope) = loop {
+        if Instant::now() >= deadline {
+            return Err(DistributedError::RegistrationProbeTimeout);
+        }
+
         match listener.accept() {
-            Ok(pair) => break pair,
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                if Instant::now() >= deadline {
-                    return Err(DistributedError::RegistrationProbeTimeout);
+            Ok((mut candidate, _peer)) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                let per_connection_timeout = remaining.min(Duration::from_secs(5));
+                candidate.set_read_timeout(Some(per_connection_timeout))?;
+                candidate.set_write_timeout(Some(per_connection_timeout))?;
+
+                let envelope: AuthenticatedEnvelope<NodeRegistration> =
+                    match read_frame(&mut candidate) {
+                        Ok(envelope) => envelope,
+                        Err(error) if is_ignorable_probe_connection_error(&error) => continue,
+                        Err(error) => return Err(error),
+                    };
+
+                let current_time = current_unix_time_secs()?;
+                if verifier.verify(&envelope, current_time).is_err()
+                    || envelope.payload.validate().is_err()
+                    || envelope.key_id != key_id
+                    || envelope.payload.key_id != key_id
+                {
+                    continue;
                 }
+
+                break (candidate, envelope);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(50));
             }
             Err(error) => return Err(error.into()),
         }
     };
 
-    stream.set_read_timeout(Some(timeout))?;
-    stream.set_write_timeout(Some(timeout))?;
-    let registration_envelope: AuthenticatedEnvelope<NodeRegistration> = read_frame(&mut stream)?;
-
     let current_time = current_unix_time_secs()?;
-    let mut verifier = EnvelopeVerifier::new(30)?;
-    verifier.add_key(key_id.to_string(), secret)?;
-    verifier.verify(&registration_envelope, current_time)?;
-    registration_envelope.payload.validate()?;
-    if registration_envelope.key_id != key_id || registration_envelope.payload.key_id != key_id {
-        return Err(DistributedError::KeyIdentityMismatch);
-    }
 
     let ack = ControllerAck {
         node_id: registration_envelope.payload.profile.node_id.clone(),
@@ -1023,6 +1039,21 @@ fn is_ipv6_unique_local(ip: Ipv6Addr) -> bool {
 
 fn is_ipv6_link_local(ip: Ipv6Addr) -> bool {
     (ip.segments()[0] & 0xffc0) == 0xfe80
+}
+
+fn is_ignorable_probe_connection_error(error: &DistributedError) -> bool {
+    match error {
+        DistributedError::Io(error) => matches!(
+            error.kind(),
+            std::io::ErrorKind::UnexpectedEof
+                | std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::TimedOut
+                | std::io::ErrorKind::WouldBlock
+        ),
+        DistributedError::FrameTooLarge | DistributedError::Json(_) => true,
+        _ => false,
+    }
 }
 
 fn current_unix_time_secs() -> Result<u64, DistributedError> {
