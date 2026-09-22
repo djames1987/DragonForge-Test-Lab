@@ -1,5 +1,8 @@
 use df_test_agent::Agent;
-use df_test_distributed::{run_distributed_fixtures, validate_controller_addr};
+use df_test_distributed::{
+    connect_registration_probe, run_distributed_fixtures, serve_registration_probe_once,
+    validate_controller_addr, NodeFeature, NodeProfile, NodeRegistration,
+};
 use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor};
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
 use df_test_gui::{GuiAutomationClient, GuiPlan};
@@ -34,6 +37,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "github-doctor" => github_doctor(),
         "distributed-doctor" => distributed_doctor(),
         "distributed-fixtures" => distributed_fixtures(),
+        "distributed-controller-once" => distributed_controller_once(&args[2..]),
+        "distributed-node-connect" => distributed_node_connect(&args[2..]),
         "gui-doctor" => gui_doctor(),
         "gui-run-plan" => gui_run_plan(&args[2..]),
         "gui-fixture" => gui_fixture(&args[2..]),
@@ -140,6 +145,98 @@ fn distributed_fixtures() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("status=distributed_fixtures_passed");
     Ok(())
+}
+
+fn distributed_controller_once(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let bind = value_after(args, "--bind").ok_or("missing --bind <private-ip:port>")?;
+    let key_id = value_after(args, "--key-id").ok_or("missing --key-id <id>")?;
+    let address: std::net::SocketAddr = bind.parse()?;
+    let secret = distributed_shared_secret()?;
+    let now = unix_time_secs()?;
+
+    println!("DragonForge Test Lab distributed controller registration probe");
+    println!("bind={address}");
+    println!("waiting_for=one outbound authenticated node registration");
+
+    let registration = serve_registration_probe_once(
+        address,
+        &key_id,
+        secret.as_bytes(),
+        now,
+        std::time::Duration::from_secs(120),
+    )?;
+
+    println!("node_id={}", registration.profile.node_id);
+    println!("node_os={}", registration.profile.os);
+    println!("node_arch={}", registration.profile.arch);
+    println!("status=distributed_registration_accepted");
+    Ok(())
+}
+
+fn distributed_node_connect(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let controller =
+        value_after(args, "--controller").ok_or("missing --controller <private-ip:port>")?;
+    let node_id = value_after(args, "--node-id").ok_or("missing --node-id <id>")?;
+    let key_id = value_after(args, "--key-id").ok_or("missing --key-id <id>")?;
+    let address: std::net::SocketAddr = controller.parse()?;
+    let secret = distributed_shared_secret()?;
+    let now = unix_time_secs()?;
+
+    let mut features = BTreeSet::from([
+        NodeFeature::Rust,
+        NodeFeature::TcpFixture,
+        NodeFeature::UdpFixture,
+        NodeFeature::DnsFixture,
+        NodeFeature::FaultInjection,
+    ]);
+    if cfg!(windows) {
+        features.insert(NodeFeature::WindowsIntegration);
+        features.insert(NodeFeature::GuiAutomation);
+    }
+
+    let registration = NodeRegistration {
+        protocol_version: PROTOCOL_VERSION,
+        profile: NodeProfile {
+            node_id,
+            os: std::env::consts::OS.into(),
+            arch: std::env::consts::ARCH.into(),
+            labels: ["phase8-probe".to_string()].into_iter().collect(),
+            features,
+            max_parallel_jobs: 2,
+        },
+        outbound_only: true,
+        key_id: key_id.clone(),
+    };
+
+    let ack = connect_registration_probe(
+        address,
+        registration,
+        &key_id,
+        secret.as_bytes(),
+        now,
+        std::time::Duration::from_secs(10),
+    )?;
+
+    println!("controller={address}");
+    println!("node_id={}", ack.node_id);
+    println!("lease_seconds={}", ack.lease_seconds);
+    println!("status=distributed_registration_confirmed");
+    Ok(())
+}
+
+fn distributed_shared_secret() -> Result<String, Box<dyn std::error::Error>> {
+    let secret = std::env::var("DRAGONFORGE_NODE_SHARED_SECRET")
+        .map_err(|_| "DRAGONFORGE_NODE_SHARED_SECRET must be set and at least 32 bytes")?;
+    if secret.as_bytes().len() < 32 {
+        return Err("DRAGONFORGE_NODE_SHARED_SECRET must be at least 32 bytes".into());
+    }
+    Ok(secret)
+}
+
+fn unix_time_secs() -> Result<u64, Box<dyn std::error::Error>> {
+    Ok(std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs())
 }
 
 fn gui_doctor() -> Result<(), Box<dyn std::error::Error>> {
@@ -643,6 +740,8 @@ fn print_help() {
     println!("  dragonforge-test-lab github-doctor");
     println!("  dragonforge-test-lab distributed-doctor");
     println!("  dragonforge-test-lab distributed-fixtures");
+    println!("  dragonforge-test-lab distributed-controller-once --bind <private-ip:port> --key-id <id>");
+    println!("  dragonforge-test-lab distributed-node-connect --controller <private-ip:port> --node-id <id> --key-id <id>");
     println!("  dragonforge-test-lab gui-doctor");
     println!("  dragonforge-test-lab gui-run-plan --plan <plan.json> [--artifact-dir <path>]");
     println!("  dragonforge-test-lab gui-fixture [--artifact-dir <path>]");
