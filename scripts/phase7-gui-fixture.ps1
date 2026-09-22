@@ -20,6 +20,7 @@ $form.Controls.Add($label)
 $input = New-Object System.Windows.Forms.TextBox
 $input.Name = "inputBox"
 $input.AccessibleName = "inputBox"
+$input.AccessibleDescription = "inputBox"
 $input.Left = 110
 $input.Top = 20
 $input.Width = 350
@@ -35,6 +36,7 @@ $form.Controls.Add($outputLabel)
 $output = New-Object System.Windows.Forms.TextBox
 $output.Name = "outputBox"
 $output.AccessibleName = "outputBox"
+$output.AccessibleDescription = "outputBox"
 $output.Left = 110
 $output.Top = 67
 $output.Width = 350
@@ -44,6 +46,7 @@ $form.Controls.Add($output)
 $apply = New-Object System.Windows.Forms.Button
 $apply.Name = "applyButton"
 $apply.AccessibleName = "applyButton"
+$apply.AccessibleDescription = "applyButton"
 $apply.Text = "Apply"
 $apply.Left = 110
 $apply.Top = 120
@@ -56,6 +59,7 @@ $form.Controls.Add($apply)
 $crash = New-Object System.Windows.Forms.Button
 $crash.Name = "crashButton"
 $crash.AccessibleName = "crashButton"
+$crash.AccessibleDescription = "crashButton"
 $crash.Text = "Crash Fixture"
 $crash.Left = 240
 $crash.Top = 120
