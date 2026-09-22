@@ -66,7 +66,7 @@ Example:
 
     $env:DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES = "https://github.com/djames1987/DragonForge-Test-Lab"
 
-The allowlist is enforced before a background job is accepted and again before execution.
+The allowlist is enforced before a background job is accepted and again before execution. Entries ending in `/` are treated as path prefixes (for example an owner/org scope). Entries without a trailing slash are treated as exact repository identities, with `.git` normalized so lookalike repository names do not match.
 
 ## MCP tool surface
 
@@ -147,7 +147,11 @@ Maximum retained jobs:
 
     1024
 
-When the registry reaches capacity, completed jobs are pruned before new submissions are accepted.
+Maximum queued/running jobs:
+
+    4
+
+When the registry reaches capacity, completed jobs are pruned before new submissions are accepted. New submissions are rejected while four jobs are already queued or running so an authenticated client cannot accidentally exhaust the local worker with unbounded concurrent builds.
 
 A submitted job transitions through:
 
@@ -163,6 +167,8 @@ Phase 9 bounds incoming requests:
 
     HTTP header bytes: 16 KiB
     HTTP body bytes:   256 KiB
+
+The minimal HTTP parser also rejects duplicate headers and `Transfer-Encoding`; clients must use a bounded `Content-Length`.
 
 JSON-RPC requests must use version 2.0.
 
