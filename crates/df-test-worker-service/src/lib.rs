@@ -2,6 +2,7 @@ use df_test_identity::{
     build_client_config, build_server_config, validate_private_controller_address,
     CertificateMaterial, IdentityError,
 };
+use df_test_observability::{MetricPoint, MetricsRegistry};
 use df_test_protocol::PROTOCOL_VERSION;
 use rustls::{pki_types::ServerName, ClientConfig, ClientConnection, StreamOwned};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -225,6 +226,30 @@ impl WorkerServiceRuntime {
         }
         fs::rename(temp_path, &self.config.state_path)?;
         Ok(())
+    }
+
+    pub fn observability_snapshot(
+        &self,
+        unix_time_secs: u64,
+    ) -> Result<Vec<MetricPoint>, WorkerServiceError> {
+        let mut metrics = MetricsRegistry::default();
+        metrics.increment(
+            "dragonforge_worker_active_jobs",
+            u64::from(self.snapshot.active_jobs),
+        )?;
+        metrics.set_gauge(
+            "dragonforge_worker_accepting_jobs",
+            if self.can_accept_job() { 1.0 } else { 0.0 },
+        )?;
+        metrics.set_gauge(
+            "dragonforge_worker_draining",
+            if self.snapshot.drain_requested { 1.0 } else { 0.0 },
+        )?;
+        metrics.set_gauge(
+            "dragonforge_worker_reconnect_attempt",
+            f64::from(self.snapshot.reconnect_attempt),
+        )?;
+        Ok(metrics.snapshot(unix_time_secs))
     }
 
     pub fn refresh_persisted_control(&mut self) -> Result<bool, WorkerServiceError> {
@@ -684,6 +709,8 @@ pub enum WorkerServiceError {
     FixtureThreadPanicked,
     #[error("identity error: {0}")]
     Identity(#[from] IdentityError),
+    #[error("observability error: {0}")]
+    Observability(#[from] df_test_observability::ObservabilityError),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("I/O error: {0}")]
@@ -764,6 +791,26 @@ mod tests {
         assert_eq!(runtime.snapshot().state, WorkerServiceState::Draining);
         assert!(!runtime.can_accept_job());
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn worker_observability_snapshot_tracks_runtime_state() {
+        let path = env::temp_dir().join("dragonforge-worker-metrics.json");
+        let mut runtime = WorkerServiceRuntime::new(config(path)).unwrap();
+        runtime.mark_connected(100);
+        runtime.start_job().unwrap();
+        let metrics = runtime.observability_snapshot(101).unwrap();
+        assert!(metrics.iter().any(|point| {
+            point.name == "dragonforge_worker_active_jobs" && point.value == 1.0
+        }));
+        assert!(metrics.iter().any(|point| {
+            point.name == "dragonforge_worker_accepting_jobs" && point.value == 1.0
+        }));
+        runtime.request_drain();
+        let metrics = runtime.observability_snapshot(102).unwrap();
+        assert!(metrics.iter().any(|point| {
+            point.name == "dragonforge_worker_draining" && point.value == 1.0
+        }));
     }
 
     #[test]
