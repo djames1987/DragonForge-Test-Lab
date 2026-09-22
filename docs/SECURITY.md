@@ -54,6 +54,11 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 48. SQL statements and migrations are fixed in Test Lab; jobs and remote clients cannot submit arbitrary SQL.
 49. Restart recovery marks uncertain assigned/running work interrupted instead of silently treating it as completed or automatically executing it again.
 50. Databases with a schema version newer than the running binary fail closed.
+51. Phase 12 mutual TLS requires certificate-chain validation against configured CA roots and server-side client certificates.
+52. Node authorization binds the claimed node ID to an enrolled SHA-256 end-entity certificate fingerprint; CA issuance alone is not node authorization.
+53. Certificate renewal uses explicit bounded overlap between generations, and revoked certificates fail closed.
+54. Serialized identity trust state contains certificate fingerprints/lifecycle metadata only and does not persist private keys.
+55. The built-in direct controller address policy remains loopback/private/link-local even when mTLS is enabled.
 
 ## Local execution boundary
 
@@ -163,9 +168,17 @@ Phase 11 persists controller metadata and typed payloads in SQLite. Persistence 
 
 Controller migrations are fixed source-controlled SQL. The CLI selects only the database path; no API accepts SQL text. In-flight jobs found after restart become `interrupted`, producing an audit event and requiring a later explicit retry/rescheduling decision rather than risking duplicate execution.
 
+## Phase 12 mTLS / node-identity boundary
+
+Phase 12 adds rustls-based mutual TLS configuration and a certificate lifecycle trust store. TLS verifies certificate chains against operator-configured CA roots and requires the worker to present a client certificate. DragonForge then separately verifies the end-entity certificate fingerprint against the enrolled node identity and its generation/validity/revocation state.
+
+Private keys remain in operator-controlled PEM material and are not serialized into the DragonForge identity trust store. Rotation may temporarily accept two generations only within an explicit overlap window. Revocation overrides logical validity and fails closed.
+
+The older HMAC transport remains available for compatibility/private-lab use, but it is not relabeled as encrypted. New service-oriented distributed paths should use mTLS.
+
 ## Current enforcement
 
-Phases 1-11 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-12 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 
