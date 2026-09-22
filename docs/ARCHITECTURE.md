@@ -214,3 +214,29 @@ The intelligence crate does not launch processes or mutate workers. It produces 
 On startup, queued and terminal jobs retain their state. Jobs persisted as assigned or running are changed to `interrupted` and their latest attempt is closed with a recovery audit event. Phase 11 deliberately does not automatically retry an interrupted job; retry classification and rescheduling are reserved for Phase 15.
 
 The database is controller-owned state only. A persisted assignment still has to pass the existing worker-side Agent/Policy trust boundary before any process execution occurs.
+
+
+## Phase 12 mTLS / identity flow
+
+    controller CA trust roots
+              |
+              v
+       rustls mTLS server
+       requires client cert
+              ^
+              |
+       outbound worker TLS
+       client certificate
+              |
+              v
+      certificate chain validation
+              +
+      SHA-256 fingerprint binding
+              +
+      enrolled node identity
+              +
+      generation / validity / revocation
+
+The TLS layer provides encryption plus certificate authentication. DragonForge authorization additionally maps the presented end-entity certificate fingerprint to the claimed node ID. A CA-issued certificate therefore does not automatically authorize every node identity.
+
+Certificate trust metadata is serializable without private keys. Rotation uses overlapping certificate generations so a new key can become active before the old generation is retired. Revocation fails closed. The Phase 8 HMAC transport remains available for compatibility/private-lab debugging; Phase 13 service-oriented workers should prefer mTLS.
