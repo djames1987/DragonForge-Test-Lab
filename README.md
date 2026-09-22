@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 9 — ChatGPT/MCP Gateway — Implementation complete
+Phase 9 — ChatGPT/MCP Gateway — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, and Phase 8 added validated authenticated distributed execution. Phase 9 adds a loopback-only bearer-authenticated MCP gateway with typed lab/node/job/result/artifact tools, exact repository allowlisting, bounded concurrency, and asynchronous named-profile execution through the existing policy/executor boundary.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, and Phase 8 added validated authenticated distributed execution. Phase 9 adds a loopback-only bearer-authenticated MCP gateway with typed lab/node/job/result/artifact tools, exact repository allowlisting, bounded concurrency, and asynchronous named-profile execution through the existing policy/executor boundary. Full Phase 9 Windows host validation passed on 2026-09-22.
 
 ## Workspace
 
