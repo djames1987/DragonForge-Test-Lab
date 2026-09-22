@@ -1,6 +1,6 @@
 # Phase 9 — ChatGPT/MCP Gateway
 
-Status: implementation complete; Windows validation pending.
+Status: complete; Windows host validation passed on 2026-09-22.
 
 ## Goal
 
@@ -274,3 +274,7 @@ Phase 9 intentionally does not provide:
 - generic distributed-node command execution.
 
 The MCP gateway is a high-level typed test interface, not a remote administration API.
+
+## Validation status
+
+Phase 9 validation completed successfully on the Windows host on 2026-09-22. The final run passed strict Clippy, the full workspace test suite, MCP host readiness, the in-process authentication/discovery fixture, real loopback HTTP startup, unauthenticated 401 rejection, modern `server/discover`, six-tool enumeration, `dragonforge_lab_status`, legacy `initialize`, a real asynchronous MCP-submitted `rust_test` job, status polling, result retrieval, SHA-256 artifact metadata retrieval, and the GitHub-aware native worker regression.
