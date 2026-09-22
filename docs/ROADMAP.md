@@ -30,5 +30,5 @@ Authenticated outbound-only node registration, replay-protected HMAC envelopes, 
 ## Phase 9 — ChatGPT/MCP Gateway — Complete
 Loopback-only authenticated MCP HTTP gateway with modern 2026-07-28 discovery and legacy 2025-11-25 initialization compatibility, typed lab/node/job/result/artifact tools, repository allowlisting, asynchronous named-profile execution through the existing Agent/Policy/Executor trust boundary, bounded HTTP/JSON-RPC handling, SHA-256 artifact metadata, and end-to-end validation tooling. Windows host validation passed on 2026-09-22.
 
-## Phase 10 — Test Intelligence
-Change-aware profile selection, historical regression targeting, failure clustering, and resource-aware scheduling.
+## Phase 10 — Test Intelligence — Implementation complete; validation pending
+Deterministic change-aware profile scoring, historical regression targeting from changed-file overlap, normalized failure fingerprint clustering, explicit regression target selection, and resource-aware scheduling based on worker profile support, free memory, job slots, and load. Intelligence produces explainable recommendations only and never bypasses existing typed execution/policy boundaries.
