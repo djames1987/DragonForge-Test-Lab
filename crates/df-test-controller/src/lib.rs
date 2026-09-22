@@ -1526,6 +1526,36 @@ mod tests {
     }
 
     #[test]
+    fn schema_v1_migrates_to_v2_observability_tables() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE artifact_metadata (
+                    artifact_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    relative_path TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL,
+                    sha256 TEXT
+                 );
+                 CREATE TABLE audit_events (
+                    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    unix_time_secs INTEGER NOT NULL,
+                    kind TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    detail_json TEXT NOT NULL
+                 );
+                 PRAGMA user_version = 1;",
+            )
+            .unwrap();
+        let controller = DurableController::from_connection(connection).unwrap();
+        assert_eq!(controller.schema_version().unwrap(), 2);
+        assert!(controller.recent_logs(10).unwrap().is_empty());
+        assert!(controller.recent_metrics(10).unwrap().is_empty());
+    }
+
+    #[test]
     fn audit_chain_verifies_for_new_events() {
         let mut controller = DurableController::open_in_memory().unwrap();
         let job = test_job();
