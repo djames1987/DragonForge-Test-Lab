@@ -7,7 +7,9 @@ fn benchmark_capability_derivation(c: &mut Criterion) {
             0 => TestAction::Checkout,
             1 => TestAction::CargoBuild { release: false },
             2 => TestAction::CargoTest { all_features: true },
-            3 => TestAction::CargoClippy { deny_warnings: true },
+            3 => TestAction::CargoClippy {
+                deny_warnings: true,
+            },
             _ => TestAction::CargoFmtCheck,
         })
         .collect();
