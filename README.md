@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 14 — Audit / Artifacts / Observability — Complete
+Phase 15 — Recovery / Retry / Job Lifecycle — Implementation complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, and Phase 13 added validated long-running worker services. Phase 14 adds validated controller schema v2, hash-chained durable audit events, redacted structured logs, JSONL rotation, durable/worker metrics, SHA-256 artifact cataloging, root-contained retention pruning, and telemetry query/pruning tooling. Full Phase 14 Windows host validation passed on 2026-09-22.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, and Phase 14 added validated audit/artifact/observability infrastructure. Phase 15 adds controller schema v3, explicit failure classification, persisted bounded retry policies, retry-pending/exhausted states, restart-interruption decisions, safe manual rescheduling, and lifecycle query tooling.
 
 ## Workspace
 
@@ -33,6 +33,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-identity/       mTLS, X.509 node identity, trust, rotation, revocation
       df-test-worker-service/ long-running worker lifecycle and service hosting
       df-test-observability/  audit/log/metrics/artifact observability and retention
+      df-test-lifecycle/      failure classification and bounded retry policy
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -52,6 +53,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-12.md
       PHASE-13.md
       PHASE-14.md
+      PHASE-15.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -75,6 +77,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase12.ps1
       test-phase13.ps1
       test-phase14.ps1
+      test-phase15.ps1
 
 ## Hyper-V host setup
 
@@ -316,10 +319,36 @@ Phase 14 upgrades the durable controller database to schema v2. New audit record
 
 See docs/PHASE-14.md for persistence, audit-chain, logging, metrics, retention, and security boundaries.
 
+## Phase 15 Recovery / Retry / Job Lifecycle
+
+Readiness:
+
+    cargo run -p dragonforge-test-lab -- lifecycle-doctor
+
+End-to-end retry/recovery fixture:
+
+    cargo run -p dragonforge-test-lab -- lifecycle-fixture
+
+Inspect a durable job and its attempts:
+
+    cargo run -p dragonforge-test-lab -- lifecycle-status --job-id <uuid>
+
+Explicitly reschedule an interrupted job:
+
+    cargo run -p dragonforge-test-lab -- lifecycle-reschedule --job-id <uuid>
+
+End-to-end Phase 15 validation:
+
+    .\scripts\test-phase15.ps1
+
+Phase 15 upgrades the durable controller to schema v3. Test failures remain terminal, transient infrastructure failures may retry only under an explicit bounded policy, retry-pending work cannot run before its durable due time, interrupted restart recovery requires explicit policy opt-in for automatic retry, and manual interrupted-job rescheduling is auditable and globally bounded.
+
+See docs/PHASE-15.md for failure classes, retry policies, lifecycle states, recovery behavior, query commands, and security boundaries.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, and docs/ROADMAP.md.
