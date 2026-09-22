@@ -32,6 +32,13 @@ impl CertificateFingerprint {
     pub fn as_hex(&self) -> &str {
         &self.0
     }
+
+    fn validate(&self) -> Result<(), IdentityError> {
+        if self.0.len() != 64 || !self.0.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(IdentityError::InvalidCertificateFingerprint);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -253,9 +260,20 @@ impl IdentityTrustStore {
             if identity.certificates.len() > MAX_CERTIFICATES_PER_IDENTITY {
                 return Err(IdentityError::TooManyCertificates);
             }
+            let mut generations = BTreeSet::new();
+            let mut fingerprints = BTreeSet::new();
             for certificate in &identity.certificates {
                 certificate.validate()?;
+                certificate.fingerprint.validate()?;
+                if !generations.insert(certificate.generation)
+                    || !fingerprints.insert(certificate.fingerprint.clone())
+                {
+                    return Err(IdentityError::InvalidTrustState);
+                }
             }
+        }
+        for fingerprint in &store.revoked_fingerprints {
+            fingerprint.validate()?;
         }
         Ok(store)
     }
@@ -533,6 +551,10 @@ pub enum IdentityError {
     InvalidCertificate,
     #[error("invalid certificate chain")]
     InvalidCertificateChain,
+    #[error("invalid certificate fingerprint")]
+    InvalidCertificateFingerprint,
+    #[error("invalid serialized trust state")]
+    InvalidTrustState,
     #[error("private key is missing")]
     MissingPrivateKey,
     #[error("invalid identity")]
@@ -628,6 +650,28 @@ mod tests {
         assert!(!json.contains("PRIVATE KEY"));
         let restored = IdentityTrustStore::from_json(&json).unwrap();
         assert!(restored.is_revoked(&certificate.fingerprint));
+    }
+
+    #[test]
+    fn malformed_serialized_fingerprint_is_rejected() {
+        let json = r#"{
+            "identities": {
+                "node-a": {
+                    "node_id": "node-a",
+                    "certificates": [{
+                        "fingerprint": "not-a-sha256",
+                        "generation": 1,
+                        "valid_from_secs": 1,
+                        "valid_until_secs": 100
+                    }]
+                }
+            },
+            "revoked_fingerprints": []
+        }"#;
+        assert!(matches!(
+            IdentityTrustStore::from_json(json),
+            Err(IdentityError::InvalidCertificateFingerprint)
+        ));
     }
 
     #[test]
