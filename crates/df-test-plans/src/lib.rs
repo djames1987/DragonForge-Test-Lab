@@ -126,6 +126,29 @@ pub struct CompiledPlanStep {
     pub artifacts: Vec<ArtifactKind>,
 }
 
+impl CompiledPlanStep {
+    pub fn matches_target(
+        &self,
+        worker_os: &str,
+        labels: &BTreeMap<String, String>,
+    ) -> bool {
+        let os_matches = match self.target_os {
+            TargetOs::Any => true,
+            TargetOs::Windows => worker_os.eq_ignore_ascii_case("windows"),
+            TargetOs::Linux => worker_os.eq_ignore_ascii_case("linux"),
+            TargetOs::Macos => {
+                worker_os.eq_ignore_ascii_case("macos")
+                    || worker_os.eq_ignore_ascii_case("darwin")
+            }
+        };
+        os_matches
+            && self
+                .node_labels
+                .iter()
+                .all(|(key, value)| labels.get(key) == Some(value))
+    }
+}
+
 impl TestPlan {
     pub fn validate(&self) -> Result<(), PlanError> {
         if self.version != TEST_PLAN_VERSION {
@@ -401,6 +424,16 @@ mod tests {
             .required_capabilities()
             .contains(&Capability::CargoClippy));
         assert_eq!(step.retry.max_attempts, 2);
+    }
+
+    #[test]
+    fn target_os_and_labels_are_enforced() {
+        let step = sample_plan().compile_step("standard").unwrap();
+        let matching = BTreeMap::from([("tier".into(), "primary".into())]);
+        let wrong = BTreeMap::from([("tier".into(), "secondary".into())]);
+        assert!(step.matches_target("windows", &matching));
+        assert!(!step.matches_target("linux", &matching));
+        assert!(!step.matches_target("windows", &wrong));
     }
 
     #[test]
