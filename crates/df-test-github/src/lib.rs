@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::process::{Command, Output};
 use thiserror::Error;
 
@@ -133,6 +133,38 @@ impl GhGitHubClient {
         Ok(payload.sha)
     }
 
+    pub fn compare_changes(
+        &self,
+        repository: &GitHubRepository,
+        base_revision: &str,
+        head_revision: &str,
+    ) -> Result<GitComparison, GitHubError> {
+        validate_revision(base_revision)?;
+        validate_revision(head_revision)?;
+        let base_sha = self.resolve_commit(repository, base_revision)?;
+        let head_sha = self.resolve_commit(repository, head_revision)?;
+        let output = self.run(&compare_args(repository, &base_sha, &head_sha))?;
+        let text = combined_output(&output);
+        if !output.status.success() {
+            return Err(GitHubError::CommandFailed {
+                operation: "compare commits",
+                output: text,
+            });
+        }
+        let payload: ComparePayload = serde_json::from_slice(&output.stdout)?;
+        let mut files = payload.files.into_iter().map(|file| file.filename).collect::<Vec<_>>();
+        files.sort();
+        files.dedup();
+        if files.len() > 4096 {
+            return Err(GitHubError::TooManyChangedFiles);
+        }
+        Ok(GitComparison {
+            base_sha,
+            head_sha,
+            files,
+        })
+    }
+
     pub fn set_commit_status(
         &self,
         repository: &GitHubRepository,
@@ -164,9 +196,27 @@ impl GhGitHubClient {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GitComparison {
+    pub base_sha: String,
+    pub head_sha: String,
+    pub files: Vec<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct CommitPayload {
     sha: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ComparePayload {
+    #[serde(default)]
+    files: Vec<CompareFile>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CompareFile {
+    filename: String,
 }
 
 fn auth_status_args() -> Vec<String> {
@@ -186,6 +236,16 @@ fn resolve_commit_args(repository: &GitHubRepository, revision: &str) -> Vec<Str
             repository.owner,
             repository.name,
             encode_path_segment(revision)
+        ),
+    ]
+}
+
+fn compare_args(repository: &GitHubRepository, base_sha: &str, head_sha: &str) -> Vec<String> {
+    vec![
+        "api".into(),
+        format!(
+            "repos/{}/{}/compare/{}...{}",
+            repository.owner, repository.name, base_sha, head_sha
         ),
     ]
 }
@@ -276,6 +336,8 @@ pub enum GitHubError {
     InvalidCommitSha,
     #[error("commit status context/description is invalid")]
     InvalidStatusMetadata,
+    #[error("GitHub comparison returned too many changed files")]
+    TooManyChangedFiles,
     #[error("failed to spawn {program}: {source}")]
     Spawn {
         program: String,
@@ -321,6 +383,21 @@ mod tests {
         assert_eq!(
             args,
             vec!["api", "repos/owner/repo/commits/feature%2Ftest-1"]
+        );
+    }
+
+    #[test]
+    fn compare_arguments_are_fixed_and_typed() {
+        let repo = GitHubRepository { owner: "owner".into(), name: "repo".into() };
+        let args = compare_args(
+            &repo,
+            "0123456789abcdef0123456789abcdef01234567",
+            "89abcdef0123456789abcdef0123456789abcdef",
+        );
+        assert_eq!(args[0], "api");
+        assert_eq!(
+            args[1],
+            "repos/owner/repo/compare/0123456789abcdef0123456789abcdef01234567...89abcdef0123456789abcdef0123456789abcdef"
         );
     }
 
