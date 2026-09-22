@@ -23,7 +23,7 @@ Phase 7 adds typed Windows GUI automation for DragonForge-managed application wi
 - Windows UI Automation integration through fixed internally generated commands.
 - Window-bounded PNG screenshot capture.
 - Artifact path containment.
-- Deterministic WinForms fixture application.
+- Deterministic WPF fixture application with explicit UI Automation IDs.
 - Owned fixture process monitoring.
 - Deliberate crash/exit fixture using expected code 23.
 - JSON crash report generation.
@@ -91,7 +91,7 @@ The Phase 7 validation generates:
 
 ## Crash capture
 
-The deterministic Phase 7 fixture includes a controlled crash button.
+The deterministic WPF Phase 7 fixture includes a controlled crash button.
 
 The fixture is launched as an owned child process by Test Lab. After the normal interaction and screenshot path passes, Test Lab invokes the controlled crash action and waits for the child process to terminate.
 
