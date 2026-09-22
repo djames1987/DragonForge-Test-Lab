@@ -10,6 +10,7 @@ use df_test_sandbox::{
     current_worker_identity, runtime_version, verify_container_image, verify_worker_identity,
     ProcessTreeGuard, SandboxLimits, SandboxMode,
 };
+use df_test_vm::{GuestOs, HyperVClient, VmCreateSpec, VmLabConfig, DEFAULT_BASELINE_CHECKPOINT};
 use std::{collections::BTreeSet, path::PathBuf, process::Command};
 
 const GITHUB_STATUS_CONTEXT: &str = "dragonforge/test-lab";
@@ -29,6 +30,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "doctor" => doctor(),
         "github-doctor" => github_doctor(),
         "sandbox-doctor" => sandbox_doctor(&args[2..]),
+        "vm-doctor" => vm_doctor(&args[2..]),
+        "vm-list" => vm_list(&args[2..]),
+        "vm-create" => vm_create(&args[2..]),
+        "vm-start" => vm_start(&args[2..]),
+        "vm-stop" => vm_stop(&args[2..]),
+        "vm-baseline" => vm_baseline(&args[2..]),
+        "vm-restore" => vm_restore(&args[2..]),
+        "vm-destroy" => vm_destroy(&args[2..]),
         "run-local" => run_local(&args[2..]),
         "run-github" => run_github(&args[2..]),
         "--version" | "-V" | "version" => {
@@ -48,7 +57,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=3");
+    println!("phase=4");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -285,6 +294,150 @@ fn sandbox_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn vm_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config = vm_config(args);
+    let client = HyperVClient::default();
+    let doctor = client.doctor()?;
+
+    println!("DragonForge Test Lab VM doctor");
+    println!("hyper_v_enabled={}", doctor.hyper_v_enabled);
+    println!("hyper_v_module={}", doctor.hyper_v_module);
+    println!("vmms_running={}", doctor.vmms_running);
+    println!("vm_root={}", config.root.display());
+    println!("base_image_root={}", config.base_image_root.display());
+    println!("default_switch={}", config.switch_name);
+    println!("switches={}", doctor.switches.join(","));
+
+    if !doctor.hyper_v_enabled || !doctor.hyper_v_module || !doctor.vmms_running {
+        return Err("Hyper-V host is not ready; see docs/HOST-SETUP-HYPERV.md".into());
+    }
+
+    if !doctor
+        .switches
+        .iter()
+        .any(|name| name == &config.switch_name)
+    {
+        return Err(format!(
+            "configured Hyper-V switch '{}' was not found",
+            config.switch_name
+        )
+        .into());
+    }
+
+    println!("status=vm_lab_ready");
+    Ok(())
+}
+
+fn vm_list(_args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let client = HyperVClient::default();
+    println!("{}", serde_json::to_string_pretty(&client.list_managed()?)?);
+    Ok(())
+}
+
+fn vm_create(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config = vm_config(args);
+    let name = value_after(args, "--name").ok_or("missing --name <DragonForge-...>")?;
+    let base_vhdx = value_after(args, "--base-vhdx").ok_or("missing --base-vhdx <path>")?;
+    let guest_os = GuestOs::parse(
+        &value_after(args, "--guest-os").ok_or("missing --guest-os windows|linux")?,
+    )?;
+    let memory_mib = parse_u64_flag(args, "--memory-mib", 4096)?;
+    let processors = parse_u32_flag(args, "--processors", 2)?;
+    let switch_name = value_after(args, "--switch").unwrap_or_else(|| config.switch_name.clone());
+
+    let spec = VmCreateSpec {
+        name: name.clone(),
+        guest_os,
+        base_vhdx: PathBuf::from(base_vhdx),
+        memory_mib,
+        processors,
+        switch_name,
+    };
+
+    let client = HyperVClient::default();
+    client.create_from_base(&config, &spec)?;
+    println!("vm_created={name}");
+    println!("next_step=install/configure guest agent if needed, then run vm-baseline");
+    Ok(())
+}
+
+fn vm_start(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let name = value_after(args, "--name").ok_or("missing --name <DragonForge-...>")?;
+    HyperVClient::default().start(&name)?;
+    println!("vm_started={name}");
+    Ok(())
+}
+
+fn vm_stop(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let name = value_after(args, "--name").ok_or("missing --name <DragonForge-...>")?;
+    HyperVClient::default().stop(&name)?;
+    println!("vm_stopped={name}");
+    Ok(())
+}
+
+fn vm_baseline(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let name = value_after(args, "--name").ok_or("missing --name <DragonForge-...>")?;
+    HyperVClient::default().ensure_clean_baseline(&name)?;
+    println!("vm_baseline={name}:{DEFAULT_BASELINE_CHECKPOINT}");
+    Ok(())
+}
+
+fn vm_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let name = value_after(args, "--name").ok_or("missing --name <DragonForge-...>")?;
+    let checkpoint =
+        value_after(args, "--checkpoint").unwrap_or_else(|| DEFAULT_BASELINE_CHECKPOINT.into());
+    HyperVClient::default().restore(&name, &checkpoint)?;
+    println!("vm_restored={name}:{checkpoint}");
+    Ok(())
+}
+
+fn vm_destroy(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config = vm_config(args);
+    let name = value_after(args, "--name").ok_or("missing --name <DragonForge-...>")?;
+    if !args.iter().any(|arg| arg == "--confirm") {
+        return Err("vm-destroy requires --confirm".into());
+    }
+    HyperVClient::default().destroy_managed(&config, &name)?;
+    println!("vm_destroyed={name}");
+    Ok(())
+}
+
+fn vm_config(args: &[String]) -> VmLabConfig {
+    let root = value_after(args, "--vm-root")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("vm-lab"));
+    let mut config = VmLabConfig::under(root);
+    if let Some(value) = value_after(args, "--image-root") {
+        config.base_image_root = PathBuf::from(value);
+    }
+    if let Some(value) = value_after(args, "--switch") {
+        config.switch_name = value;
+    }
+    config
+}
+
+fn parse_u64_flag(
+    args: &[String],
+    flag: &str,
+    default: u64,
+) -> Result<u64, Box<dyn std::error::Error>> {
+    match value_after(args, flag) {
+        Some(value) => Ok(value.parse()?),
+        None => Ok(default),
+    }
+}
+
+fn parse_u32_flag(
+    args: &[String],
+    flag: &str,
+    default: u32,
+) -> Result<u32, Box<dyn std::error::Error>> {
+    match value_after(args, flag) {
+        Some(value) => Ok(value.parse()?),
+        None => Ok(default),
+    }
+}
+
 fn sandbox_mode(args: &[String]) -> Result<SandboxMode, Box<dyn std::error::Error>> {
     let value = value_after(args, "--sandbox").unwrap_or_else(|| "native".into());
     Ok(SandboxMode::parse(&value)?)
@@ -317,6 +470,14 @@ fn print_help() {
     println!("  dragonforge-test-lab doctor");
     println!("  dragonforge-test-lab github-doctor");
     println!("  dragonforge-test-lab sandbox-doctor [--sandbox native|docker|podman] [--worker-user <name>]");
+    println!("  dragonforge-test-lab vm-doctor [--vm-root <path>] [--switch <name>]");
+    println!("  dragonforge-test-lab vm-list");
+    println!("  dragonforge-test-lab vm-create --name <DragonForge-...> --guest-os windows|linux --base-vhdx <path> [--memory-mib 4096] [--processors 2] [--switch <name>]");
+    println!("  dragonforge-test-lab vm-start --name <DragonForge-...>");
+    println!("  dragonforge-test-lab vm-stop --name <DragonForge-...>");
+    println!("  dragonforge-test-lab vm-baseline --name <DragonForge-...>");
+    println!("  dragonforge-test-lab vm-restore --name <DragonForge-...> [--checkpoint DragonForge-Baseline]");
+    println!("  dragonforge-test-lab vm-destroy --name <DragonForge-...> --confirm");
     println!("  dragonforge-test-lab version");
     println!("  dragonforge-test-lab run-local --repo <https-url> [--revision <ref>] [--lab-root <path>] [--retain-workspace] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab run-github --repo <github-https-url> [--revision <ref>] [--lab-root <path>] [--retain-workspace] [--sandbox native|docker|podman] [--worker-user <name>] [--no-status]");

@@ -19,6 +19,9 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 13. Windows native execution is assigned to a Job Object before the suspended child is resumed.
 14. Memory and active-process ceilings are kernel-enforced for Windows native jobs and runtime-enforced for Docker/Podman project actions.
 15. Dedicated worker identity can be required without placing account passwords in Test Lab configuration or job payloads.
+16. Hyper-V management accepts only validated typed VM operations; arbitrary PowerShell is not exposed.
+17. Destructive VM operations are limited to the DragonForge-* namespace and explicit confirmation.
+18. Golden VHDX parents must remain beneath the configured image root and are consumed through differencing children.
 
 ## Local execution boundary
 
@@ -54,13 +57,25 @@ Worker identity may be constrained with `--worker-user`. On Windows, Test Lab re
 
 Phase 3 does not claim outbound-network isolation. Native execution retains normal worker networking and containers use runtime-default networking so dependency resolution can function.
 
+## Phase 4 VM boundary
+
+Phase 4 introduces a separate Hyper-V orchestration boundary. Test Lab generates fixed PowerShell templates for known Hyper-V cmdlets rather than accepting scripts from callers.
+
+Managed VM names must begin with DragonForge-. VM/checkpoint/switch names use restricted character sets, memory and CPU values are bounded, golden VHDX paths are verified beneath the configured image root, and VM deletion is limited to the managed namespace plus an explicit --confirm CLI gate.
+
+Managed instances use differencing disks so the golden parent image is not intentionally modified. Creation failures attempt to remove any partially registered VM and instance storage.
+
+Standard Hyper-V checkpoints are used for the DragonForge-Baseline rollback point. Restoring the baseline powers the VM off, applies the checkpoint, and starts the VM again.
+
+The VM layer does not expose a general host-to-guest shell. Guest execution remains a later typed/authenticated transport problem.
+
 ## Current enforcement
 
-Phases 1-3 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, and Docker/Podman project-code isolation.
+Phases 1-4 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 
-Before truly hostile third-party code is considered safely isolated, later phases must add disposable VM boundaries, live disk quotas or disposable filesystems, outbound network policy, authenticated controller-agent transport, immutable audit records, artifact hashing, and stronger privilege/network isolation. Phase 3 provides meaningful process/container containment but Phase 4 VMs remain the preferred hostile-code boundary.
+Phase 4 provides disposable VM lifecycle and rollback, but truly hostile third-party code still requires careful network isolation, patched hosts/hypervisors, immutable audit records, artifact hashing, and stronger privilege/network controls. Hyper-V reduces host exposure but does not make hypervisor escape impossible.
 
 Before distributed nodes are enabled, add mutual controller/agent authentication, short-lived node credentials, replay protection, node identity, connection health/lease expiry, explicit high-risk capability approvals, and encrypted transport. Nodes should not expose a general remote shell.
 

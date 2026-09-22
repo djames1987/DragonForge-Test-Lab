@@ -23,3 +23,10 @@ required_worker_user = ""
 allow_arbitrary_shell = false
 require_https_repositories = true
 require_process_tree_containment = true
+
+[vm_lab]
+root = ".dragonforge-test-lab/vm-lab"
+base_image_root = ".dragonforge-test-lab/vm-lab/images"
+switch_name = "Default Switch"
+managed_vm_prefix = "DragonForge-"
+baseline_checkpoint = "DragonForge-Baseline"

@@ -12,7 +12,7 @@ use std::{
     process::{Child, Command, ExitStatus, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, OnceLock,
     },
     thread,
     time::{Duration, Instant},
@@ -22,6 +22,9 @@ use uuid::Uuid;
 
 const DEFAULT_OUTPUT_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 const DEFAULT_POLL_INTERVAL_MS: u64 = 50;
+
+#[cfg(windows)]
+static MSVC_ENVIRONMENT: OnceLock<Option<BTreeMap<String, String>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Default)]
 pub struct CancellationToken {
@@ -616,6 +619,8 @@ fn apply_sanitized_environment(command: &mut Command) {
     const ALLOWED: &[&str] = &[
         "PATH",
         "Path",
+        "PATHEXT",
+        "COMSPEC",
         "SYSTEMROOT",
         "SystemRoot",
         "WINDIR",
@@ -628,6 +633,12 @@ fn apply_sanitized_environment(command: &mut Command) {
         "LANG",
         "LC_ALL",
         "TERM",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "ProgramW6432",
+        "CommonProgramFiles",
+        "CommonProgramFiles(x86)",
+        "CommonProgramW6432",
     ];
 
     let current: BTreeMap<String, String> = std::env::vars().collect();
@@ -637,6 +648,115 @@ fn apply_sanitized_environment(command: &mut Command) {
         if let Some(value) = current.get(*key) {
             command.env(key, value);
         }
+    }
+
+    #[cfg(windows)]
+    if let Some(msvc) = MSVC_ENVIRONMENT.get_or_init(discover_msvc_environment) {
+        for (key, value) in msvc {
+            command.env(key, value);
+        }
+    }
+}
+
+#[cfg(windows)]
+fn discover_msvc_environment() -> Option<BTreeMap<String, String>> {
+    const IMPORTED: &[&str] = &[
+        "PATH",
+        "Path",
+        "INCLUDE",
+        "LIB",
+        "LIBPATH",
+        "VSINSTALLDIR",
+        "VCINSTALLDIR",
+        "VCToolsInstallDir",
+        "VCToolsVersion",
+        "WindowsSdkDir",
+        "WindowsSDKVersion",
+        "UniversalCRTSdkDir",
+        "UCRTVersion",
+    ];
+
+    let program_files_x86 = std::env::var("ProgramFiles(x86)").ok()?;
+    let vswhere = PathBuf::from(program_files_x86)
+        .join("Microsoft Visual Studio")
+        .join("Installer")
+        .join("vswhere.exe");
+    if !vswhere.is_file() {
+        return None;
+    }
+
+    let output = Command::new(vswhere)
+        .args([
+            "-latest",
+            "-products",
+            "*",
+            "-requires",
+            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+            "-property",
+            "installationPath",
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let install = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if install.is_empty() {
+        return None;
+    }
+
+    let vsdevcmd = PathBuf::from(install)
+        .join("Common7")
+        .join("Tools")
+        .join("VsDevCmd.bat");
+    if !vsdevcmd.is_file() {
+        return None;
+    }
+
+    let comspec =
+        std::env::var("COMSPEC").unwrap_or_else(|_| r"C:\Windows\System32\cmd.exe".to_owned());
+
+    // Use a short-lived helper script rather than embedding a quoted
+    // `call "C:\\Program Files\\..."` expression directly in `cmd /c`.
+    // Windows command-line quoting around batch files is surprisingly fragile;
+    // the helper file keeps the command fixed and the toolchain path comes only
+    // from trusted vswhere discovery.
+    let helper = std::env::temp_dir().join(format!("dragonforge-msvc-env-{}.cmd", Uuid::new_v4()));
+    let helper_body = format!(
+        "@echo off\r\ncall \"{}\" -no_logo -arch=x64 -host_arch=x64 >nul\r\nif errorlevel 1 exit /b %errorlevel%\r\nset\r\n",
+        vsdevcmd.display()
+    );
+    fs::write(&helper, helper_body).ok()?;
+
+    let output = Command::new(comspec)
+        .args(["/d", "/c"])
+        .arg(&helper)
+        .output()
+        .ok();
+    let _ = fs::remove_file(&helper);
+    let output = output?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let mut discovered = BTreeMap::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if IMPORTED
+            .iter()
+            .any(|allowed| key.eq_ignore_ascii_case(allowed))
+        {
+            discovered.insert(key.to_owned(), value.to_owned());
+        }
+    }
+
+    if discovered.is_empty() {
+        None
+    } else {
+        Some(discovered)
     }
 }
 
