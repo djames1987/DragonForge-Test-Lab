@@ -60,7 +60,7 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 54. Serialized identity trust state contains certificate fingerprints/lifecycle metadata only and does not persist private keys.
 55. The built-in direct controller address policy remains loopback/private/link-local even when mTLS is enabled.
 56. Phase 13 workers initiate controller connections outbound over mTLS and do not expose inbound worker listeners.
-57. Drain mode stops new job admission immediately while preserving already-active job state for graceful shutdown.
+57. Drain mode stops new job admission immediately while preserving already-active job state for graceful shutdown; running services refresh the persisted drain/resume control before heartbeats.
 58. Worker restart snapshots contain lifecycle metadata only; TLS private keys remain file-backed operator secrets and are not serialized into runtime state.
 59. Windows service launch metadata is fixed to the DragonForgeTestWorker service identity and internally generated worker-service command shape.
 60. Service reconnect uses bounded exponential backoff and a restart never treats a previously online session as still authenticated.
