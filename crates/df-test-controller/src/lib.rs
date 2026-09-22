@@ -977,8 +977,16 @@ impl DurableController {
 
         let mut expected_previous: Option<String> = None;
         for row in rows {
-            let (id, unix_time, kind, entity_type, entity_id, detail_json, stored_previous, stored_hash) =
-                row?;
+            let (
+                id,
+                unix_time,
+                kind,
+                entity_type,
+                entity_id,
+                detail_json,
+                stored_previous,
+                stored_hash,
+            ) = row?;
             let detail: serde_json::Value = serde_json::from_str(&detail_json)?;
             let payload = serde_json::json!({
                 "unix_time_secs": to_u64(unix_time)?,
@@ -987,11 +995,7 @@ impl DurableController {
                 "entity_id": entity_id,
                 "detail": detail
             });
-            let digest = next_audit_digest(
-                to_u64(id)?,
-                expected_previous.as_deref(),
-                &payload,
-            )?;
+            let digest = next_audit_digest(to_u64(id)?, expected_previous.as_deref(), &payload)?;
             if stored_previous.as_deref() != Some(digest.previous_sha256.as_str())
                 || stored_hash.as_deref() != Some(digest.event_sha256.as_str())
             {
@@ -1025,7 +1029,10 @@ impl DurableController {
         Ok(self.connection.last_insert_rowid())
     }
 
-    pub fn recent_logs(&self, limit: usize) -> Result<Vec<DurableLogRecord>, DurableControllerError> {
+    pub fn recent_logs(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<DurableLogRecord>, DurableControllerError> {
         let limit = bounded_query_limit(limit)?;
         let mut statement = self.connection.prepare(
             "SELECT log_id, unix_time_secs, level, component, message, fields_json, job_id, worker_id
@@ -1033,18 +1040,21 @@ impl DurableController {
              ORDER BY log_id DESC
              LIMIT ?1",
         )?;
-        let rows = statement.query_map([i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-                row.get::<_, Option<String>>(6)?,
-                row.get::<_, Option<String>>(7)?,
-            ))
-        })?;
+        let rows = statement.query_map(
+            [i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                ))
+            },
+        )?;
         let mut records = Vec::new();
         for row in rows {
             let (id, unix_time, level, component, message, fields_json, job_id, worker_id) = row?;
@@ -1090,15 +1100,18 @@ impl DurableController {
              ORDER BY metric_id DESC
              LIMIT ?1",
         )?;
-        let rows = statement.query_map([i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, f64>(3)?,
-                row.get::<_, String>(4)?,
-            ))
-        })?;
+        let rows = statement.query_map(
+            [i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, f64>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            },
+        )?;
         let mut records = Vec::new();
         for row in rows {
             let (id, unix_time, name, value, labels_json) = row?;
@@ -1280,7 +1293,9 @@ fn parse_log_level(value: &str) -> Result<LogLevel, DurableControllerError> {
         "info" => Ok(LogLevel::Info),
         "warn" => Ok(LogLevel::Warn),
         "error" => Ok(LogLevel::Error),
-        _ => Err(DurableControllerError::InvalidStoredLogLevel(value.to_owned())),
+        _ => Err(DurableControllerError::InvalidStoredLogLevel(
+            value.to_owned(),
+        )),
     }
 }
 
