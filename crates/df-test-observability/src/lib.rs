@@ -265,12 +265,16 @@ pub fn catalog_artifact(
     created_at_secs: u64,
 ) -> Result<ArtifactCatalogEntry, ObservabilityError> {
     let root = canonical_directory(artifact_root.as_ref())?;
+    let original_metadata = fs::symlink_metadata(artifact_path.as_ref())?;
+    if original_metadata.file_type().is_symlink() || !original_metadata.file_type().is_file() {
+        return Err(ObservabilityError::InvalidArtifactFile);
+    }
     let path = fs::canonicalize(artifact_path.as_ref())?;
     if !path.starts_with(&root) {
         return Err(ObservabilityError::ArtifactOutsideRoot);
     }
-    let metadata = fs::symlink_metadata(&path)?;
-    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+    let metadata = fs::metadata(&path)?;
+    if !metadata.is_file() {
         return Err(ObservabilityError::InvalidArtifactFile);
     }
 
@@ -301,6 +305,13 @@ pub fn prune_artifacts(
 
     let mut ordered = entries.to_vec();
     ordered.sort_by_key(|entry| (entry.created_at_secs, entry.relative_path.clone()));
+
+    let mut seen = BTreeSet::new();
+    for entry in &ordered {
+        if !seen.insert(entry.relative_path.clone()) {
+            return Err(ObservabilityError::DuplicateArtifactPath);
+        }
+    }
 
     let mut retained: BTreeSet<String> =
         ordered.iter().map(|entry| entry.relative_path.clone()).collect();
@@ -521,6 +532,8 @@ pub enum ObservabilityError {
     InvalidRetentionPolicy,
     #[error("too many artifacts in a single retention pass")]
     TooManyArtifacts,
+    #[error("artifact retention input contains duplicate relative paths")]
+    DuplicateArtifactPath,
     #[error("invalid SHA-256 value")]
     InvalidSha256,
     #[error("JSON error: {0}")]
@@ -606,6 +619,45 @@ mod tests {
         assert_eq!(report.removed, vec!["old.log"]);
         assert!(!old.exists());
         assert!(new.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn artifact_prune_rejects_duplicate_paths() {
+        let root = std::env::temp_dir().join(format!(
+            "dragonforge-phase14-duplicates-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let entries = vec![
+            ArtifactCatalogEntry {
+                relative_path: "same.log".into(),
+                size_bytes: 1,
+                sha256: "0".repeat(64),
+                created_at_secs: 1,
+            },
+            ArtifactCatalogEntry {
+                relative_path: "same.log".into(),
+                size_bytes: 2,
+                sha256: "1".repeat(64),
+                created_at_secs: 2,
+            },
+        ];
+        let result = prune_artifacts(
+            &root,
+            &entries,
+            ArtifactRetentionPolicy {
+                max_age_secs: 100,
+                max_total_bytes: 100,
+                max_artifacts: 10,
+            },
+            10,
+        );
+        assert!(matches!(
+            result,
+            Err(ObservabilityError::DuplicateArtifactPath)
+        ));
         let _ = fs::remove_dir_all(root);
     }
 
