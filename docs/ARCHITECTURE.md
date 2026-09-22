@@ -9,7 +9,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-protocol: versioned, serializable contracts shared by controllers and agents.
 - df-test-policy: repository, capability, and resource-limit authorization.
 - df-test-agent: worker-side trust boundary and protocol compatibility gate.
-- df-test-controller: queue/capability-aware scheduling plus Phase 11 SQLite-backed durable controller state and restart recovery.
+- df-test-controller: queue/capability-aware scheduling plus SQLite-backed durable controller state, restart recovery, Phase 14 audit chaining, structured logs, metrics, and artifact retention metadata.
 - df-test-executor: local workspace, fixed-command process execution, cancellation, output capture, artifact generation, and cleanup.
 - df-test-github: typed GitHub repository/ref resolution and commit-status reporting through the authenticated gh CLI.
 - df-test-sandbox: native/container sandbox selection, Windows Job Object containment, resource ceilings, worker-identity enforcement, and fixed Docker/Podman wrapping.
@@ -18,6 +18,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-gui: managed-window UI Automation, deterministic typed plans, screenshots, and owned-process crash capture.
 - df-test-distributed: authenticated node envelopes, lease/heartbeat inventory, capability/load-aware multi-node scheduling, framed outbound transport, typed network tasks, and hashed distributed result manifests.
 - df-test-mcp: loopback-only authenticated MCP HTTP gateway, protocol/version handling, named tool schemas, bounded asynchronous job registry, typed profile submission, and result/artifact metadata projection.
+- df-test-observability: structured log validation/redaction and JSONL rotation, metrics registry/snapshots, SHA-256 artifact cataloging, retention pruning, and audit digest construction.
 - dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, deep-Rust tool readiness, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
@@ -266,3 +267,25 @@ Certificate trust metadata is serializable without private keys. Rotation uses o
 Windows uses a native Service Control Manager dispatcher and Stop control handling. Linux uses the same foreground worker runtime beneath a hardened systemd unit. Service installation/upgrade packaging is reserved for Phase 21; the Phase 13 executable and service definitions are service-manager capable now.
 
 Drain mode prevents new work while retaining existing active-job state. Runtime snapshots contain no certificate or private-key bytes. A restart never trusts a previously online session and reconnects before advertising availability.
+
+
+## Phase 14 observability flow
+
+    controller / worker lifecycle
+              |
+              +--> structured events -> redact + bound -> SQLite / JSONL
+              |
+              +--> metric samples -> validate finite values -> SQLite
+              |
+              +--> audit events -> SQLite audit_id + previous digest -> SHA-256 chain
+              |
+              +--> artifacts -> canonical root check -> SHA-256 catalog
+                                      |
+                                      +--> age/count/byte retention policy
+                                      +--> root-contained regular-file deletion
+
+Controller schema v2 extends the durable Phase 11 database rather than creating a separate telemetry database. Existing v1 audit records remain readable; new Phase 14 audit records form a verifiable SHA-256 chain. Telemetry pruning can remove structured logs and metrics by timestamp but does not remove audit history.
+
+WorkerServiceRuntime exposes deterministic operational metrics for active jobs, job admission, drain state, and reconnect attempts. These metrics are intended to become input to the Phase 18 dashboard and later scheduling/intelligence integrations, but Phase 14 metrics do not themselves authorize or execute work.
+
+Artifact retention is filesystem-root constrained. Cataloging canonicalizes files beneath the configured artifact root, rejects symlinks and escapes, hashes content with SHA-256, and retention removes only eligible canonical regular files beneath that same root.

@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 13 — Worker Services — Complete
+Phase 14 — Audit / Artifacts / Observability — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, and Phase 12 added validated rustls mTLS/X.509 node identity. Phase 13 adds validated long-running worker services with outbound mTLS registration, typed heartbeats, drain/resume, restart-state persistence, native Windows SCM hosting, and hardened systemd service definitions. Full Phase 13 Windows host validation passed on 2026-09-22.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, and Phase 13 added validated long-running worker services. Phase 14 adds validated controller schema v2, hash-chained durable audit events, redacted structured logs, JSONL rotation, durable/worker metrics, SHA-256 artifact cataloging, root-contained retention pruning, and telemetry query/pruning tooling. Full Phase 14 Windows host validation passed on 2026-09-22.
 
 ## Workspace
 
@@ -32,6 +32,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-intelligence/   change analysis, regression targeting, clustering, scheduling
       df-test-identity/       mTLS, X.509 node identity, trust, rotation, revocation
       df-test-worker-service/ long-running worker lifecycle and service hosting
+      df-test-observability/  audit/log/metrics/artifact observability and retention
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -50,6 +51,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-11.md
       PHASE-12.md
       PHASE-13.md
+      PHASE-14.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -72,6 +74,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase11.ps1
       test-phase12.ps1
       test-phase13.ps1
+      test-phase14.ps1
 
 ## Hyper-V host setup
 
@@ -291,10 +294,32 @@ End-to-end Phase 13 validation:
 
 See docs/PHASE-13.md for service lifecycle, mTLS registration, drain behavior, restart recovery, Windows SCM hosting, systemd hardening, and security boundaries.
 
+## Phase 14 Audit / Artifacts / Observability
+
+Readiness:
+
+    cargo run -p dragonforge-test-lab -- observability-doctor
+
+End-to-end audit/log/metric/artifact fixture:
+
+    cargo run -p dragonforge-test-lab -- observability-fixture
+
+Inspect the durable controller:
+
+    cargo run -p dragonforge-test-lab -- observability-summary
+
+End-to-end Phase 14 validation:
+
+    .\scripts\test-phase14.ps1
+
+Phase 14 upgrades the durable controller database to schema v2. New audit records are SHA-256 chained, structured logs are bounded/redacted before persistence, metrics are durable, worker services expose runtime metrics, artifacts can be SHA-256 cataloged and safely pruned under a configured root, and old telemetry can be removed without deleting audit history.
+
+See docs/PHASE-14.md for persistence, audit-chain, logging, metrics, retention, and security boundaries.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, and docs/ROADMAP.md.

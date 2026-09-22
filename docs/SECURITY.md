@@ -64,6 +64,11 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 58. Worker restart snapshots contain lifecycle metadata only; TLS private keys remain file-backed operator secrets and are not serialized into runtime state.
 59. Windows service launch metadata is fixed to the DragonForgeTestWorker service identity and internally generated worker-service command shape.
 60. Service reconnect uses bounded exponential backoff and a restart never treats a previously online session as still authenticated.
+61. Phase 14 structured logs are bounded and redact known secret-bearing field names before JSONL or SQLite persistence.
+62. New Phase 14 audit records are SHA-256 chained using their SQLite audit sequence and prior event digest; audit-chain verification is integrity evidence, not a digital signature.
+63. Artifact cataloging and deletion canonicalize paths beneath a configured artifact root, reject symlinks/traversal, and never delete arbitrary caller-selected filesystem paths.
+64. Telemetry pruning applies only to structured logs and metric samples; audit history is not deleted by the telemetry-prune operation.
+65. Metrics must use validated names and finite values and do not themselves authorize scheduling or execution.
 
 ## Local execution boundary
 
@@ -187,9 +192,17 @@ Phase 13 makes the worker long-running without turning it into a remote shell. W
 
 Windows uses a native Service Control Manager dispatcher and handles Stop by setting a shared stop flag, entering drain state, persisting the snapshot, and reporting Stopped. Linux systemd metadata includes restart behavior and service hardening. Runtime snapshots contain no TLS certificate or private-key bytes.
 
+## Phase 14 audit / artifact / observability boundary
+
+Phase 14 records additional operational state without adding execution authority. Structured fields are validated and bounded before persistence, and known sensitive field names are replaced with `<redacted>`. This is a defensive redaction layer, not a guarantee that arbitrary free-form messages can never contain sensitive content; callers should still avoid placing secrets in log messages.
+
+New audit rows contain a hash of their sequence, previous digest, timestamp, type/entity metadata, and event detail. The chain makes modification/reordering of Phase 14 chained events detectable through the controller verifier. It is not externally signed or immutable against an attacker who can rewrite the database and recompute the entire chain; later release/security phases can add stronger external anchoring if required.
+
+Artifact retention is deliberately root-contained. Cataloging and pruning canonicalize the configured artifact root and target file, reject symlinks and parent traversal, and remove only regular files under the root. Telemetry pruning deletes only old structured-log and metric rows and leaves audit history intact.
+
 ## Current enforcement
 
-Phases 1-13 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-14 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 
