@@ -854,9 +854,21 @@ impl DurableController {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let previous_state: Option<String> = tx
+            .query_row(
+                "SELECT state FROM jobs
+                 WHERE job_id = ?1 AND state IN ('queued', 'retry_pending')",
+                [job_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
         let changed = tx.execute(
-            "UPDATE jobs SET state = 'cancelled', updated_at_secs = ?2
-             WHERE job_id = ?1 AND state = 'queued'",
+            "UPDATE jobs
+             SET state = 'cancelled',
+                 updated_at_secs = ?2,
+                 next_retry_at_secs = NULL,
+                 retry_reason = NULL
+             WHERE job_id = ?1 AND state IN ('queued', 'retry_pending')",
             params![job_id.to_string(), to_i64(now_secs)?],
         )?;
         if changed > 0 {
@@ -866,7 +878,9 @@ impl DurableController {
                 "job_cancelled",
                 "job",
                 &job_id.to_string(),
-                &serde_json::json!({"from":"queued"}),
+                &serde_json::json!({
+                    "from": previous_state.as_deref().unwrap_or("unknown")
+                }),
             )?;
         }
         tx.commit()?;
@@ -994,6 +1008,25 @@ impl DurableController {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let (state, attempt_count): (String, i64) = tx
+            .query_row(
+                "SELECT state,
+                        (SELECT COUNT(*) FROM job_attempts WHERE job_id = jobs.job_id)
+                 FROM jobs WHERE job_id = ?1",
+                [job_id.to_string()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?
+            .ok_or(DurableControllerError::UnknownJob)?;
+        if state != DurableJobState::Interrupted.as_str() {
+            return Err(DurableControllerError::InvalidTransition);
+        }
+        let attempt_count = u32::try_from(attempt_count)
+            .map_err(|_| DurableControllerError::IntegerOutOfRange)?;
+        if attempt_count >= df_test_lifecycle::MAX_ATTEMPTS {
+            return Err(DurableControllerError::ManualRescheduleLimitReached);
+        }
+
         let changed = tx.execute(
             "UPDATE jobs
              SET state = 'queued',
@@ -1719,6 +1752,8 @@ pub enum DurableControllerError {
     InvalidCompletionStatus,
     #[error("job has no durable attempt to classify")]
     MissingAttempt,
+    #[error("manual rescheduling reached the global attempt safety limit")]
+    ManualRescheduleLimitReached,
     #[error("integer value is outside the supported SQLite range")]
     IntegerOutOfRange,
     #[error("invalid controller configuration key")]
@@ -2091,6 +2126,44 @@ mod tests {
             controller.get_job(manual_job.id).unwrap().unwrap().state,
             DurableJobState::Queued
         );
+    }
+
+    #[test]
+    fn retry_pending_jobs_can_be_cancelled_before_reassignment() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let job = test_job();
+        controller
+            .enqueue_job_with_retry(
+                &job,
+                RetryPolicy::bounded(3, 10, 60, false).unwrap(),
+                1,
+            )
+            .unwrap();
+        controller.register_worker(&test_worker(), 2).unwrap();
+        controller.assign_next("windows-1", 3).unwrap().unwrap();
+        controller.mark_running(job.id, 4).unwrap();
+        controller
+            .complete_job_with_classification(
+                &JobResult {
+                    job_id: job.id,
+                    status: JobStatus::Failed,
+                    summary: "temporary worker failure".into(),
+                    artifacts: vec![],
+                },
+                Some(FailureClass::InfrastructureTransient),
+                5,
+            )
+            .unwrap();
+        assert_eq!(
+            controller.get_job(job.id).unwrap().unwrap().state,
+            DurableJobState::RetryPending
+        );
+        assert!(controller.cancel_queued_job(job.id, 6).unwrap());
+        assert_eq!(
+            controller.get_job(job.id).unwrap().unwrap().state,
+            DurableJobState::Cancelled
+        );
+        assert!(controller.assign_next("windows-1", 100).unwrap().is_none());
     }
 
     #[test]
