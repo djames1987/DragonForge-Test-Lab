@@ -95,6 +95,9 @@ impl JsonlLogWriter {
         }
 
         let line = serde_json::to_vec(&event)?;
+        if u64::try_from(line.len() + 1).unwrap_or(u64::MAX) > self.max_bytes {
+            return Err(ObservabilityError::LogEntryTooLarge);
+        }
         let projected = self
             .path
             .metadata()
@@ -357,7 +360,9 @@ pub fn next_audit_digest(
     previous_sha256: Option<&str>,
     event: &serde_json::Value,
 ) -> Result<AuditDigest, ObservabilityError> {
-    let previous = previous_sha256.unwrap_or(&"0".repeat(64)).to_owned();
+    let previous = previous_sha256
+        .map(str::to_owned)
+        .unwrap_or_else(|| "0".repeat(64));
     validate_sha256(&previous)?;
     let payload = serde_json::to_vec(event)?;
     let mut hasher = Sha256::new();
@@ -490,6 +495,8 @@ pub enum ObservabilityError {
     LogFieldTooLarge,
     #[error("invalid log file size limit")]
     InvalidLogLimit,
+    #[error("structured log entry exceeds the configured log file limit")]
+    LogEntryTooLarge,
     #[error("invalid log path")]
     InvalidLogPath,
     #[error("invalid identifier")]
