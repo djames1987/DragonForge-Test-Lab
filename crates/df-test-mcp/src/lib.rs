@@ -199,9 +199,11 @@ impl McpGateway {
     pub fn new(config: McpGatewayConfig) -> Result<Self, McpGatewayError> {
         config.validate()?;
         let token_digest: [u8; 32] = Sha256::digest(config.bearer_token.as_bytes()).into();
+        let mut stored_config = config;
+        stored_config.bearer_token.clear();
         Ok(Self {
             inner: Arc::new(GatewayInner {
-                config,
+                config: stored_config,
                 token_digest,
                 state: Mutex::new(GatewayState::default()),
             }),
@@ -476,6 +478,7 @@ impl McpGateway {
             state.jobs.insert(job_id, record);
         }
 
+        let profile = submission.profile;
         let gateway = self.clone();
         thread::spawn(move || {
             gateway.run_job(job_id, submission);
@@ -484,7 +487,7 @@ impl McpGateway {
         Ok(json!({
             "job_id": job_id,
             "state": "queued",
-            "profile": submission.profile
+            "profile": profile
         }))
     }
 
@@ -1358,7 +1361,8 @@ mod tests {
             .unwrap(),
         });
         assert_eq!(response.status, 200);
-        let result = &response.body.unwrap()["result"];
+        let body = response.body.unwrap();
+        let result = &body["result"];
         assert!(result["supportedVersions"]
             .as_array()
             .unwrap()
