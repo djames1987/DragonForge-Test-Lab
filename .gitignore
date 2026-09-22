@@ -7,3 +7,5 @@
 artifacts/
 workspaces/
 test-logs/
+fuzz/artifacts/
+fuzz/corpus/
