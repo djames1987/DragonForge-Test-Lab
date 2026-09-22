@@ -1,5 +1,13 @@
-use df_test_protocol::{JobRequest, WorkerRegistration, PROTOCOL_VERSION};
-use std::collections::{HashMap, VecDeque};
+use df_test_protocol::{
+    ArtifactRef, JobRequest, JobResult, WorkerRegistration, PROTOCOL_VERSION,
+};
+use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::{HashMap, VecDeque},
+    path::Path,
+};
+use thiserror::Error;
 use uuid::Uuid;
 
 #[derive(Debug, Default)]
@@ -55,10 +63,937 @@ pub enum ControllerError {
     UnknownWorker,
 }
 
+pub const SCHEMA_VERSION: i64 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DurableJobState {
+    Queued,
+    Assigned,
+    Running,
+    Passed,
+    Failed,
+    Rejected,
+    Cancelled,
+    Interrupted,
+}
+
+impl DurableJobState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Queued => "queued",
+            Self::Assigned => "assigned",
+            Self::Running => "running",
+            Self::Passed => "passed",
+            Self::Failed => "failed",
+            Self::Rejected => "rejected",
+            Self::Cancelled => "cancelled",
+            Self::Interrupted => "interrupted",
+        }
+    }
+
+    fn parse(value: &str) -> Result<Self, DurableControllerError> {
+        match value {
+            "queued" => Ok(Self::Queued),
+            "assigned" => Ok(Self::Assigned),
+            "running" => Ok(Self::Running),
+            "passed" => Ok(Self::Passed),
+            "failed" => Ok(Self::Failed),
+            "rejected" => Ok(Self::Rejected),
+            "cancelled" => Ok(Self::Cancelled),
+            "interrupted" => Ok(Self::Interrupted),
+            _ => Err(DurableControllerError::InvalidStoredState(value.to_owned())),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableJobRecord {
+    pub job: JobRequest,
+    pub state: DurableJobState,
+    pub assigned_worker: Option<String>,
+    pub created_at_secs: u64,
+    pub updated_at_secs: u64,
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableAttemptRecord {
+    pub attempt_id: i64,
+    pub job_id: Uuid,
+    pub attempt_number: u32,
+    pub worker_id: Option<String>,
+    pub state: DurableJobState,
+    pub started_at_secs: Option<u64>,
+    pub finished_at_secs: Option<u64>,
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableWorkerRecord {
+    pub registration: WorkerRegistration,
+    pub last_seen_secs: u64,
+    pub online: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditEvent {
+    pub id: i64,
+    pub unix_time_secs: u64,
+    pub kind: String,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub detail: serde_json::Value,
+}
+
+pub struct DurableController {
+    connection: Connection,
+}
+
+impl DurableController {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, DurableControllerError> {
+        let connection = Connection::open(path)?;
+        Self::from_connection(connection)
+    }
+
+    pub fn open_in_memory() -> Result<Self, DurableControllerError> {
+        let connection = Connection::open_in_memory()?;
+        Self::from_connection(connection)
+    }
+
+    fn from_connection(connection: Connection) -> Result<Self, DurableControllerError> {
+        connection.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             PRAGMA busy_timeout = 5000;",
+        )?;
+        let mut controller = Self { connection };
+        controller.migrate()?;
+        Ok(controller)
+    }
+
+    pub fn schema_version(&self) -> Result<i64, DurableControllerError> {
+        Ok(self
+            .connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))?)
+    }
+
+    pub fn migrate(&mut self) -> Result<(), DurableControllerError> {
+        let current = self.schema_version()?;
+        if current > SCHEMA_VERSION {
+            return Err(DurableControllerError::SchemaTooNew {
+                current,
+                supported: SCHEMA_VERSION,
+            });
+        }
+
+        if current < 1 {
+            let tx = self
+                .connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute_batch(
+                "CREATE TABLE IF NOT EXISTS jobs (
+                    job_id TEXT PRIMARY KEY NOT NULL,
+                    request_json TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    assigned_worker TEXT,
+                    created_at_secs INTEGER NOT NULL,
+                    updated_at_secs INTEGER NOT NULL,
+                    last_error TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS job_attempts (
+                    attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT NOT NULL,
+                    attempt_number INTEGER NOT NULL,
+                    worker_id TEXT,
+                    state TEXT NOT NULL,
+                    started_at_secs INTEGER,
+                    finished_at_secs INTEGER,
+                    summary TEXT,
+                    FOREIGN KEY(job_id) REFERENCES jobs(job_id) ON DELETE CASCADE,
+                    UNIQUE(job_id, attempt_number)
+                );
+
+                CREATE TABLE IF NOT EXISTS workers (
+                    worker_id TEXT PRIMARY KEY NOT NULL,
+                    registration_json TEXT NOT NULL,
+                    last_seen_secs INTEGER NOT NULL,
+                    online INTEGER NOT NULL CHECK(online IN (0, 1))
+                );
+
+                CREATE TABLE IF NOT EXISTS intelligence_history (
+                    intelligence_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_json TEXT NOT NULL,
+                    created_at_secs INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS artifact_metadata (
+                    artifact_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    relative_path TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL,
+                    sha256 TEXT,
+                    FOREIGN KEY(job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    unix_time_secs INTEGER NOT NULL,
+                    kind TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    detail_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS controller_config (
+                    config_key TEXT PRIMARY KEY NOT NULL,
+                    config_value TEXT NOT NULL,
+                    updated_at_secs INTEGER NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_jobs_state_created
+                    ON jobs(state, created_at_secs);
+                CREATE INDEX IF NOT EXISTS idx_attempts_job
+                    ON job_attempts(job_id, attempt_number);
+                CREATE INDEX IF NOT EXISTS idx_audit_entity
+                    ON audit_events(entity_type, entity_id, unix_time_secs);
+
+                PRAGMA user_version = 1;",
+            )?;
+            tx.commit()?;
+        }
+
+        Ok(())
+    }
+
+    pub fn enqueue_job(
+        &mut self,
+        job: &JobRequest,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        let job_json = serde_json::to_string(job)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
+            "INSERT INTO jobs (
+                job_id, request_json, state, created_at_secs, updated_at_secs
+             ) VALUES (?1, ?2, ?3, ?4, ?4)",
+            params![
+                job.id.to_string(),
+                job_json,
+                DurableJobState::Queued.as_str(),
+                to_i64(now_secs)?
+            ],
+        )?;
+        insert_audit(
+            &tx,
+            now_secs,
+            "job_enqueued",
+            "job",
+            &job.id.to_string(),
+            &serde_json::json!({"state":"queued"}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn register_worker(
+        &mut self,
+        worker: &WorkerRegistration,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        if worker.protocol_version != PROTOCOL_VERSION {
+            return Err(DurableControllerError::ProtocolMismatch);
+        }
+        let worker_json = serde_json::to_string(worker)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
+            "INSERT INTO workers(worker_id, registration_json, last_seen_secs, online)
+             VALUES (?1, ?2, ?3, 1)
+             ON CONFLICT(worker_id) DO UPDATE SET
+                registration_json = excluded.registration_json,
+                last_seen_secs = excluded.last_seen_secs,
+                online = 1",
+            params![worker.worker_id, worker_json, to_i64(now_secs)?],
+        )?;
+        insert_audit(
+            &tx,
+            now_secs,
+            "worker_registered",
+            "worker",
+            &worker.worker_id,
+            &serde_json::json!({
+                "os": worker.os,
+                "arch": worker.arch,
+                "protocol_version": worker.protocol_version
+            }),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn heartbeat_worker(
+        &mut self,
+        worker_id: &str,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        let changed = self.connection.execute(
+            "UPDATE workers SET last_seen_secs = ?2, online = 1 WHERE worker_id = ?1",
+            params![worker_id, to_i64(now_secs)?],
+        )?;
+        if changed == 0 {
+            return Err(DurableControllerError::UnknownWorker);
+        }
+        Ok(())
+    }
+
+    pub fn set_worker_offline(
+        &mut self,
+        worker_id: &str,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE workers SET online = 0, last_seen_secs = ?2 WHERE worker_id = ?1",
+            params![worker_id, to_i64(now_secs)?],
+        )?;
+        if changed == 0 {
+            return Err(DurableControllerError::UnknownWorker);
+        }
+        insert_audit(
+            &tx,
+            now_secs,
+            "worker_offline",
+            "worker",
+            worker_id,
+            &serde_json::json!({}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn assign_next(
+        &mut self,
+        worker_id: &str,
+        now_secs: u64,
+    ) -> Result<Option<JobRequest>, DurableControllerError> {
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+
+        let worker_json: String = tx
+            .query_row(
+                "SELECT registration_json FROM workers
+                 WHERE worker_id = ?1 AND online = 1",
+                [worker_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or(DurableControllerError::UnknownWorker)?;
+        let worker: WorkerRegistration = serde_json::from_str(&worker_json)?;
+
+        let queued = {
+            let mut statement = tx.prepare(
+                "SELECT request_json FROM jobs
+                 WHERE state = 'queued'
+                 ORDER BY created_at_secs ASC, job_id ASC",
+            )?;
+            let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+            let mut values = Vec::new();
+            for row in rows {
+                values.push(row?);
+            }
+            values
+        };
+
+        let mut selected = None;
+        for job_json in queued {
+            let job: JobRequest = serde_json::from_str(&job_json)?;
+            if job.required_capabilities().is_subset(&worker.capabilities) {
+                selected = Some(job);
+                break;
+            }
+        }
+
+        let Some(job) = selected else {
+            tx.commit()?;
+            return Ok(None);
+        };
+
+        let attempt_number: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(attempt_number), 0) + 1
+             FROM job_attempts WHERE job_id = ?1",
+            [job.id.to_string()],
+            |row| row.get(0),
+        )?;
+
+        tx.execute(
+            "UPDATE jobs
+             SET state = 'assigned', assigned_worker = ?2, updated_at_secs = ?3
+             WHERE job_id = ?1 AND state = 'queued'",
+            params![job.id.to_string(), worker_id, to_i64(now_secs)?],
+        )?;
+        tx.execute(
+            "INSERT INTO job_attempts(
+                job_id, attempt_number, worker_id, state, started_at_secs
+             ) VALUES (?1, ?2, ?3, 'assigned', ?4)",
+            params![
+                job.id.to_string(),
+                attempt_number,
+                worker_id,
+                to_i64(now_secs)?
+            ],
+        )?;
+        insert_audit(
+            &tx,
+            now_secs,
+            "job_assigned",
+            "job",
+            &job.id.to_string(),
+            &serde_json::json!({
+                "worker_id": worker_id,
+                "attempt_number": attempt_number
+            }),
+        )?;
+        tx.commit()?;
+        Ok(Some(job))
+    }
+
+    pub fn mark_running(
+        &mut self,
+        job_id: Uuid,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE jobs SET state = 'running', updated_at_secs = ?2
+             WHERE job_id = ?1 AND state = 'assigned'",
+            params![job_id.to_string(), to_i64(now_secs)?],
+        )?;
+        if changed == 0 {
+            return Err(DurableControllerError::InvalidTransition);
+        }
+        tx.execute(
+            "UPDATE job_attempts SET state = 'running'
+             WHERE attempt_id = (
+                SELECT attempt_id FROM job_attempts
+                WHERE job_id = ?1 ORDER BY attempt_number DESC LIMIT 1
+             )",
+            [job_id.to_string()],
+        )?;
+        insert_audit(
+            &tx,
+            now_secs,
+            "job_running",
+            "job",
+            &job_id.to_string(),
+            &serde_json::json!({}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn complete_job(
+        &mut self,
+        result: &JobResult,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        let state = match result.status {
+            df_test_protocol::JobStatus::Passed => DurableJobState::Passed,
+            df_test_protocol::JobStatus::Failed => DurableJobState::Failed,
+            df_test_protocol::JobStatus::Rejected => DurableJobState::Rejected,
+            df_test_protocol::JobStatus::Cancelled => DurableJobState::Cancelled,
+            _ => return Err(DurableControllerError::InvalidCompletionStatus),
+        };
+
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE jobs
+             SET state = ?2, updated_at_secs = ?3, last_error = ?4
+             WHERE job_id = ?1 AND state IN ('assigned', 'running', 'interrupted')",
+            params![
+                result.job_id.to_string(),
+                state.as_str(),
+                to_i64(now_secs)?,
+                if state == DurableJobState::Failed {
+                    Some(result.summary.as_str())
+                } else {
+                    None
+                }
+            ],
+        )?;
+        if changed == 0 {
+            return Err(DurableControllerError::InvalidTransition);
+        }
+
+        tx.execute(
+            "UPDATE job_attempts
+             SET state = ?2, finished_at_secs = ?3, summary = ?4
+             WHERE attempt_id = (
+                SELECT attempt_id FROM job_attempts
+                WHERE job_id = ?1 ORDER BY attempt_number DESC LIMIT 1
+             )",
+            params![
+                result.job_id.to_string(),
+                state.as_str(),
+                to_i64(now_secs)?,
+                result.summary
+            ],
+        )?;
+
+        tx.execute(
+            "DELETE FROM artifact_metadata WHERE job_id = ?1",
+            [result.job_id.to_string()],
+        )?;
+        for artifact in &result.artifacts {
+            insert_artifact(&tx, result.job_id, artifact)?;
+        }
+
+        insert_audit(
+            &tx,
+            now_secs,
+            "job_completed",
+            "job",
+            &result.job_id.to_string(),
+            &serde_json::json!({
+                "state": state.as_str(),
+                "summary": result.summary,
+                "artifact_count": result.artifacts.len()
+            }),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn cancel_queued_job(
+        &mut self,
+        job_id: Uuid,
+        now_secs: u64,
+    ) -> Result<bool, DurableControllerError> {
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE jobs SET state = 'cancelled', updated_at_secs = ?2
+             WHERE job_id = ?1 AND state = 'queued'",
+            params![job_id.to_string(), to_i64(now_secs)?],
+        )?;
+        if changed > 0 {
+            insert_audit(
+                &tx,
+                now_secs,
+                "job_cancelled",
+                "job",
+                &job_id.to_string(),
+                &serde_json::json!({"from":"queued"}),
+            )?;
+        }
+        tx.commit()?;
+        Ok(changed > 0)
+    }
+
+    pub fn recover_after_restart(
+        &mut self,
+        now_secs: u64,
+    ) -> Result<Vec<Uuid>, DurableControllerError> {
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+
+        let interrupted_ids = {
+            let mut statement = tx.prepare(
+                "SELECT job_id FROM jobs
+                 WHERE state IN ('assigned', 'running')
+                 ORDER BY created_at_secs, job_id",
+            )?;
+            let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+            let mut ids = Vec::new();
+            for row in rows {
+                ids.push(Uuid::parse_str(&row?)?);
+            }
+            ids
+        };
+
+        for job_id in &interrupted_ids {
+            tx.execute(
+                "UPDATE jobs
+                 SET state = 'interrupted',
+                     updated_at_secs = ?2,
+                     last_error = 'controller restarted while job was in flight'
+                 WHERE job_id = ?1",
+                params![job_id.to_string(), to_i64(now_secs)?],
+            )?;
+            tx.execute(
+                "UPDATE job_attempts
+                 SET state = 'interrupted',
+                     finished_at_secs = ?2,
+                     summary = 'controller restarted while job was in flight'
+                 WHERE attempt_id = (
+                    SELECT attempt_id FROM job_attempts
+                    WHERE job_id = ?1 ORDER BY attempt_number DESC LIMIT 1
+                 )",
+                params![job_id.to_string(), to_i64(now_secs)?],
+            )?;
+            insert_audit(
+                &tx,
+                now_secs,
+                "job_interrupted_on_recovery",
+                "job",
+                &job_id.to_string(),
+                &serde_json::json!({}),
+            )?;
+        }
+
+        tx.commit()?;
+        Ok(interrupted_ids)
+    }
+
+    pub fn get_job(
+        &self,
+        job_id: Uuid,
+    ) -> Result<Option<DurableJobRecord>, DurableControllerError> {
+        let row = self
+            .connection
+            .query_row(
+                "SELECT request_json, state, assigned_worker,
+                        created_at_secs, updated_at_secs, last_error
+                 FROM jobs WHERE job_id = ?1",
+                [job_id.to_string()],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, i64>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                    ))
+                },
+            )
+            .optional()?;
+
+        row.map(
+            |(job_json, state, assigned_worker, created, updated, last_error)| {
+                Ok(DurableJobRecord {
+                    job: serde_json::from_str(&job_json)?,
+                    state: DurableJobState::parse(&state)?,
+                    assigned_worker,
+                    created_at_secs: to_u64(created)?,
+                    updated_at_secs: to_u64(updated)?,
+                    last_error,
+                })
+            },
+        )
+        .transpose()
+    }
+
+    pub fn list_attempts(
+        &self,
+        job_id: Uuid,
+    ) -> Result<Vec<DurableAttemptRecord>, DurableControllerError> {
+        let mut statement = self.connection.prepare(
+            "SELECT attempt_id, attempt_number, worker_id, state,
+                    started_at_secs, finished_at_secs, summary
+             FROM job_attempts
+             WHERE job_id = ?1
+             ORDER BY attempt_number",
+        )?;
+        let rows = statement.query_map([job_id.to_string()], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<i64>>(4)?,
+                row.get::<_, Option<i64>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+            ))
+        })?;
+
+        let mut attempts = Vec::new();
+        for row in rows {
+            let (attempt_id, attempt_number, worker_id, state, started, finished, summary) = row?;
+            attempts.push(DurableAttemptRecord {
+                attempt_id,
+                job_id,
+                attempt_number: u32::try_from(attempt_number)
+                    .map_err(|_| DurableControllerError::IntegerOutOfRange)?,
+                worker_id,
+                state: DurableJobState::parse(&state)?,
+                started_at_secs: started.map(to_u64).transpose()?,
+                finished_at_secs: finished.map(to_u64).transpose()?,
+                summary,
+            });
+        }
+        Ok(attempts)
+    }
+
+    pub fn list_workers(&self) -> Result<Vec<DurableWorkerRecord>, DurableControllerError> {
+        let mut statement = self.connection.prepare(
+            "SELECT registration_json, last_seen_secs, online
+             FROM workers ORDER BY worker_id",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?;
+
+        let mut workers = Vec::new();
+        for row in rows {
+            let (registration_json, last_seen, online) = row?;
+            workers.push(DurableWorkerRecord {
+                registration: serde_json::from_str(&registration_json)?,
+                last_seen_secs: to_u64(last_seen)?,
+                online: online != 0,
+            });
+        }
+        Ok(workers)
+    }
+
+    pub fn list_artifacts(
+        &self,
+        job_id: Uuid,
+    ) -> Result<Vec<ArtifactRef>, DurableControllerError> {
+        let mut statement = self.connection.prepare(
+            "SELECT name, relative_path, size_bytes, sha256
+             FROM artifact_metadata
+             WHERE job_id = ?1
+             ORDER BY artifact_id",
+        )?;
+        let rows = statement.query_map([job_id.to_string()], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, Option<String>>(3)?,
+            ))
+        })?;
+        let mut artifacts = Vec::new();
+        for row in rows {
+            let (name, relative_path, size_bytes, sha256) = row?;
+            artifacts.push(ArtifactRef {
+                name,
+                relative_path,
+                size_bytes: to_u64(size_bytes)?,
+                sha256,
+            });
+        }
+        Ok(artifacts)
+    }
+
+    pub fn record_intelligence(
+        &mut self,
+        report: &serde_json::Value,
+        now_secs: u64,
+    ) -> Result<i64, DurableControllerError> {
+        let report_json = serde_json::to_string(report)?;
+        self.connection.execute(
+            "INSERT INTO intelligence_history(report_json, created_at_secs)
+             VALUES (?1, ?2)",
+            params![report_json, to_i64(now_secs)?],
+        )?;
+        Ok(self.connection.last_insert_rowid())
+    }
+
+    pub fn set_config(
+        &mut self,
+        key: &str,
+        value: &str,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        validate_config_key(key)?;
+        self.connection.execute(
+            "INSERT INTO controller_config(config_key, config_value, updated_at_secs)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(config_key) DO UPDATE SET
+                config_value = excluded.config_value,
+                updated_at_secs = excluded.updated_at_secs",
+            params![key, value, to_i64(now_secs)?],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_config(&self, key: &str) -> Result<Option<String>, DurableControllerError> {
+        validate_config_key(key)?;
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT config_value FROM controller_config WHERE config_key = ?1",
+                [key],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    pub fn audit_events_for(
+        &self,
+        entity_type: &str,
+        entity_id: &str,
+    ) -> Result<Vec<AuditEvent>, DurableControllerError> {
+        let mut statement = self.connection.prepare(
+            "SELECT audit_id, unix_time_secs, kind, entity_type, entity_id, detail_json
+             FROM audit_events
+             WHERE entity_type = ?1 AND entity_id = ?2
+             ORDER BY audit_id",
+        )?;
+        let rows = statement.query_map(params![entity_type, entity_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+            ))
+        })?;
+        let mut events = Vec::new();
+        for row in rows {
+            let (id, unix_time, kind, stored_entity_type, stored_entity_id, detail_json) = row?;
+            events.push(AuditEvent {
+                id,
+                unix_time_secs: to_u64(unix_time)?,
+                kind,
+                entity_type: stored_entity_type,
+                entity_id: stored_entity_id,
+                detail: serde_json::from_str(&detail_json)?,
+            });
+        }
+        Ok(events)
+    }
+}
+
+fn insert_artifact(
+    tx: &rusqlite::Transaction<'_>,
+    job_id: Uuid,
+    artifact: &ArtifactRef,
+) -> Result<(), DurableControllerError> {
+    tx.execute(
+        "INSERT INTO artifact_metadata(
+            job_id, name, relative_path, size_bytes, sha256
+         ) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            job_id.to_string(),
+            artifact.name,
+            artifact.relative_path,
+            to_i64(artifact.size_bytes)?,
+            artifact.sha256
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_audit(
+    tx: &rusqlite::Transaction<'_>,
+    now_secs: u64,
+    kind: &str,
+    entity_type: &str,
+    entity_id: &str,
+    detail: &serde_json::Value,
+) -> Result<(), DurableControllerError> {
+    tx.execute(
+        "INSERT INTO audit_events(
+            unix_time_secs, kind, entity_type, entity_id, detail_json
+         ) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            to_i64(now_secs)?,
+            kind,
+            entity_type,
+            entity_id,
+            serde_json::to_string(detail)?
+        ],
+    )?;
+    Ok(())
+}
+
+fn validate_config_key(key: &str) -> Result<(), DurableControllerError> {
+    if key.is_empty()
+        || key.len() > 128
+        || !key
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_'))
+    {
+        return Err(DurableControllerError::InvalidConfigKey);
+    }
+    Ok(())
+}
+
+fn to_i64(value: u64) -> Result<i64, DurableControllerError> {
+    i64::try_from(value).map_err(|_| DurableControllerError::IntegerOutOfRange)
+}
+
+fn to_u64(value: i64) -> Result<u64, DurableControllerError> {
+    u64::try_from(value).map_err(|_| DurableControllerError::IntegerOutOfRange)
+}
+
+#[derive(Debug, Error)]
+pub enum DurableControllerError {
+    #[error("SQLite error: {0}")]
+    Sqlite(#[from] rusqlite::Error),
+    #[error("JSON serialization error: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("UUID parse error: {0}")]
+    Uuid(#[from] uuid::Error),
+    #[error("controller database schema {current} is newer than supported schema {supported}")]
+    SchemaTooNew { current: i64, supported: i64 },
+    #[error("stored controller state is invalid: {0}")]
+    InvalidStoredState(String),
+    #[error("worker protocol version mismatch")]
+    ProtocolMismatch,
+    #[error("worker is not registered or not online")]
+    UnknownWorker,
+    #[error("invalid durable job state transition")]
+    InvalidTransition,
+    #[error("completion result does not contain a terminal status")]
+    InvalidCompletionStatus,
+    #[error("integer value is outside the supported SQLite range")]
+    IntegerOutOfRange,
+    #[error("invalid controller configuration key")]
+    InvalidConfigKey,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use df_test_protocol::{Capability, RepositorySpec, TestAction};
+    use df_test_protocol::{
+        Capability, JobStatus, RepositorySpec, TestAction,
+    };
+    use std::{collections::BTreeSet, fs};
+
+    fn test_job() -> JobRequest {
+        JobRequest::new(
+            RepositorySpec {
+                url: "https://github.com/example/project.git".into(),
+                revision: "main".into(),
+            },
+            vec![TestAction::Checkout, TestAction::CargoTest { all_features: true }],
+        )
+    }
+
+    fn test_worker() -> WorkerRegistration {
+        WorkerRegistration {
+            worker_id: "windows-1".into(),
+            protocol_version: PROTOCOL_VERSION,
+            os: "windows".into(),
+            arch: "x86_64".into(),
+            capabilities: BTreeSet::from([
+                Capability::CheckoutRepository,
+                Capability::CargoTest,
+            ]),
+        }
+    }
 
     #[test]
     fn scheduler_skips_jobs_worker_cannot_run() {
@@ -93,5 +1028,124 @@ mod tests {
         let assigned = controller.assign_next("linux-1").unwrap().unwrap();
         assert!(matches!(assigned.actions[0], TestAction::CargoTest { .. }));
         assert_eq!(controller.queued_jobs(), 1);
+    }
+
+    #[test]
+    fn durable_state_survives_reopen_and_completion() {
+        let path = std::env::temp_dir().join(format!(
+            "dragonforge-phase11-{}.sqlite3",
+            Uuid::new_v4()
+        ));
+        let job = test_job();
+
+        {
+            let mut controller = DurableController::open(&path).unwrap();
+            controller.enqueue_job(&job, 10).unwrap();
+            controller.register_worker(&test_worker(), 11).unwrap();
+            let assigned = controller.assign_next("windows-1", 12).unwrap().unwrap();
+            assert_eq!(assigned.id, job.id);
+            controller.mark_running(job.id, 13).unwrap();
+        }
+
+        {
+            let mut controller = DurableController::open(&path).unwrap();
+            let interrupted = controller.recover_after_restart(20).unwrap();
+            assert_eq!(interrupted, vec![job.id]);
+            let record = controller.get_job(job.id).unwrap().unwrap();
+            assert_eq!(record.state, DurableJobState::Interrupted);
+
+            controller
+                .complete_job(
+                    &JobResult {
+                        job_id: job.id,
+                        status: JobStatus::Failed,
+                        summary: "interrupted test fixture".into(),
+                        artifacts: vec![ArtifactRef {
+                            name: "fixture.log".into(),
+                            relative_path: "logs/fixture.log".into(),
+                            size_bytes: 42,
+                            sha256: Some("a".repeat(64)),
+                        }],
+                    },
+                    21,
+                )
+                .unwrap();
+
+            let completed = controller.get_job(job.id).unwrap().unwrap();
+            assert_eq!(completed.state, DurableJobState::Failed);
+            assert_eq!(controller.list_artifacts(job.id).unwrap().len(), 1);
+            assert_eq!(controller.list_attempts(job.id).unwrap().len(), 1);
+            assert!(controller
+                .audit_events_for("job", &job.id.to_string())
+                .unwrap()
+                .iter()
+                .any(|event| event.kind == "job_interrupted_on_recovery"));
+        }
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn queued_jobs_remain_queued_after_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "dragonforge-phase11-queued-{}.sqlite3",
+            Uuid::new_v4()
+        ));
+        let job = test_job();
+
+        {
+            let mut controller = DurableController::open(&path).unwrap();
+            controller.enqueue_job(&job, 100).unwrap();
+        }
+        {
+            let mut controller = DurableController::open(&path).unwrap();
+            assert!(controller.recover_after_restart(101).unwrap().is_empty());
+            assert_eq!(
+                controller.get_job(job.id).unwrap().unwrap().state,
+                DurableJobState::Queued
+            );
+        }
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn durable_scheduler_respects_worker_capabilities() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let incompatible = JobRequest::new(
+            RepositorySpec {
+                url: "https://github.com/example/build.git".into(),
+                revision: "main".into(),
+            },
+            vec![TestAction::CargoBuild { release: false }],
+        );
+        let compatible = test_job();
+        controller.enqueue_job(&incompatible, 1).unwrap();
+        controller.enqueue_job(&compatible, 2).unwrap();
+        controller.register_worker(&test_worker(), 3).unwrap();
+
+        let assigned = controller.assign_next("windows-1", 4).unwrap().unwrap();
+        assert_eq!(assigned.id, compatible.id);
+        assert_eq!(
+            controller.get_job(incompatible.id).unwrap().unwrap().state,
+            DurableJobState::Queued
+        );
+    }
+
+    #[test]
+    fn controller_config_and_intelligence_history_are_persistent() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        controller
+            .set_config("controller.mode", "local", 1)
+            .unwrap();
+        assert_eq!(
+            controller.get_config("controller.mode").unwrap().as_deref(),
+            Some("local")
+        );
+        let id = controller
+            .record_intelligence(&serde_json::json!({"profile":"rust_standard"}), 2)
+            .unwrap();
+        assert!(id > 0);
+        assert_eq!(controller.schema_version().unwrap(), SCHEMA_VERSION);
     }
 }
