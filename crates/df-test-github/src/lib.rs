@@ -152,7 +152,11 @@ impl GhGitHubClient {
             });
         }
         let payload: ComparePayload = serde_json::from_slice(&output.stdout)?;
-        let mut files = payload.files.into_iter().map(|file| file.filename).collect::<Vec<_>>();
+        let mut files = payload
+            .files
+            .into_iter()
+            .map(|file| file.filename)
+            .collect::<Vec<_>>();
         files.sort();
         files.dedup();
         if files.len() > 4096 {
