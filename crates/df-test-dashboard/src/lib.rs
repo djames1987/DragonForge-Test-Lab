@@ -89,6 +89,19 @@ impl Dashboard {
                 }),
             ),
             path if path.starts_with("/api/") => {
+                if !matches!(
+                    path,
+                    "/api/overview"
+                        | "/api/jobs"
+                        | "/api/workers"
+                        | "/api/plans"
+                        | "/api/artifacts"
+                        | "/api/intelligence"
+                        | "/api/audit"
+                        | "/api/settings"
+                ) {
+                    return HttpResponse::json(404, json!({"error":"not found"}));
+                }
                 if !self.authorized(request.headers.get("authorization").map(String::as_str)) {
                     return HttpResponse::unauthorized();
                 }
@@ -451,7 +464,7 @@ pub fn run_dashboard_fixture() -> Result<DashboardFixtureReport, DashboardError>
             },
             steps: vec![PlanStep {
                 id: "observe".into(),
-                profile: PlanProfile::TypedActions { actions: vec![] },
+                profile: PlanProfile::RustFast,
                 depends_on: vec![],
                 condition: PlanCondition::DependenciesPassed,
                 limits: ResourceLimits::default(),
