@@ -59,7 +59,7 @@ impl WindowsIntegrationClient {
             "$p=New-Object Security.Principal.WindowsPrincipal($id);",
             "$elevated=$p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator);",
             "$eventReadable=$false;try{Get-WinEvent -LogName System -MaxEvents 1 -ErrorAction Stop|Out-Null;$eventReadable=$true}catch{};",
-            "$regReadable=Test-Path 'HKCU:\Software';",
+            r"$regReadable=Test-Path 'HKCU:\Software';",
             "$scmReadable=$false;try{Get-Service -ErrorAction Stop|Select-Object -First 1|Out-Null;$scmReadable=$true}catch{};",
             "$msiService=[bool](Get-Service msiserver -ErrorAction SilentlyContinue);",
             "$msiexec=[bool](Get-Command msiexec.exe -ErrorAction SilentlyContinue);",
@@ -351,7 +351,7 @@ fn require_windows() -> Result<(), WindowsError> {
 }
 
 fn ps_literal(value: &str) -> String {
-    value.replace(''', "''")
+    value.replace('\'', "''")
 }
 
 fn ps_literal_path(path: &Path) -> String {
