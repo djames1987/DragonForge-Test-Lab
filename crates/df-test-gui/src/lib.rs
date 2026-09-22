@@ -115,7 +115,7 @@ impl GuiAutomationClient {
         require_windows()?;
         let script = concat!(
             "$ErrorActionPreference='Stop';",
-            "$uia=$false;try{Add-Type -AssemblyName UIAutomationClient -ErrorAction Stop;$uia=$true}catch{};",
+            "$uia=$false;try{Add-Type -AssemblyName UIAutomationClient -ErrorAction Stop;Add-Type -AssemblyName UIAutomationTypes -ErrorAction Stop;$uia=$true}catch{};",
             "$drawing=$false;try{Add-Type -AssemblyName System.Drawing -ErrorAction Stop;$drawing=$true}catch{};",
             "[pscustomobject]@{user_interactive=[Environment]::UserInteractive;",
             "session_name=[string]$env:SESSIONNAME;ui_automation_available=$uia;drawing_available=$drawing}",
