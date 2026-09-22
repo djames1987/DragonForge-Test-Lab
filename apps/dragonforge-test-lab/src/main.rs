@@ -353,8 +353,9 @@ fn observability_fixture() -> Result<(), Box<dyn std::error::Error>> {
         },
         1_000,
     )?;
-    let artifact_retention_verified =
-        prune.removed == vec![old.relative_path.clone()] && current_path.exists() && !old_path.exists();
+    let artifact_retention_verified = prune.removed == vec![old.relative_path.clone()]
+        && current_path.exists()
+        && !old_path.exists();
 
     let mut controller = DurableController::open_in_memory()?;
     let job = JobRequest::new(
