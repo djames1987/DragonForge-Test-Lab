@@ -233,16 +233,7 @@ impl GuiAutomationClient {
             ));
         }
 
-        if let Err(error) = self.run_action(
-            PHASE7_FIXTURE_TITLE,
-            &GuiAction::Invoke {
-                automation_id: "crashButton".into(),
-            },
-            artifact_dir,
-        ) {
-            terminate_child(&mut child);
-            return Err(error);
-        }
+        self.invoke_fixture_crash_button()?;
 
         let observed = wait_for_exit(&mut child, Duration::from_secs(10))?;
         let crash = CrashReport {
@@ -261,6 +252,25 @@ impl GuiAutomationClient {
         }
 
         Ok((report, crash))
+    }
+
+    fn invoke_fixture_crash_button(&self) -> Result<(), GuiError> {
+        let script = element_script(
+            PHASE7_FIXTURE_TITLE,
+            "crashButton",
+            "try{$pattern=$control.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern);([System.Windows.Automation.InvokePattern]$pattern).Invoke()}catch [System.Windows.Automation.ElementNotAvailableException]{}",
+        );
+        let output = run_powershell(&script)?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            let detail = String::from_utf8_lossy(&output.stderr);
+            if detail.contains("ElementNotAvailable") {
+                Ok(())
+            } else {
+                Err(command_failed("invoke crash fixture control", &output))
+            }
+        }
     }
 
     fn run_action(
