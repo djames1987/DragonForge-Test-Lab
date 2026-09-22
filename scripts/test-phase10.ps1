@@ -132,9 +132,18 @@ try {
     Invoke-CargoCaptured -Step "intelligence-doctor" -Arguments @(
         "run", "-p", "dragonforge-test-lab", "--", "intelligence-doctor"
     )
-    $doctor = & cargo run -p dragonforge-test-lab -- doctor 2>&1
+
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $doctor = & cargo run -p dragonforge-test-lab -- doctor 2>&1
+        $doctorExit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
     $doctor | ForEach-Object { Write-Host $_ }
-    if ($LASTEXITCODE -ne 0 -or -not ($doctor -match "phase=10")) {
+    if ($doctorExit -ne 0 -or -not ($doctor -match "phase=10")) {
         throw "general doctor did not report Phase 10"
     }
 
