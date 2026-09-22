@@ -1,6 +1,6 @@
 # Phase 8 — Multi-machine & Network Lab
 
-Status: implementation complete; host, VM, and optional real cross-node validation pending.
+Status: complete; host, Windows VM, and real host-to-VM cross-node validation passed on 2026-09-22.
 
 ## Goal
 
@@ -221,3 +221,7 @@ Phase 8 intentionally does not provide:
 - remote desktop control.
 
 The distributed layer is a typed test transport, not a remote administration framework.
+
+## Validation status
+
+Phase 8 validation completed successfully on 2026-09-22. The Windows host and Windows VM both passed the local Phase 8 suite, and the real host-to-VM test successfully authenticated the VM, delivered the typed `NetworkFixtureSuite` job, returned a signed `NodeResultManifest`, verified one SHA-256-tracked artifact, and completed the GitHub-aware regression on both sides.
