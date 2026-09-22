@@ -1,6 +1,6 @@
 # Phase 10 — Test Intelligence
 
-Status: implementation complete; Windows host validation pending.
+Status: complete; Windows host validation passed on 2026-09-22.
 
 ## Goal
 
@@ -204,3 +204,8 @@ A recommendation should always be answerable with:
     why was this profile not scheduled?
 
 The system favors deterministic rules and auditable history over opaque model output.
+
+
+## Validation status
+
+Phase 10 validation completed successfully on the Windows host on 2026-09-22. The final run passed strict Clippy, the full workspace and doc-test suite, the deterministic intelligence fixture, realistic JSON analysis, historical failure clustering, resource-aware scheduling, both intelligence and general doctor checks, and the GitHub-aware native worker regression.
