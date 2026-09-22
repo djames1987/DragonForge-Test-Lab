@@ -531,7 +531,8 @@ pub fn validate_private_controller_address(address: SocketAddr) -> Result<(), Id
     let safe = match address.ip() {
         std::net::IpAddr::V4(ip) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
         std::net::IpAddr::V6(ip) => {
-            ip.is_loopback() || ip.is_unicast_link_local() || (ip.segments()[0] & 0xfe00) == 0xfc00
+            let first = ip.segments()[0];
+            ip.is_loopback() || (first & 0xffc0) == 0xfe80 || (first & 0xfe00) == 0xfc00
         }
     };
     if safe && address.port() != 0 {
