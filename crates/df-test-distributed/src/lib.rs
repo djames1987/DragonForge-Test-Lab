@@ -47,7 +47,7 @@ impl NodeProfile {
         validate_identifier(&self.node_id, 64)?;
         validate_token(&self.os, 32)?;
         validate_token(&self.arch, 32)?;
-        if self.max_parallel_jobs == 0 || self.max_parallel_jobs > 128 {
+        if !(1..=128).contains(&self.max_parallel_jobs) {
             return Err(DistributedError::InvalidParallelism);
         }
         if self.labels.len() > 64 {
@@ -140,7 +140,7 @@ pub struct EnvelopeVerifier {
 
 impl EnvelopeVerifier {
     pub fn new(max_clock_skew_secs: u64) -> Result<Self, DistributedError> {
-        if max_clock_skew_secs == 0 || max_clock_skew_secs > 300 {
+        if !(1..=300).contains(&max_clock_skew_secs) {
             return Err(DistributedError::InvalidClockSkew);
         }
         Ok(Self {
@@ -210,7 +210,7 @@ pub struct NodeRegistry {
 
 impl NodeRegistry {
     pub fn new(verifier: EnvelopeVerifier, lease_seconds: u64) -> Result<Self, DistributedError> {
-        if lease_seconds < 5 || lease_seconds > 3600 {
+        if !(5..=3600).contains(&lease_seconds) {
             return Err(DistributedError::InvalidLease);
         }
         Ok(Self {
@@ -470,6 +470,7 @@ impl FaultProfile {
         Ok(())
     }
 
+    #[allow(clippy::manual_is_multiple_of)]
     pub fn should_drop(&self, sequence: u64) -> bool {
         self.drop_every_n
             .map(|n| sequence > 0 && sequence % n as u64 == 0)
