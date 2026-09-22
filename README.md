@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 9 — ChatGPT/MCP Gateway — Complete
+Phase 10 — Test Intelligence — Implementation complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, and Phase 8 added validated authenticated distributed execution. Phase 9 adds a loopback-only bearer-authenticated MCP gateway with typed lab/node/job/result/artifact tools, exact repository allowlisting, bounded concurrency, and asynchronous named-profile execution through the existing policy/executor boundary. Full Phase 9 Windows host validation passed on 2026-09-22.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, and Phase 9 added the validated authenticated MCP gateway. Phase 10 adds deterministic change-aware profile selection, historical regression targeting, SHA-256 failure clustering, and resource-aware scheduling with explicit unscheduled coverage.
 
 ## Workspace
 
@@ -29,6 +29,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-gui/            Windows GUI automation
       df-test-distributed/    distributed nodes, scheduling, transport, network fixtures
       df-test-mcp/            authenticated MCP HTTP gateway and typed tool surface
+      df-test-intelligence/   change analysis, regression targeting, clustering, scheduling
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -43,6 +44,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-7.md
       PHASE-8.md
       PHASE-9.md
+      PHASE-10.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -61,6 +63,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase8.ps1
       check-mcp-host.ps1
       test-phase9.ps1
+      test-phase10.ps1
 
 ## Hyper-V host setup
 
@@ -192,10 +195,30 @@ End-to-end Phase 9 validation:
 
 See docs/PHASE-9.md for authentication, MCP protocol compatibility, typed tool schemas, job profiles, and artifact/result boundaries.
 
+## Phase 10 Test Intelligence
+
+Readiness:
+
+    cargo run -p dragonforge-test-lab -- intelligence-doctor
+
+Deterministic built-in fixture:
+
+    cargo run -p dragonforge-test-lab -- intelligence-fixture
+
+Analyze a JSON scenario:
+
+    cargo run -p dragonforge-test-lab -- intelligence-analyze --input .\examples\phase10-intelligence.json
+
+End-to-end Phase 10 validation:
+
+    .\scripts\test-phase10.ps1
+
+See docs/PHASE-10.md for profile scoring, history targeting, clustering, scheduling rules, and security boundaries.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, and docs/ROADMAP.md.
