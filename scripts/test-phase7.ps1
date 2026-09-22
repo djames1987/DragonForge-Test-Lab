@@ -64,9 +64,19 @@ try {
     $fixtureArgs = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $fixtureScript)
     $fixtureProcess = Start-Process powershell.exe -ArgumentList $fixtureArgs -PassThru
 
-    cargo run -p dragonforge-test-lab -- gui-run-plan --plan ".\examples\phase7-plan.json" --artifact-dir $artifactDir 2>&1 | Tee-Object -Variable guiPlanOutput
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $guiPlanOutput = & cargo run -p dragonforge-test-lab -- gui-run-plan --plan ".\examples\phase7-plan.json" --artifact-dir $artifactDir 2>&1
+        $guiPlanExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
     $guiPlanOutput | ForEach-Object { Write-Host $_ }
-    Assert-LastExitCode "gui-run-plan"
+    if ($guiPlanExitCode -ne 0) {
+        throw "gui-run-plan failed: $guiPlanExitCode"
+    }
 
     $planScreenshot = Join-Path $artifactDir "phase7-plan.png"
     if (-not (Test-Path $planScreenshot)) {
@@ -80,9 +90,19 @@ try {
     $fixtureProcess = $null
 
     Write-Host "[7/9] Owned fixture, screenshot, and crash capture"
-    cargo run -p dragonforge-test-lab -- gui-fixture --artifact-dir $artifactDir 2>&1 | Tee-Object -Variable guiFixtureOutput
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $guiFixtureOutput = & cargo run -p dragonforge-test-lab -- gui-fixture --artifact-dir $artifactDir 2>&1
+        $guiFixtureExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
     $guiFixtureOutput | ForEach-Object { Write-Host $_ }
-    Assert-LastExitCode "gui-fixture"
+    if ($guiFixtureExitCode -ne 0) {
+        throw "gui-fixture failed: $guiFixtureExitCode"
+    }
 
     $fixtureScreenshot = Join-Path $artifactDir "phase7-fixture.png"
     $crashReport = Join-Path $artifactDir "phase7-crash-report.json"
