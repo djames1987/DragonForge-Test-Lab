@@ -44,6 +44,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "mcp-doctor" => mcp_doctor(&args[2..]),
         "mcp-serve" => mcp_serve(&args[2..]),
         "mcp-fixture" => mcp_fixture(&args[2..]),
+        "intelligence-doctor" => intelligence_doctor(),
         "intelligence-analyze" => intelligence_analyze(&args[2..]),
         "intelligence-fixture" => intelligence_fixture(),
         "gui-doctor" => gui_doctor(),
@@ -380,6 +381,20 @@ fn mcp_config(args: &[String]) -> Result<McpGatewayConfig, Box<dyn std::error::E
         sandbox_mode: sandbox_mode(args)?,
         expected_worker_user: value_after(args, "--worker-user"),
     })
+}
+
+fn intelligence_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    println!("DragonForge Test Lab intelligence doctor");
+    println!("mode=deterministic_explainable");
+    println!("change_aware_selection=true");
+    println!("historical_regression_targeting=true");
+    println!("failure_clustering=sha256_normalized");
+    println!("resource_aware_scheduling=true");
+    println!("max_changed_files={}", df_test_intelligence::MAX_CHANGED_FILES);
+    println!("max_history_records={}", df_test_intelligence::MAX_HISTORY_RECORDS);
+    println!("max_workers={}", df_test_intelligence::MAX_WORKERS);
+    println!("status=test_intelligence_ready");
+    Ok(())
 }
 
 fn intelligence_analyze(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -964,6 +979,9 @@ fn print_help() {
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");
+    println!("  dragonforge-test-lab intelligence-doctor");
+    println!("  dragonforge-test-lab intelligence-analyze --input <intelligence.json>");
+    println!("  dragonforge-test-lab intelligence-fixture");
     println!("  dragonforge-test-lab distributed-doctor");
     println!("  dragonforge-test-lab distributed-fixtures");
     println!(
