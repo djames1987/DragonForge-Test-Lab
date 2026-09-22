@@ -159,7 +159,7 @@ impl WindowsIntegrationClient {
 
     fn service_fixture(&self) -> Result<(), WindowsError> {
         let name = fixture_name("Service")?;
-        let bin_path = PathBuf::from(r"C:\Windows\System32\notepad.exe");
+        let bin_path = PathBuf::from(r"C:\Windows\System32\svchost.exe");
         if !bin_path.is_file() {
             return Err(WindowsError::MissingSystemBinary(bin_path));
         }
