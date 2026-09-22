@@ -722,10 +722,7 @@ fn discover_msvc_environment() -> Option<BTreeMap<String, String>> {
     // Windows command-line quoting around batch files is surprisingly fragile;
     // the helper file keeps the command fixed and the toolchain path comes only
     // from trusted vswhere discovery.
-    let helper = std::env::temp_dir().join(format!(
-        "dragonforge-msvc-env-{}.cmd",
-        Uuid::new_v4()
-    ));
+    let helper = std::env::temp_dir().join(format!("dragonforge-msvc-env-{}.cmd", Uuid::new_v4()));
     let helper_body = format!(
         "@echo off\r\ncall \"{}\" -no_logo -arch=x64 -host_arch=x64 >nul\r\nif errorlevel 1 exit /b %errorlevel%\r\nset\r\n",
         vsdevcmd.display()
