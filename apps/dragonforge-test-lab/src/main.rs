@@ -469,9 +469,8 @@ fn lifecycle_reschedule(args: &[String]) -> Result<(), Box<dyn std::error::Error
     let path = value_after(args, "--state-db")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
-    let job_id = uuid::Uuid::parse_str(
-        &value_after(args, "--job-id").ok_or("missing --job-id <uuid>")?,
-    )?;
+    let job_id =
+        uuid::Uuid::parse_str(&value_after(args, "--job-id").ok_or("missing --job-id <uuid>")?)?;
     let mut controller = DurableController::open(&path)?;
     controller.reschedule_interrupted_job(job_id, unix_time_secs()?)?;
     println!("job_id={job_id}");
