@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 16 — Test Plans — Implementation complete
+Phase 16 — Test Plans — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, Phase 14 added validated audit/artifact/observability infrastructure, and Phase 15 added validated recovery/retry lifecycle control. Phase 16 adds versioned declarative plans, controller schema v4 plan persistence, DAG dependencies/conditions, typed profile compilation, capability enforcement, typed artifacts, retry policy integration, target predicates, and plan operator tooling.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, Phase 14 added validated audit/artifact/observability infrastructure, and Phase 15 added validated recovery/retry lifecycle control. Phase 16 adds validated versioned declarative plans, controller schema v4 plan persistence, DAG dependencies/conditions, typed profile compilation, capability enforcement, typed artifacts, retry policy integration, target predicates, and plan operator tooling. Full Phase 16 Windows host validation passed on 2026-09-22.
 
 ## Workspace
 
