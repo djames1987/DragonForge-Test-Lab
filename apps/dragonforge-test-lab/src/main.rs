@@ -7,6 +7,7 @@ use df_test_distributed::{
 use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor};
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
 use df_test_gui::{GuiAutomationClient, GuiPlan};
+use df_test_identity::{run_mtls_fixture, validate_private_controller_address};
 use df_test_intelligence::{analyze, IntelligenceInput, TestProfile, WorkerCapacity};
 use df_test_mcp::{McpGateway, McpGatewayConfig};
 use df_test_policy::ExecutionPolicy;
@@ -40,6 +41,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "controller-state-doctor" => controller_state_doctor(&args[2..]),
         "controller-state-fixture" => controller_state_fixture(),
         "github-doctor" => github_doctor(),
+        "identity-doctor" => identity_doctor(),
+        "identity-fixture" => identity_fixture(),
         "distributed-doctor" => distributed_doctor(),
         "distributed-fixtures" => distributed_fixtures(),
         "distributed-controller-once" => distributed_controller_once(&args[2..]),
@@ -86,7 +89,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=11");
+    println!("phase=12");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -204,6 +207,46 @@ fn github_doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("DragonForge Test Lab GitHub doctor");
     println!("github_host=github.com");
     println!("status=github_ready");
+    Ok(())
+}
+
+fn identity_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let loopback: std::net::SocketAddr = "127.0.0.1:443".parse()?;
+    let private: std::net::SocketAddr = "10.0.0.1:443".parse()?;
+    let public: std::net::SocketAddr = "8.8.8.8:443".parse()?;
+
+    validate_private_controller_address(loopback)?;
+    validate_private_controller_address(private)?;
+    if validate_private_controller_address(public).is_ok() {
+        return Err("mTLS identity controller address policy unexpectedly allowed a public IP".into());
+    }
+
+    println!("DragonForge Test Lab identity doctor");
+    println!("transport=mutual_tls");
+    println!("tls_library=rustls");
+    println!("certificate_enrollment=enabled");
+    println!("certificate_renewal=enabled");
+    println!("certificate_revocation=enabled");
+    println!("identity_binding=sha256_certificate_fingerprint");
+    println!("controller_address_policy=loopback_private_link_local");
+    println!("legacy_hmac_transport=compatibility_only");
+    println!("status=mtls_identity_ready");
+    Ok(())
+}
+
+fn identity_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let report = run_mtls_fixture()?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !report.encrypted_round_trip
+        || !report.client_certificate_observed
+        || !report.server_certificate_observed
+        || !report.node_identity_verified
+        || !report.renewal_verified
+        || !report.revocation_verified
+    {
+        return Err("Phase 12 mTLS identity fixture failed".into());
+    }
+    println!("status=mtls_identity_fixture_passed");
     Ok(())
 }
 
@@ -1076,6 +1119,8 @@ fn print_help() {
     println!("Usage:");
     println!("  dragonforge-test-lab doctor");
     println!("  dragonforge-test-lab github-doctor");
+    println!("  dragonforge-test-lab identity-doctor");
+    println!("  dragonforge-test-lab identity-fixture");
     println!("  dragonforge-test-lab controller-state-doctor [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-fixture");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
