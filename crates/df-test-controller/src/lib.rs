@@ -1,3 +1,4 @@
+use df_test_observability::{next_audit_digest, LogLevel, MetricPoint, StructuredLogEvent};
 use df_test_protocol::{ArtifactRef, JobRequest, JobResult, WorkerRegistration, PROTOCOL_VERSION};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
@@ -61,7 +62,7 @@ pub enum ControllerError {
     UnknownWorker,
 }
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -142,6 +143,29 @@ pub struct AuditEvent {
     pub entity_type: String,
     pub entity_id: String,
     pub detail: serde_json::Value,
+    pub previous_sha256: Option<String>,
+    pub event_sha256: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DurableLogRecord {
+    pub id: i64,
+    pub event: StructuredLogEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DurableMetricRecord {
+    pub id: i64,
+    pub point: MetricPoint,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableArtifactRecord {
+    pub id: i64,
+    pub job_id: Uuid,
+    pub artifact: ArtifactRef,
+    pub created_at_secs: u64,
+    pub retained_until_secs: Option<u64>,
 }
 
 pub struct DurableController {
@@ -258,6 +282,53 @@ impl DurableController {
                     ON audit_events(entity_type, entity_id, unix_time_secs);
 
                 PRAGMA user_version = 1;",
+            )?;
+            tx.commit()?;
+        }
+
+        if current < 2 {
+            let tx = self
+                .connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute_batch(
+                "ALTER TABLE artifact_metadata
+                    ADD COLUMN created_at_secs INTEGER NOT NULL DEFAULT 0;
+                 ALTER TABLE artifact_metadata
+                    ADD COLUMN retained_until_secs INTEGER;
+                 ALTER TABLE audit_events
+                    ADD COLUMN previous_sha256 TEXT;
+                 ALTER TABLE audit_events
+                    ADD COLUMN event_sha256 TEXT;
+
+                 CREATE TABLE IF NOT EXISTS structured_logs (
+                    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    unix_time_secs INTEGER NOT NULL,
+                    level TEXT NOT NULL,
+                    component TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    fields_json TEXT NOT NULL,
+                    job_id TEXT,
+                    worker_id TEXT
+                 );
+
+                 CREATE TABLE IF NOT EXISTS metric_samples (
+                    metric_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    unix_time_secs INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    value REAL NOT NULL,
+                    labels_json TEXT NOT NULL
+                 );
+
+                 CREATE INDEX IF NOT EXISTS idx_artifacts_created
+                    ON artifact_metadata(created_at_secs, artifact_id);
+                 CREATE INDEX IF NOT EXISTS idx_logs_time
+                    ON structured_logs(unix_time_secs, log_id);
+                 CREATE INDEX IF NOT EXISTS idx_logs_job
+                    ON structured_logs(job_id, unix_time_secs);
+                 CREATE INDEX IF NOT EXISTS idx_metrics_name_time
+                    ON metric_samples(name, unix_time_secs);
+
+                 PRAGMA user_version = 2;",
             )?;
             tx.commit()?;
         }
@@ -554,7 +625,7 @@ impl DurableController {
             [result.job_id.to_string()],
         )?;
         for artifact in &result.artifacts {
-            insert_artifact(&tx, result.job_id, artifact)?;
+            insert_artifact(&tx, result.job_id, artifact, now_secs)?;
         }
 
         insert_audit(
@@ -839,7 +910,8 @@ impl DurableController {
         entity_id: &str,
     ) -> Result<Vec<AuditEvent>, DurableControllerError> {
         let mut statement = self.connection.prepare(
-            "SELECT audit_id, unix_time_secs, kind, entity_type, entity_id, detail_json
+            "SELECT audit_id, unix_time_secs, kind, entity_type, entity_id, detail_json,
+                    previous_sha256, event_sha256
              FROM audit_events
              WHERE entity_type = ?1 AND entity_id = ?2
              ORDER BY audit_id",
@@ -852,11 +924,22 @@ impl DurableController {
                 row.get::<_, String>(3)?,
                 row.get::<_, String>(4)?,
                 row.get::<_, String>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
             ))
         })?;
         let mut events = Vec::new();
         for row in rows {
-            let (id, unix_time, kind, stored_entity_type, stored_entity_id, detail_json) = row?;
+            let (
+                id,
+                unix_time,
+                kind,
+                stored_entity_type,
+                stored_entity_id,
+                detail_json,
+                previous_sha256,
+                event_sha256,
+            ) = row?;
             events.push(AuditEvent {
                 id,
                 unix_time_secs: to_u64(unix_time)?,
@@ -864,9 +947,248 @@ impl DurableController {
                 entity_type: stored_entity_type,
                 entity_id: stored_entity_id,
                 detail: serde_json::from_str(&detail_json)?,
+                previous_sha256,
+                event_sha256,
             });
         }
         Ok(events)
+    }
+
+    pub fn verify_audit_chain(&self) -> Result<bool, DurableControllerError> {
+        let mut statement = self.connection.prepare(
+            "SELECT audit_id, unix_time_secs, kind, entity_type, entity_id, detail_json,
+                    previous_sha256, event_sha256
+             FROM audit_events
+             WHERE event_sha256 IS NOT NULL
+             ORDER BY audit_id",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+            ))
+        })?;
+
+        let mut expected_previous: Option<String> = None;
+        for row in rows {
+            let (id, unix_time, kind, entity_type, entity_id, detail_json, stored_previous, stored_hash) =
+                row?;
+            let detail: serde_json::Value = serde_json::from_str(&detail_json)?;
+            let payload = serde_json::json!({
+                "unix_time_secs": to_u64(unix_time)?,
+                "kind": kind,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "detail": detail
+            });
+            let digest = next_audit_digest(
+                to_u64(id)?,
+                expected_previous.as_deref(),
+                &payload,
+            )?;
+            if stored_previous.as_deref() != Some(digest.previous_sha256.as_str())
+                || stored_hash.as_deref() != Some(digest.event_sha256.as_str())
+            {
+                return Ok(false);
+            }
+            expected_previous = Some(digest.event_sha256);
+        }
+        Ok(true)
+    }
+
+    pub fn record_log(
+        &mut self,
+        event: &StructuredLogEvent,
+    ) -> Result<i64, DurableControllerError> {
+        event.validate()?;
+        let event = event.clone().redacted();
+        self.connection.execute(
+            "INSERT INTO structured_logs(
+                unix_time_secs, level, component, message, fields_json, job_id, worker_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                to_i64(event.unix_time_secs)?,
+                log_level_as_str(event.level),
+                event.component,
+                event.message,
+                serde_json::to_string(&event.fields)?,
+                event.job_id,
+                event.worker_id
+            ],
+        )?;
+        Ok(self.connection.last_insert_rowid())
+    }
+
+    pub fn recent_logs(&self, limit: usize) -> Result<Vec<DurableLogRecord>, DurableControllerError> {
+        let limit = bounded_query_limit(limit)?;
+        let mut statement = self.connection.prepare(
+            "SELECT log_id, unix_time_secs, level, component, message, fields_json, job_id, worker_id
+             FROM structured_logs
+             ORDER BY log_id DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement.query_map([i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+            ))
+        })?;
+        let mut records = Vec::new();
+        for row in rows {
+            let (id, unix_time, level, component, message, fields_json, job_id, worker_id) = row?;
+            records.push(DurableLogRecord {
+                id,
+                event: StructuredLogEvent {
+                    unix_time_secs: to_u64(unix_time)?,
+                    level: parse_log_level(&level)?,
+                    component,
+                    message,
+                    fields: serde_json::from_str(&fields_json)?,
+                    job_id,
+                    worker_id,
+                },
+            });
+        }
+        Ok(records)
+    }
+
+    pub fn record_metric(&mut self, point: &MetricPoint) -> Result<i64, DurableControllerError> {
+        point.validate()?;
+        self.connection.execute(
+            "INSERT INTO metric_samples(unix_time_secs, name, value, labels_json)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                to_i64(point.unix_time_secs)?,
+                point.name,
+                point.value,
+                serde_json::to_string(&point.labels)?
+            ],
+        )?;
+        Ok(self.connection.last_insert_rowid())
+    }
+
+    pub fn recent_metrics(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<DurableMetricRecord>, DurableControllerError> {
+        let limit = bounded_query_limit(limit)?;
+        let mut statement = self.connection.prepare(
+            "SELECT metric_id, unix_time_secs, name, value, labels_json
+             FROM metric_samples
+             ORDER BY metric_id DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement.query_map([i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, f64>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })?;
+        let mut records = Vec::new();
+        for row in rows {
+            let (id, unix_time, name, value, labels_json) = row?;
+            records.push(DurableMetricRecord {
+                id,
+                point: MetricPoint {
+                    unix_time_secs: to_u64(unix_time)?,
+                    name,
+                    value,
+                    labels: serde_json::from_str(&labels_json)?,
+                },
+            });
+        }
+        Ok(records)
+    }
+
+    pub fn list_artifact_records(
+        &self,
+        job_id: Uuid,
+    ) -> Result<Vec<DurableArtifactRecord>, DurableControllerError> {
+        let mut statement = self.connection.prepare(
+            "SELECT artifact_id, name, relative_path, size_bytes, sha256,
+                    created_at_secs, retained_until_secs
+             FROM artifact_metadata
+             WHERE job_id = ?1
+             ORDER BY artifact_id",
+        )?;
+        let rows = statement.query_map([job_id.to_string()], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, Option<i64>>(6)?,
+            ))
+        })?;
+        let mut records = Vec::new();
+        for row in rows {
+            let (id, name, relative_path, size_bytes, sha256, created_at, retained_until) = row?;
+            records.push(DurableArtifactRecord {
+                id,
+                job_id,
+                artifact: ArtifactRef {
+                    name,
+                    relative_path,
+                    size_bytes: to_u64(size_bytes)?,
+                    sha256,
+                },
+                created_at_secs: to_u64(created_at)?,
+                retained_until_secs: retained_until.map(to_u64).transpose()?,
+            });
+        }
+        Ok(records)
+    }
+
+    pub fn set_artifact_retention(
+        &mut self,
+        artifact_id: i64,
+        retained_until_secs: Option<u64>,
+    ) -> Result<bool, DurableControllerError> {
+        let retained_until = retained_until_secs.map(to_i64).transpose()?;
+        let changed = self.connection.execute(
+            "UPDATE artifact_metadata
+             SET retained_until_secs = ?2
+             WHERE artifact_id = ?1",
+            params![artifact_id, retained_until],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn prune_telemetry_before(
+        &mut self,
+        before_secs: u64,
+    ) -> Result<(usize, usize), DurableControllerError> {
+        let before = to_i64(before_secs)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let logs = tx.execute(
+            "DELETE FROM structured_logs WHERE unix_time_secs < ?1",
+            [before],
+        )?;
+        let metrics = tx.execute(
+            "DELETE FROM metric_samples WHERE unix_time_secs < ?1",
+            [before],
+        )?;
+        tx.commit()?;
+        Ok((logs, metrics))
     }
 }
 
@@ -874,17 +1196,19 @@ fn insert_artifact(
     tx: &rusqlite::Transaction<'_>,
     job_id: Uuid,
     artifact: &ArtifactRef,
+    now_secs: u64,
 ) -> Result<(), DurableControllerError> {
     tx.execute(
         "INSERT INTO artifact_metadata(
-            job_id, name, relative_path, size_bytes, sha256
-         ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            job_id, name, relative_path, size_bytes, sha256, created_at_secs
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             job_id.to_string(),
             artifact.name,
             artifact.relative_path,
             to_i64(artifact.size_bytes)?,
-            artifact.sha256
+            artifact.sha256,
+            to_i64(now_secs)?
         ],
     )?;
     Ok(())
@@ -898,19 +1222,73 @@ fn insert_audit(
     entity_id: &str,
     detail: &serde_json::Value,
 ) -> Result<(), DurableControllerError> {
+    let sequence: i64 = tx.query_row(
+        "SELECT COALESCE(MAX(audit_id), 0) + 1 FROM audit_events",
+        [],
+        |row| row.get(0),
+    )?;
+    let previous: Option<String> = tx
+        .query_row(
+            "SELECT event_sha256 FROM audit_events
+             WHERE event_sha256 IS NOT NULL
+             ORDER BY audit_id DESC
+             LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let payload = serde_json::json!({
+        "unix_time_secs": now_secs,
+        "kind": kind,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "detail": detail
+    });
+    let digest = next_audit_digest(to_u64(sequence)?, previous.as_deref(), &payload)?;
     tx.execute(
         "INSERT INTO audit_events(
-            unix_time_secs, kind, entity_type, entity_id, detail_json
-         ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            unix_time_secs, kind, entity_type, entity_id, detail_json,
+            previous_sha256, event_sha256
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             to_i64(now_secs)?,
             kind,
             entity_type,
             entity_id,
-            serde_json::to_string(detail)?
+            serde_json::to_string(detail)?,
+            digest.previous_sha256,
+            digest.event_sha256
         ],
     )?;
     Ok(())
+}
+
+fn log_level_as_str(level: LogLevel) -> &'static str {
+    match level {
+        LogLevel::Trace => "trace",
+        LogLevel::Debug => "debug",
+        LogLevel::Info => "info",
+        LogLevel::Warn => "warn",
+        LogLevel::Error => "error",
+    }
+}
+
+fn parse_log_level(value: &str) -> Result<LogLevel, DurableControllerError> {
+    match value {
+        "trace" => Ok(LogLevel::Trace),
+        "debug" => Ok(LogLevel::Debug),
+        "info" => Ok(LogLevel::Info),
+        "warn" => Ok(LogLevel::Warn),
+        "error" => Ok(LogLevel::Error),
+        _ => Err(DurableControllerError::InvalidStoredLogLevel(value.to_owned())),
+    }
+}
+
+fn bounded_query_limit(limit: usize) -> Result<usize, DurableControllerError> {
+    if limit == 0 || limit > 10_000 {
+        return Err(DurableControllerError::InvalidQueryLimit);
+    }
+    Ok(limit)
 }
 
 fn validate_config_key(key: &str) -> Result<(), DurableControllerError> {
@@ -957,11 +1335,18 @@ pub enum DurableControllerError {
     IntegerOutOfRange,
     #[error("invalid controller configuration key")]
     InvalidConfigKey,
+    #[error("invalid stored log level: {0}")]
+    InvalidStoredLogLevel(String),
+    #[error("query limit must be between 1 and 10000")]
+    InvalidQueryLimit,
+    #[error("observability validation error: {0}")]
+    Observability(#[from] df_test_observability::ObservabilityError),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use df_test_observability::{LogLevel, MetricPoint, StructuredLogEvent};
     use df_test_protocol::{Capability, JobStatus, RepositorySpec, TestAction};
     use std::{collections::BTreeSet, fs};
 
@@ -1138,5 +1523,58 @@ mod tests {
             .unwrap();
         assert!(id > 0);
         assert_eq!(controller.schema_version().unwrap(), SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn audit_chain_verifies_for_new_events() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let job = test_job();
+        controller.enqueue_job(&job, 10).unwrap();
+        controller.register_worker(&test_worker(), 11).unwrap();
+        controller.assign_next("windows-1", 12).unwrap().unwrap();
+        assert!(controller.verify_audit_chain().unwrap());
+        let events = controller
+            .audit_events_for("job", &job.id.to_string())
+            .unwrap();
+        assert!(events.iter().all(|event| event.event_sha256.is_some()));
+    }
+
+    #[test]
+    fn structured_logs_are_redacted_and_metrics_are_durable() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let mut fields = std::collections::BTreeMap::new();
+        fields.insert(
+            "access_token".into(),
+            serde_json::Value::String("secret-value".into()),
+        );
+        controller
+            .record_log(&StructuredLogEvent {
+                unix_time_secs: 20,
+                level: LogLevel::Info,
+                component: "controller".into(),
+                message: "worker connected".into(),
+                fields,
+                job_id: None,
+                worker_id: Some("windows-1".into()),
+            })
+            .unwrap();
+        controller
+            .record_metric(&MetricPoint {
+                unix_time_secs: 21,
+                name: "workers_online".into(),
+                value: 1.0,
+                labels: Default::default(),
+            })
+            .unwrap();
+
+        let logs = controller.recent_logs(10).unwrap();
+        assert_eq!(
+            logs[0].event.fields.get("access_token").unwrap(),
+            &serde_json::Value::String("<redacted>".into())
+        );
+        let metrics = controller.recent_metrics(10).unwrap();
+        assert_eq!(metrics[0].point.name, "workers_online");
+        let pruned = controller.prune_telemetry_before(30).unwrap();
+        assert_eq!(pruned, (1, 1));
     }
 }
