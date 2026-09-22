@@ -24,8 +24,8 @@ Typed Windows doctor and fixtures for registry, processes, TCP/UDP loopback netw
 ## Phase 7 — GUI Automation — Complete
 Typed Windows UI Automation for DragonForge-managed windows, deterministic JSON interaction plans, ValuePattern/InvokePattern actions, bounded assertions, window screenshots, artifact containment, deterministic WPF fixture application, owned-process crash/exit capture, readiness tooling, and uploadable validation logs. Host and Windows VM validation passed on 2026-09-22.
 
-## Phase 8 — Multi-machine & Network Lab — Implementation complete; validation pending
-Authenticated outbound-only node registration, replay-protected HMAC envelopes, lease/heartbeat health, OS/architecture/label/feature capability inventory, load-aware distinct-node scheduling, coordinated typed multi-node role plans, signed result return with SHA-256 artifact manifests, bounded framed transport, TCP/UDP/DNS fixtures, deterministic fault profiles, and a real host-to-node typed network-job probe. Public controller addresses, inbound agent listeners, and arbitrary remote commands remain forbidden.
+## Phase 8 — Multi-machine & Network Lab — Complete
+Authenticated outbound-only node registration, replay-protected HMAC envelopes, lease/heartbeat health, OS/architecture/label/feature capability inventory, load-aware distinct-node scheduling, coordinated typed multi-node role plans, signed result return with SHA-256 artifact manifests, bounded framed transport, TCP/UDP/DNS fixtures, deterministic fault profiles, and a real host-to-node typed network-job probe. Public controller addresses, inbound agent listeners, and arbitrary remote commands remain forbidden. Host, Windows VM, and real cross-node validation passed on 2026-09-22.
 
 ## Phase 9 — ChatGPT/MCP Gateway
 Authenticated high-level tool surface for job submission, status, and artifact/result retrieval.
