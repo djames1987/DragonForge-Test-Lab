@@ -1,0 +1,19 @@
+[package]
+name = "df-test-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+sha2.workspace = true
+hex.workspace = true
+df-test-agent = { path = "../df-test-agent" }
+df-test-executor = { path = "../df-test-executor" }
+df-test-policy = { path = "../df-test-policy" }
+df-test-protocol = { path = "../df-test-protocol" }
+df-test-sandbox = { path = "../df-test-sandbox" }
