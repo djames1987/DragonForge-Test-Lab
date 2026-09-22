@@ -869,6 +869,7 @@ impl DurableController {
             "UPDATE jobs
              SET state = 'cancelled',
                  updated_at_secs = ?2,
+                 failure_class = 'cancelled',
                  next_retry_at_secs = NULL,
                  retry_reason = NULL
              WHERE job_id = ?1 AND state IN ('queued', 'retry_pending')",
