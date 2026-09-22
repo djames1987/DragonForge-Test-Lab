@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 11 — Durable Controller & State — Complete
+Phase 12 — mTLS / Node Identity — Implementation complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, and Phase 10 added validated deterministic Test Intelligence. Phase 11 adds SQLite-backed durable controller state, migrations, persisted jobs/attempts/workers/intelligence/artifact metadata/audit/configuration, and restart recovery that marks uncertain in-flight work interrupted. Full Phase 11 Windows host validation passed on 2026-09-22.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, and Phase 11 added validated SQLite-backed durable controller state. Phase 12 adds rustls mutual TLS, X.509 certificate-backed node identity, renewal/rotation overlap, revocation, fingerprint binding, and serializable trust metadata while retaining the older HMAC transport only as compatibility/private-lab mode.
 
 ## Workspace
 
@@ -30,6 +30,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-distributed/    distributed nodes, scheduling, transport, network fixtures
       df-test-mcp/            authenticated MCP HTTP gateway and typed tool surface
       df-test-intelligence/   change analysis, regression targeting, clustering, scheduling
+      df-test-identity/       mTLS, X.509 node identity, trust, rotation, revocation
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -46,6 +47,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-9.md
       PHASE-10.md
       PHASE-11.md
+      PHASE-12.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -66,6 +68,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase9.ps1
       test-phase10.ps1
       test-phase11.ps1
+      test-phase12.ps1
 
 ## Hyper-V host setup
 
@@ -237,10 +240,28 @@ The default durable database is:
 
 See docs/PHASE-11.md for schema, persistence records, restart behavior, audit metadata, and security boundaries.
 
+## Phase 12 mTLS / Node Identity
+
+Readiness:
+
+    cargo run -p dragonforge-test-lab -- identity-doctor
+
+Real loopback mutual-TLS + identity lifecycle fixture:
+
+    cargo run -p dragonforge-test-lab -- identity-fixture
+
+End-to-end Phase 12 validation:
+
+    .\scripts\test-phase12.ps1
+
+Phase 12 uses rustls for certificate-authenticated encrypted transport and binds node IDs to enrolled SHA-256 certificate fingerprints. Renewal supports a bounded overlap for key rotation; revocation fails closed. Trust metadata deliberately excludes private keys.
+
+See docs/PHASE-12.md for certificate lifecycle, transport, compatibility, and security boundaries.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, and docs/ROADMAP.md.
