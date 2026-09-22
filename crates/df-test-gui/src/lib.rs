@@ -384,9 +384,12 @@ fn element_script(title: &str, automation_id: &str, body: &str) -> String {
             "if(-not $control){{$nameCondition=([System.Windows.Automation.PropertyCondition]::new(",
             "[System.Windows.Automation.AutomationElement]::NameProperty,'{id}'));",
             "$control=$window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$nameCondition)}};",
+            "if(-not $control){{$helpCondition=([System.Windows.Automation.PropertyCondition]::new(",
+            "[System.Windows.Automation.AutomationElement]::HelpTextProperty,'{id}'));",
+            "$control=$window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$helpCondition)}};",
             "if(-not $control){{$children=$window.FindAll([System.Windows.Automation.TreeScope]::Descendants,",
             "[System.Windows.Automation.Condition]::TrueCondition);",
-            "$seen=@($children|ForEach-Object{{($_.Current.AutomationId+'|'+$_.Current.Name)}})-join ', ';",
+            "$seen=@($children|ForEach-Object{{($_.Current.AutomationId+'|'+$_.Current.Name+'|'+$_.Current.HelpText)}})-join ', ';",
             "throw ('automation control not found: {id}; visible controls: '+$seen)}};",
             "{body}"
         ),
