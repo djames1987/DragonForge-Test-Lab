@@ -80,7 +80,7 @@ pub struct JsonlLogWriter {
 impl JsonlLogWriter {
     pub fn new(path: impl Into<PathBuf>, max_bytes: u64) -> Result<Self, ObservabilityError> {
         let path = path.into();
-        if max_bytes < 1024 || max_bytes > 1024 * 1024 * 1024 {
+        if !(1024..=1024 * 1024 * 1024).contains(&max_bytes) {
             return Err(ObservabilityError::InvalidLogLimit);
         }
         validate_leaf_file_path(&path)?;
