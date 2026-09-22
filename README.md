@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 13 — Worker Services — Implementation complete
+Phase 13 — Worker Services — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, and Phase 12 added validated rustls mTLS/X.509 node identity. Phase 13 adds long-running worker services with outbound mTLS registration, typed heartbeats, drain/resume, restart-state persistence, native Windows SCM hosting, and hardened systemd service definitions.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, and Phase 12 added validated rustls mTLS/X.509 node identity. Phase 13 adds validated long-running worker services with outbound mTLS registration, typed heartbeats, drain/resume, restart-state persistence, native Windows SCM hosting, and hardened systemd service definitions. Full Phase 13 Windows host validation passed on 2026-09-22.
 
 ## Workspace
 
