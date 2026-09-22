@@ -68,8 +68,11 @@ $output = $window.FindName("outputBox")
 $apply = $window.FindName("applyButton")
 $crash = $window.FindName("crashButton")
 
+$apply.Tag = @($input, $output)
 $apply.Add_Click({
-    $output.Text = $input.Text
+    param($sender, $eventArgs)
+    $refs = $sender.Tag
+    $refs[1].Text = $refs[0].Text
 })
 
 $crash.Add_Click({
