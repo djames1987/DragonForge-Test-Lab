@@ -84,7 +84,8 @@ impl IdentityTrustStore {
     ) -> Result<TrustedCertificate, IdentityError> {
         let node_id = node_id.into();
         validate_identifier(&node_id)?;
-        if self.identities.len() >= MAX_TRUSTED_IDENTITIES && !self.identities.contains_key(&node_id)
+        if self.identities.len() >= MAX_TRUSTED_IDENTITIES
+            && !self.identities.contains_key(&node_id)
         {
             return Err(IdentityError::TooManyIdentities);
         }
@@ -369,12 +370,22 @@ pub struct MtlsFixtureReport {
 pub fn run_mtls_fixture() -> Result<MtlsFixtureReport, IdentityError> {
     let fixture = FixtureCertificates::generate()?;
 
-    let client_material =
-        CertificateMaterial::from_pem(fixture.client_cert_pem.as_bytes(), fixture.client_key_pem.as_bytes())?;
-    let server_material =
-        CertificateMaterial::from_pem(fixture.server_cert_pem.as_bytes(), fixture.server_key_pem.as_bytes())?;
-    let client_config = Arc::new(build_client_config(fixture.ca_cert_pem.as_bytes(), client_material)?);
-    let server_config = Arc::new(build_server_config(fixture.ca_cert_pem.as_bytes(), server_material)?);
+    let client_material = CertificateMaterial::from_pem(
+        fixture.client_cert_pem.as_bytes(),
+        fixture.client_key_pem.as_bytes(),
+    )?;
+    let server_material = CertificateMaterial::from_pem(
+        fixture.server_cert_pem.as_bytes(),
+        fixture.server_key_pem.as_bytes(),
+    )?;
+    let client_config = Arc::new(build_client_config(
+        fixture.ca_cert_pem.as_bytes(),
+        client_material,
+    )?);
+    let server_config = Arc::new(build_server_config(
+        fixture.ca_cert_pem.as_bytes(),
+        server_material,
+    )?);
 
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let address = listener.local_addr()?;
@@ -446,9 +457,7 @@ pub fn run_mtls_fixture() -> Result<MtlsFixtureReport, IdentityError> {
         && trust.verify_peer("fixture-node", rotated_der, 701).is_ok();
 
     trust.revoke_certificate(&renewed.fingerprint)?;
-    let revocation_verified = trust
-        .verify_peer("fixture-node", rotated_der, 800)
-        .is_err();
+    let revocation_verified = trust.verify_peer("fixture-node", rotated_der, 800).is_err();
 
     Ok(MtlsFixtureReport {
         encrypted_round_trip,
@@ -522,9 +531,7 @@ pub fn validate_private_controller_address(address: SocketAddr) -> Result<(), Id
     let safe = match address.ip() {
         std::net::IpAddr::V4(ip) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
         std::net::IpAddr::V6(ip) => {
-            ip.is_loopback()
-                || ip.is_unicast_link_local()
-                || (ip.segments()[0] & 0xfe00) == 0xfc00
+            ip.is_loopback() || ip.is_unicast_link_local() || (ip.segments()[0] & 0xfe00) == 0xfc00
         }
     };
     if safe && address.port() != 0 {
@@ -621,9 +628,7 @@ mod tests {
     fn renewal_supports_bounded_overlap_then_retires_old_generation() {
         let mut store = IdentityTrustStore::default();
         let first = store.enroll("node-a", b"cert-1", 100, 1_000).unwrap();
-        let second = store
-            .renew("node-a", b"cert-2", 500, 2_000, 700)
-            .unwrap();
+        let second = store.renew("node-a", b"cert-2", 500, 2_000, 700).unwrap();
 
         assert_eq!(second.generation, first.generation + 1);
         assert!(store.verify_peer("node-a", b"cert-1", 650).is_ok());
