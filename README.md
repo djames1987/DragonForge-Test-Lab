@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 10 — Test Intelligence — Complete
+Phase 11 — Durable Controller & State — Implementation complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, and Phase 9 added the validated authenticated MCP gateway. Phase 10 adds deterministic change-aware profile selection, historical regression targeting, SHA-256 failure clustering, and resource-aware scheduling with explicit unscheduled coverage. Full Phase 10 Windows host validation passed on 2026-09-22.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, and Phase 10 added validated deterministic Test Intelligence. Phase 11 adds SQLite-backed durable controller state, migrations, persisted jobs/attempts/workers/intelligence/artifact metadata/audit/configuration, and restart recovery that marks uncertain in-flight work interrupted.
 
 ## Workspace
 
@@ -45,6 +45,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-8.md
       PHASE-9.md
       PHASE-10.md
+      PHASE-11.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -64,6 +65,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       check-mcp-host.ps1
       test-phase9.ps1
       test-phase10.ps1
+      test-phase11.ps1
 
 ## Hyper-V host setup
 
@@ -215,10 +217,30 @@ End-to-end Phase 10 validation:
 
 See docs/PHASE-10.md for profile scoring, history targeting, clustering, scheduling rules, and security boundaries.
 
+## Phase 11 Durable Controller & State
+
+Readiness and schema migration:
+
+    cargo run -p dragonforge-test-lab -- controller-state-doctor
+
+Restart-recovery fixture:
+
+    cargo run -p dragonforge-test-lab -- controller-state-fixture
+
+End-to-end Phase 11 validation:
+
+    .\scripts\test-phase11.ps1
+
+The default durable database is:
+
+    .dragonforge-test-lab\controller.sqlite3
+
+See docs/PHASE-11.md for schema, persistence records, restart behavior, audit metadata, and security boundaries.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, and docs/ROADMAP.md.
