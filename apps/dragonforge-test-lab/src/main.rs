@@ -251,17 +251,15 @@ fn unix_time_secs() -> Result<u64, Box<dyn std::error::Error>> {
 
 fn mcp_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let config = mcp_config(args)?;
-    let gateway = McpGateway::new(config.clone())?;
+    let allowlist_count = config.allowed_repository_prefixes.len();
+    let gateway = McpGateway::new(config)?;
 
     println!("DragonForge Test Lab MCP doctor");
     println!("bind={}", gateway.bind_address());
     println!("transport=loopback_http");
     println!("authentication=bearer_token_from_environment");
     println!("token_retained_in_plaintext=false");
-    println!(
-        "allowed_repository_prefixes={}",
-        config.allowed_repository_prefixes.len()
-    );
+    println!("allowed_repository_prefixes={allowlist_count}");
     println!("mcp_modern=2026-07-28");
     println!("mcp_legacy=2025-11-25");
     println!("status=mcp_gateway_ready");
