@@ -477,7 +477,9 @@ fn validate_identifier(value: &str, max: usize) -> Result<(), ObservabilityError
 fn validate_reference(value: &str) -> Result<(), ObservabilityError> {
     if value.is_empty()
         || value.len() > 256
-        || value.chars().any(|ch| ch == '\r' || ch == '\n' || ch == '\0')
+        || value
+            .chars()
+            .any(|ch| ch == '\r' || ch == '\n' || ch == '\0')
     {
         return Err(ObservabilityError::InvalidReference);
     }
