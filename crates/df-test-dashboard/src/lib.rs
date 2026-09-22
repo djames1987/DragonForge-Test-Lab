@@ -139,7 +139,9 @@ impl Dashboard {
                 let intelligence = controller.recent_intelligence_records(MAX_DASHBOARD_ROWS)?;
                 let mut states = HashMap::<String, usize>::new();
                 for job in &jobs {
-                    *states.entry(job_state_name(job.state).to_owned()).or_default() += 1;
+                    *states
+                        .entry(job_state_name(job.state).to_owned())
+                        .or_default() += 1;
                 }
                 Ok(json!({
                     "version": env!("CARGO_PKG_VERSION"),
@@ -301,8 +303,8 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, DashboardErr
         }
     }
 
-    let header_text =
-        std::str::from_utf8(&bytes[..header_end]).map_err(|_| DashboardError::InvalidHttpRequest)?;
+    let header_text = std::str::from_utf8(&bytes[..header_end])
+        .map_err(|_| DashboardError::InvalidHttpRequest)?;
     let mut lines = header_text.split("\r\n");
     let request_line = lines.next().ok_or(DashboardError::InvalidHttpRequest)?;
     let mut request_parts = request_line.split_whitespace();
@@ -380,7 +382,9 @@ fn write_http_response(
 }
 
 fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 fn constant_time_equal(left: &[u8; 32], right: &[u8; 32]) -> bool {
@@ -500,22 +504,38 @@ pub fn run_dashboard_fixture() -> Result<DashboardFixtureReport, DashboardError>
         state_db: path.clone(),
     });
 
-    let authentication_enforced =
-        dashboard.handle_request(HttpRequest::get("/api/overview", None)).status == 401;
-    let overview_available =
-        dashboard.handle_request(HttpRequest::get("/api/overview", Some(token))).status == 200;
-    let jobs_available =
-        dashboard.handle_request(HttpRequest::get("/api/jobs", Some(token))).status == 200;
-    let workers_available =
-        dashboard.handle_request(HttpRequest::get("/api/workers", Some(token))).status == 200;
-    let plans_available =
-        dashboard.handle_request(HttpRequest::get("/api/plans", Some(token))).status == 200;
-    let artifacts_available =
-        dashboard.handle_request(HttpRequest::get("/api/artifacts", Some(token))).status == 200;
-    let intelligence_available =
-        dashboard.handle_request(HttpRequest::get("/api/intelligence", Some(token))).status == 200;
-    let audit_available =
-        dashboard.handle_request(HttpRequest::get("/api/audit", Some(token))).status == 200;
+    let authentication_enforced = dashboard
+        .handle_request(HttpRequest::get("/api/overview", None))
+        .status
+        == 401;
+    let overview_available = dashboard
+        .handle_request(HttpRequest::get("/api/overview", Some(token)))
+        .status
+        == 200;
+    let jobs_available = dashboard
+        .handle_request(HttpRequest::get("/api/jobs", Some(token)))
+        .status
+        == 200;
+    let workers_available = dashboard
+        .handle_request(HttpRequest::get("/api/workers", Some(token)))
+        .status
+        == 200;
+    let plans_available = dashboard
+        .handle_request(HttpRequest::get("/api/plans", Some(token)))
+        .status
+        == 200;
+    let artifacts_available = dashboard
+        .handle_request(HttpRequest::get("/api/artifacts", Some(token)))
+        .status
+        == 200;
+    let intelligence_available = dashboard
+        .handle_request(HttpRequest::get("/api/intelligence", Some(token)))
+        .status
+        == 200;
+    let audit_available = dashboard
+        .handle_request(HttpRequest::get("/api/audit", Some(token)))
+        .status
+        == 200;
     let settings = dashboard.handle_request(HttpRequest::get("/api/settings", Some(token)));
     let settings_text = String::from_utf8_lossy(&settings.body);
     let settings_safe = settings.status == 200
