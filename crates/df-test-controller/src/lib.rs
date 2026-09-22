@@ -1423,8 +1423,8 @@ impl DurableController {
                 [&worker.registration.worker_id],
                 |row| row.get(0),
             )?;
-            let active_jobs = u16::try_from(active_i64)
-                .map_err(|_| DurableControllerError::IntegerOutOfRange)?;
+            let active_jobs =
+                u16::try_from(active_i64).map_err(|_| DurableControllerError::IntegerOutOfRange)?;
             let capabilities = &worker.registration.capabilities;
             let mut supported_profiles = std::collections::BTreeSet::new();
             let fast_required = [
@@ -1441,7 +1441,10 @@ impl DurableController {
                 df_test_protocol::Capability::CargoClippy,
                 df_test_protocol::Capability::CargoTest,
             ];
-            if standard_required.iter().all(|cap| capabilities.contains(cap)) {
+            if standard_required
+                .iter()
+                .all(|cap| capabilities.contains(cap))
+            {
                 supported_profiles.insert(TestProfile::RustStandard);
             }
             if supported_profiles.is_empty() {

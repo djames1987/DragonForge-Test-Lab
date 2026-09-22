@@ -392,7 +392,10 @@ mod tests {
 
     #[test]
     fn compare_arguments_are_fixed_and_typed() {
-        let repo = GitHubRepository { owner: "owner".into(), name: "repo".into() };
+        let repo = GitHubRepository {
+            owner: "owner".into(),
+            name: "repo".into(),
+        };
         let args = compare_args(
             &repo,
             "0123456789abcdef0123456789abcdef01234567",

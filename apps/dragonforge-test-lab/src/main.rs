@@ -1565,9 +1565,8 @@ fn intelligence_integrate(args: &[String]) -> Result<(), Box<dyn std::error::Err
     let base_revision = value_after(args, "--base").ok_or("missing --base <revision>")?;
     let head_revision = value_after(args, "--head").ok_or("missing --head <revision>")?;
     let plan_name = value_after(args, "--plan").ok_or("missing --plan <stored-plan-name>")?;
-    let mode = IntelligenceMode::parse(
-        &value_after(args, "--mode").unwrap_or_else(|| "advisory".into()),
-    )?;
+    let mode =
+        IntelligenceMode::parse(&value_after(args, "--mode").unwrap_or_else(|| "advisory".into()))?;
     let min_automatic_score = value_after(args, "--min-score")
         .map(|value| value.parse())
         .transpose()?
