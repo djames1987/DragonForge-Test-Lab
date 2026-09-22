@@ -1,0 +1,13 @@
+[package]
+name = "df-test-plans"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+df-test-protocol = { path = "../df-test-protocol" }
+df-test-lifecycle = { path = "../df-test-lifecycle" }
