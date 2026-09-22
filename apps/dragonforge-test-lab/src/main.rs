@@ -746,7 +746,9 @@ fn print_help() {
     println!("  dragonforge-test-lab github-doctor");
     println!("  dragonforge-test-lab distributed-doctor");
     println!("  dragonforge-test-lab distributed-fixtures");
-    println!("  dragonforge-test-lab distributed-controller-once --bind <private-ip:port> --key-id <id>");
+    println!(
+        "  dragonforge-test-lab distributed-controller-once --bind <private-ip:port> --key-id <id>"
+    );
     println!("  dragonforge-test-lab distributed-node-connect --controller <private-ip:port> --node-id <id> --key-id <id>");
     println!("  dragonforge-test-lab gui-doctor");
     println!("  dragonforge-test-lab gui-run-plan --plan <plan.json> [--artifact-dir <path>]");

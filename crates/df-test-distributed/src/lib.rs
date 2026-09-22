@@ -5,7 +5,9 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::{Read, Write},
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
+    net::{
+        IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket,
+    },
     time::{Duration, Instant},
 };
 use thiserror::Error;
@@ -150,7 +152,11 @@ impl EnvelopeVerifier {
         })
     }
 
-    pub fn add_key(&mut self, key_id: impl Into<String>, secret: &[u8]) -> Result<(), DistributedError> {
+    pub fn add_key(
+        &mut self,
+        key_id: impl Into<String>,
+        secret: &[u8],
+    ) -> Result<(), DistributedError> {
         let key_id = key_id.into();
         validate_identifier(&key_id, 64)?;
         if secret.len() < 32 {
@@ -176,7 +182,8 @@ impl EnvelopeVerifier {
             .get(&envelope.key_id)
             .ok_or(DistributedError::UnknownKey)?;
         let provided = hex::decode(&envelope.mac_hex).map_err(|_| DistributedError::InvalidMac)?;
-        let mut mac = HmacSha256::new_from_slice(secret).map_err(|_| DistributedError::InvalidMac)?;
+        let mut mac =
+            HmacSha256::new_from_slice(secret).map_err(|_| DistributedError::InvalidMac)?;
         let signing_bytes = signing_bytes(
             &envelope.key_id,
             &envelope.nonce,
@@ -278,7 +285,12 @@ impl NodeRegistry {
 
     pub fn states(&self) -> Vec<&NodeState> {
         let mut states: Vec<_> = self.nodes.values().collect();
-        states.sort_by(|a, b| a.registration.profile.node_id.cmp(&b.registration.profile.node_id));
+        states.sort_by(|a, b| {
+            a.registration
+                .profile
+                .node_id
+                .cmp(&b.registration.profile.node_id)
+        });
         states
     }
 
@@ -445,7 +457,9 @@ impl NodeResultManifest {
         }
         for artifact in &self.artifacts {
             validate_artifact_name(&artifact.name)?;
-            if artifact.sha256.len() != 64 || !artifact.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+            if artifact.sha256.len() != 64
+                || !artifact.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+            {
                 return Err(DistributedError::InvalidArtifactDigest);
             }
         }
@@ -550,7 +564,10 @@ impl OutboundAgentClient {
         Ok(Self { stream })
     }
 
-    pub fn send<T: Serialize>(&mut self, envelope: &AuthenticatedEnvelope<T>) -> Result<(), DistributedError> {
+    pub fn send<T: Serialize>(
+        &mut self,
+        envelope: &AuthenticatedEnvelope<T>,
+    ) -> Result<(), DistributedError> {
         let bytes = serde_json::to_vec(envelope)?;
         if bytes.len() > MAX_FRAME_BYTES {
             return Err(DistributedError::FrameTooLarge);
@@ -565,7 +582,6 @@ impl OutboundAgentClient {
         read_frame(&mut self.stream)
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -612,8 +628,7 @@ pub fn connect_registration_probe(
     }
 
     let node_id = registration.profile.node_id.clone();
-    let envelope =
-        AuthenticatedEnvelope::sign(key_id.to_string(), secret, now_secs, registration)?;
+    let envelope = AuthenticatedEnvelope::sign(key_id.to_string(), secret, now_secs, registration)?;
     let mut client = OutboundAgentClient::connect(controller, timeout)?;
     client.send(&envelope)?;
 
@@ -694,16 +709,19 @@ pub fn serve_registration_probe_once(
         accepted: true,
         lease_seconds: DEFAULT_LEASE_SECONDS,
     };
-    let ack_envelope =
-        AuthenticatedEnvelope::sign(key_id.to_string(), secret, current_time, ack)?;
+    let ack_envelope = AuthenticatedEnvelope::sign(key_id.to_string(), secret, current_time, ack)?;
     write_frame(&mut stream, &ack_envelope)?;
 
     let command = NodeCommand {
         job_id: Uuid::new_v4(),
         task: DistributedTask::NetworkFixtureSuite,
     };
-    let command_envelope =
-        AuthenticatedEnvelope::sign(key_id.to_string(), secret, current_unix_time_secs()?, command)?;
+    let command_envelope = AuthenticatedEnvelope::sign(
+        key_id.to_string(),
+        secret,
+        current_unix_time_secs()?,
+        command,
+    )?;
     write_frame(&mut stream, &command_envelope)?;
 
     let result_envelope: AuthenticatedEnvelope<NodeResultManifest> = read_frame(&mut stream)?;
@@ -799,7 +817,6 @@ pub fn loopback_transport_fixture() -> Result<bool, DistributedError> {
         .map_err(|_| DistributedError::FixtureThreadPanicked)??;
     Ok(echoed == heartbeat)
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DistributedFixtureReport {
@@ -921,8 +938,8 @@ pub fn run_distributed_fixtures() -> Result<DistributedFixtureReport, Distribute
     registry.release_assignment(&assignment);
 
     let artifact = DistributedArtifact::from_bytes("result.json", br#"{"status":"ok"}"#)?;
-    let artifact_hash_verified = artifact.sha256
-        == "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288";
+    let artifact_hash_verified =
+        artifact.sha256 == "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288";
 
     let outbound_transport_round_trip = loopback_transport_fixture()?;
     let network = run_network_fixtures()?;
@@ -946,7 +963,10 @@ fn tcp_loopback_round_trip() -> Result<bool, DistributedError> {
         let mut request = [0u8; 11];
         stream.read_exact(&mut request)?;
         if &request != b"dragonforge" {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "unexpected payload"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "unexpected payload",
+            ));
         }
         stream.write_all(b"ok")?;
         Ok(())
@@ -970,7 +990,10 @@ fn udp_loopback_round_trip() -> Result<bool, DistributedError> {
         let mut request = [0u8; 64];
         let (size, peer) = server.recv_from(&mut request)?;
         if &request[..size] != b"dragonforge" {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "unexpected payload"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "unexpected payload",
+            ));
         }
         server.send_to(b"ok", peer)?;
         Ok(())
@@ -990,11 +1013,7 @@ fn udp_loopback_round_trip() -> Result<bool, DistributedError> {
 fn safe_controller_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(ip) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
-        IpAddr::V6(ip) => {
-            ip.is_loopback()
-                || is_ipv6_unique_local(ip)
-                || is_ipv6_link_local(ip)
-        }
+        IpAddr::V6(ip) => ip.is_loopback() || is_ipv6_unique_local(ip) || is_ipv6_link_local(ip),
     }
 }
 
@@ -1032,7 +1051,12 @@ fn signing_bytes<T: Serialize>(
     issued_at_secs: u64,
     payload: &T,
 ) -> Result<Vec<u8>, DistributedError> {
-    Ok(serde_json::to_vec(&(key_id, nonce, issued_at_secs, payload))?)
+    Ok(serde_json::to_vec(&(
+        key_id,
+        nonce,
+        issued_at_secs,
+        payload,
+    ))?)
 }
 
 fn option_matches(expected: &Option<String>, actual: &str) -> bool {
@@ -1219,7 +1243,11 @@ mod tests {
             profile: profile(
                 "win-1",
                 "windows",
-                &[NodeFeature::Rust, NodeFeature::GuiAutomation, NodeFeature::TcpFixture],
+                &[
+                    NodeFeature::Rust,
+                    NodeFeature::GuiAutomation,
+                    NodeFeature::TcpFixture,
+                ],
             ),
             outbound_only: true,
             key_id: "win-key".into(),
@@ -1229,7 +1257,11 @@ mod tests {
             profile: profile(
                 "linux-1",
                 "linux",
-                &[NodeFeature::Rust, NodeFeature::TcpFixture, NodeFeature::DnsFixture],
+                &[
+                    NodeFeature::Rust,
+                    NodeFeature::TcpFixture,
+                    NodeFeature::DnsFixture,
+                ],
             ),
             outbound_only: true,
             key_id: "linux-key".into(),
@@ -1271,7 +1303,10 @@ mod tests {
 
         let assignment = registry.allocate_plan(&plan, 100).unwrap();
         assert_eq!(assignment.assignments.len(), 2);
-        assert_ne!(assignment.assignments[0].node_id, assignment.assignments[1].node_id);
+        assert_ne!(
+            assignment.assignments[0].node_id,
+            assignment.assignments[1].node_id
+        );
     }
 
     #[test]
