@@ -400,7 +400,7 @@ fn intelligence_fixture() -> Result<(), Box<dyn std::error::Error>> {
             ],
         },
         history: vec![df_test_intelligence::HistoricalFailure {
-            id: uuid::Uuid::parse_str("00000000-0000-4000-8000-000000000010")?,
+            id: "00000000-0000-4000-8000-000000000010".parse()?,
             profile: TestProfile::McpGateway,
             step: "mcp integration".into(),
             message: "gateway fixture failed on port 55648".into(),
