@@ -396,9 +396,7 @@ fn worker_service_run_loop(
     }
 }
 
-fn service_stop_requested(
-    flag: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
-) -> bool {
+fn service_stop_requested(flag: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>) -> bool {
     flag.map(|value| value.load(std::sync::atomic::Ordering::SeqCst))
         .unwrap_or(false)
 }
@@ -518,13 +516,15 @@ fn worker_service_resume(args: &[String]) -> Result<(), Box<dyn std::error::Erro
 }
 
 fn worker_service_specs(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let executable = value_after(args, "--executable").ok_or("missing --executable <absolute-path>")?;
+    let executable =
+        value_after(args, "--executable").ok_or("missing --executable <absolute-path>")?;
     let config_path = value_after(args, "--config").ok_or("missing --config <worker.json>")?;
-    let windows =
-        WindowsServiceSpec::new(PathBuf::from(&executable), PathBuf::from(&config_path))?;
-    let systemd =
-        SystemdServiceSpec::new(PathBuf::from(&executable), PathBuf::from(&config_path))?;
-    println!("windows_service={}", serde_json::to_string_pretty(&windows)?);
+    let windows = WindowsServiceSpec::new(PathBuf::from(&executable), PathBuf::from(&config_path))?;
+    let systemd = SystemdServiceSpec::new(PathBuf::from(&executable), PathBuf::from(&config_path))?;
+    println!(
+        "windows_service={}",
+        serde_json::to_string_pretty(&windows)?
+    );
     println!("systemd_unit_name={}", systemd.unit_name);
     println!("systemd_unit_begin");
     print!("{}", systemd.render_unit());
