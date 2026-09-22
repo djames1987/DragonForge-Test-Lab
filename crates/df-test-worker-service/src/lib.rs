@@ -226,6 +226,27 @@ impl WorkerServiceRuntime {
         fs::rename(temp_path, &self.config.state_path)?;
         Ok(())
     }
+
+    pub fn refresh_persisted_control(&mut self) -> Result<bool, WorkerServiceError> {
+        if !self.config.state_path.exists() {
+            return Ok(false);
+        }
+        let json = fs::read_to_string(&self.config.state_path)?;
+        let persisted: WorkerRuntimeSnapshot = serde_json::from_str(&json)?;
+        persisted.validate(self.config.max_parallel_jobs)?;
+        if persisted.worker_id != self.snapshot.worker_id {
+            return Err(WorkerServiceError::StateIdentityMismatch);
+        }
+
+        let changed = persisted.drain_requested != self.snapshot.drain_requested;
+        self.snapshot.drain_requested = persisted.drain_requested;
+        if self.snapshot.drain_requested {
+            self.snapshot.state = WorkerServiceState::Draining;
+        } else if self.snapshot.state == WorkerServiceState::Draining {
+            self.snapshot.state = WorkerServiceState::Online;
+        }
+        Ok(changed)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -718,6 +739,28 @@ mod tests {
         assert_eq!(recovered.snapshot().state, WorkerServiceState::Connecting);
         assert_eq!(recovered.snapshot().active_jobs, 1);
         assert!(!recovered.can_accept_job());
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn live_runtime_refreshes_external_drain_control() {
+        let path = env::temp_dir().join(format!(
+            "dragonforge-worker-live-drain-{}.json",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&path);
+        let cfg = config(path.clone());
+        let mut runtime = WorkerServiceRuntime::new(cfg.clone()).unwrap();
+        runtime.mark_connected(100);
+        runtime.persist().unwrap();
+
+        let mut external = WorkerServiceRuntime::recover(cfg).unwrap();
+        external.request_drain();
+        external.persist().unwrap();
+
+        assert!(runtime.refresh_persisted_control().unwrap());
+        assert_eq!(runtime.snapshot().state, WorkerServiceState::Draining);
+        assert!(!runtime.can_accept_job());
         let _ = fs::remove_file(path);
     }
 
