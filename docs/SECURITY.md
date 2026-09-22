@@ -31,6 +31,12 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 25. GUI actions are limited to typed wait, value, invoke, assertion, and screenshot operations; raw input injection and arbitrary UI Automation patterns are not exposed.
 26. Screenshot artifacts are leaf PNG files contained beneath the selected artifact root.
 27. Crash capture is limited to Test Lab-owned fixture processes in Phase 7 validation.
+28. Distributed agents must initiate outbound-only connections; inbound agent listeners are rejected.
+29. Distributed node messages use HMAC-SHA256 with nonce replay protection and bounded clock skew.
+30. Controller targets are restricted to loopback, private, or link-local addresses; public Internet controller targets are rejected.
+31. Remote Phase 8 work is typed; the built-in cross-node probe exposes only the fixed NetworkFixtureSuite task.
+32. Distributed result manifests are bounded and carry SHA-256 artifact digests.
+33. Phase 8 fault injection is fixture-local delay/drop behavior only; Test Lab does not modify firewall, routes, NIC configuration, packet filters, or system DNS.
 
 ## Local execution boundary
 
@@ -104,16 +110,26 @@ Screenshots are restricted to the managed target window's UI Automation bounding
 
 The crash-capture validation launches only the repository-maintained `phase7-gui-fixture.ps1`, owns the resulting child process, invokes a fixed crash fixture control, waits with a bounded timeout, and records the observed exit code.
 
+## Phase 8 distributed boundary
+
+Phase 8 introduces authenticated distributed node contracts without adding a remote shell. Node registrations, heartbeats, commands, acknowledgements, and results are wrapped in HMAC-SHA256 authenticated envelopes with random nonces and issue timestamps. The verifier rejects stale messages, duplicate nonces, unknown keys, invalid MACs, protocol mismatches, and key/node identity mismatches.
+
+Agents declare `outbound_only=true`; registrations that request an inbound agent listener are rejected. The built-in outbound client accepts only loopback, RFC1918/private, link-local, IPv6 loopback, IPv6 unique-local, or IPv6 link-local controller addresses.
+
+The shared node secret is read from `DRAGONFORGE_NODE_SHARED_SECRET`; it is not accepted as a CLI argument or emitted in logs. The current Phase 8 transport authenticates and integrity-protects messages but does not encrypt them. Cross-host use should therefore remain on a trusted private network or VPN. Internet/untrusted-network use requires an additional confidentiality layer such as WireGuard/Tailscale or future mTLS.
+
+The cross-node validation path sends a fixed typed `NetworkFixtureSuite` command and receives a signed `NodeResultManifest`. It cannot send executable paths, arbitrary command lines, shell fragments, firewall commands, packet-capture instructions, or raw process arguments.
+
 ## Current enforcement
 
-Phases 1-7 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-8 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 
 Phase 4 provides disposable VM lifecycle and rollback, but truly hostile third-party code still requires careful network isolation, patched hosts/hypervisors, immutable audit records, artifact hashing, and stronger privilege/network controls. Hyper-V reduces host exposure but does not make hypervisor escape impossible.
 
-Before distributed nodes are enabled, add mutual controller/agent authentication, short-lived node credentials, replay protection, node identity, connection health/lease expiry, explicit high-risk capability approvals, and encrypted transport. Nodes should not expose a general remote shell.
+Phase 8 now adds authenticated node messages, replay protection, node identity, lease expiry, outbound-only connection policy, and typed capability scheduling. The current transport is deliberately constrained to private/link-local networks and does not provide confidentiality itself; deployments on untrusted networks still require VPN/mTLS encryption. Nodes must not expose a general remote shell.
 
-Before VM, GUI, or MCP support, also add VM snapshot rollback and a user-visible audit trail.
+Before MCP/Internet-facing distributed control, add certificate-backed transport identity, durable audit storage, credential rotation, and explicit high-risk capability approval workflows.
 
 The project must not evolve into an unrestricted remote shell.

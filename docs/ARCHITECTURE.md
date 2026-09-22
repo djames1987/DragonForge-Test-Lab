@@ -16,6 +16,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-vm: typed Hyper-V host checks, golden-image differencing VM creation, managed lifecycle, checkpoints, and rollback.
 - df-test-windows: typed Windows registry/process/network/service/Event Log/installer fixtures with privilege separation.
 - df-test-gui: managed-window UI Automation, deterministic typed plans, screenshots, and owned-process crash capture.
+- df-test-distributed: authenticated node envelopes, lease/heartbeat inventory, capability/load-aware multi-node scheduling, framed outbound transport, typed network tasks, and hashed distributed result manifests.
 - dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, deep-Rust tool readiness, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
@@ -112,9 +113,29 @@ Safe and privileged fixtures are deliberately separated. Privileged mutation req
 
 GUI plans cannot supply executable commands, raw PowerShell, arbitrary UI Automation properties, raw keyboard injection, or unrestricted desktop coordinates. Phase 7 requires an interactive desktop session and is intended to run on the Windows host or Windows VM console/RDP session.
 
+## Phase 8 distributed flow
+
+    authorized node
+      -> outbound connection to private/controller address
+      -> signed registration envelope
+      -> nonce/timestamp/MAC verification
+      -> lease + capability inventory
+      -> scheduler selects compatible low-load node
+      -> signed typed job command
+      -> worker executes supported fixture only
+      -> signed result manifest + SHA-256 artifact metadata
+      -> controller verifies node identity/result
+      -> lease/active-job state updated
+
+Multi-node plans allocate named roles to distinct nodes based on OS, architecture, labels, features, current load, lease state, and free job slots.
+
+The Phase 8 cross-node validation sends only the fixed `NetworkFixtureSuite` task. No shell string, executable path, arbitrary program arguments, firewall command, or remote desktop operation exists in the wire contract.
+
+Phase 8 message authentication provides integrity and replay protection. Cross-host use is restricted to private/link-local addresses; deployments crossing untrusted networks should additionally use a trusted VPN or future mTLS layer for confidentiality.
+
 ## Distributed target
 
-The planned Phase 8 topology is:
+The Phase 8 topology is:
 
     ChatGPT / operator / GitHub
               |

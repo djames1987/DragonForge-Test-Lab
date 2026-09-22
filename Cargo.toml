@@ -12,10 +12,11 @@ members = [
     "crates/df-test-vm",
     "crates/df-test-windows",
     "crates/df-test-gui",
+    "crates/df-test-distributed",
 ]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.80"
@@ -27,3 +28,6 @@ thiserror = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 proptest = "=1.5.0"
 criterion = "0.5"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
