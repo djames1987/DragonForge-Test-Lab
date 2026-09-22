@@ -36,8 +36,8 @@ Deterministic change-aware profile scoring, historical regression targeting from
 ## Phase 11 — Durable Controller & State — Complete
 Persistent controller state, SQLite migrations, restart recovery, durable jobs/attempts/workers/intelligence/artifact metadata/audit/configuration, and recovery validation. Windows host validation passed on 2026-09-22.
 
-## Phase 12 — mTLS / Node Identity — Implementation complete; validation pending
-Certificate-backed controller/worker identity, encrypted mutual-TLS transport primitives, enrollment, renewal with bounded overlap, revocation, serializable trust stores, SHA-256 certificate-to-node binding, private/local address policy, and key-rotation hooks. Legacy Phase 8 HMAC transport remains compatibility/private-lab mode.
+## Phase 12 — mTLS / Node Identity — Complete
+Certificate-backed controller/worker identity, encrypted mutual-TLS transport primitives, enrollment, renewal with bounded overlap, revocation, serializable trust stores, SHA-256 certificate-to-node binding, private/local address policy, and key-rotation hooks. Legacy Phase 8 HMAC transport remains compatibility/private-lab mode. Windows host validation passed on 2026-09-22.
 
 ## Phase 13 — Worker Services
 Automatic Windows Service and Linux systemd worker operation, outbound controller registration, heartbeats, graceful drain, restart recovery, and service diagnostics.
