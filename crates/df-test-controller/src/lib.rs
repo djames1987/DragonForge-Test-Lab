@@ -184,6 +184,13 @@ pub struct DurableArtifactRecord {
     pub retained_until_secs: Option<u64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DurableIntelligenceRecord {
+    pub id: i64,
+    pub report: serde_json::Value,
+    pub created_at_secs: u64,
+}
+
 pub struct DurableController {
     connection: Connection,
 }
@@ -1227,6 +1234,73 @@ impl DurableController {
         .transpose()
     }
 
+    pub fn recent_jobs(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<DurableJobRecord>, DurableControllerError> {
+        let limit = bounded_query_limit(limit)?;
+        let mut statement = self.connection.prepare(
+            "SELECT request_json, state, assigned_worker,
+                    created_at_secs, updated_at_secs, last_error,
+                    retry_policy_json, failure_class, next_retry_at_secs, retry_reason
+             FROM jobs
+             ORDER BY updated_at_secs DESC, job_id DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement.query_map(
+            [i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                    row.get::<_, Option<i64>>(8)?,
+                    row.get::<_, Option<String>>(9)?,
+                ))
+            },
+        )?;
+        let mut records = Vec::new();
+        for row in rows {
+            let (
+                job_json,
+                state,
+                assigned_worker,
+                created,
+                updated,
+                last_error,
+                retry_policy_json,
+                failure_class,
+                next_retry_at,
+                retry_reason,
+            ) = row?;
+            records.push(DurableJobRecord {
+                job: serde_json::from_str(&job_json)?,
+                state: DurableJobState::parse(&state)?,
+                assigned_worker,
+                created_at_secs: to_u64(created)?,
+                updated_at_secs: to_u64(updated)?,
+                last_error,
+                retry_policy: retry_policy_json
+                    .as_deref()
+                    .map(serde_json::from_str)
+                    .transpose()?
+                    .unwrap_or_else(RetryPolicy::no_retry),
+                failure_class: failure_class
+                    .as_deref()
+                    .map(parse_failure_class)
+                    .transpose()?,
+                next_retry_at_secs: next_retry_at.map(to_u64).transpose()?,
+                retry_reason,
+            });
+        }
+        Ok(records)
+    }
+
     pub fn list_attempts(
         &self,
         job_id: Uuid,
@@ -1800,6 +1874,139 @@ impl DurableController {
             });
         }
         Ok(records)
+    }
+
+    pub fn recent_artifact_records(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<DurableArtifactRecord>, DurableControllerError> {
+        let limit = bounded_query_limit(limit)?;
+        let mut statement = self.connection.prepare(
+            "SELECT artifact_id, job_id, name, relative_path, size_bytes, sha256,
+                    created_at_secs, retained_until_secs
+             FROM artifact_metadata
+             ORDER BY artifact_id DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement.query_map(
+            [i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, Option<i64>>(7)?,
+                ))
+            },
+        )?;
+        let mut records = Vec::new();
+        for row in rows {
+            let (id, job_id, name, relative_path, size_bytes, sha256, created_at, retained_until) =
+                row?;
+            records.push(DurableArtifactRecord {
+                id,
+                job_id: Uuid::parse_str(&job_id)?,
+                artifact: ArtifactRef {
+                    name,
+                    relative_path,
+                    size_bytes: to_u64(size_bytes)?,
+                    sha256,
+                },
+                created_at_secs: to_u64(created_at)?,
+                retained_until_secs: retained_until.map(to_u64).transpose()?,
+            });
+        }
+        Ok(records)
+    }
+
+    pub fn recent_intelligence_records(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<DurableIntelligenceRecord>, DurableControllerError> {
+        let limit = bounded_query_limit(limit)?;
+        let mut statement = self.connection.prepare(
+            "SELECT intelligence_id, report_json, created_at_secs
+             FROM intelligence_history
+             ORDER BY intelligence_id DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement.query_map(
+            [i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            },
+        )?;
+        let mut records = Vec::new();
+        for row in rows {
+            let (id, report_json, created_at) = row?;
+            records.push(DurableIntelligenceRecord {
+                id,
+                report: serde_json::from_str(&report_json)?,
+                created_at_secs: to_u64(created_at)?,
+            });
+        }
+        Ok(records)
+    }
+
+    pub fn recent_audit_events(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<AuditEvent>, DurableControllerError> {
+        let limit = bounded_query_limit(limit)?;
+        let mut statement = self.connection.prepare(
+            "SELECT audit_id, unix_time_secs, kind, entity_type, entity_id, detail_json,
+                    previous_sha256, event_sha256
+             FROM audit_events
+             ORDER BY audit_id DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement.query_map(
+            [i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                ))
+            },
+        )?;
+        let mut events = Vec::new();
+        for row in rows {
+            let (
+                id,
+                unix_time,
+                kind,
+                entity_type,
+                entity_id,
+                detail_json,
+                previous_sha256,
+                event_sha256,
+            ) = row?;
+            events.push(AuditEvent {
+                id,
+                unix_time_secs: to_u64(unix_time)?,
+                kind,
+                entity_type,
+                entity_id,
+                detail: serde_json::from_str(&detail_json)?,
+                previous_sha256,
+                event_sha256,
+            });
+        }
+        Ok(events)
     }
 
     pub fn set_artifact_retention(

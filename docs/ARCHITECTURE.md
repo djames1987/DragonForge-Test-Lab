@@ -367,3 +367,30 @@ Data flow:
 Automatic mode is intentionally narrower than advisory recommendations. Only exact `rust_fast` and `rust_standard` plan profiles are executable through this bridge. Dependency-bearing or OS/label-constrained steps are not auto-enqueued because the legacy durable queue does not represent a full plan-run dependency/routing state machine.
 
 Every automatically generated JobRequest is pinned to the immutable compared head SHA before persistence.
+
+
+## Phase 18 dashboard flow
+
+Phase 18 adds `df-test-dashboard` as a local operator visibility layer over the durable controller.
+
+    browser on controller host
+              |
+      loopback HTTP only
+              |
+      static shell/CSS/JS
+              |
+      bearer-authenticated GET /api/*
+              |
+       bounded projections
+       +------+------+------+------+------+------+
+       |      |      |      |      |      |
+      jobs workers plans artifacts intelligence audit
+                                      |
+                              chain verification
+              |
+           settings
+       (security metadata only)
+
+The dashboard opens the existing durable controller database and uses typed controller query methods. It does not bypass the controller, Agent, Policy, Executor, lifecycle, or worker-service boundaries.
+
+The Phase 18 HTTP API is deliberately read-only. There is no generic action endpoint, terminal, command field, raw SQL endpoint, filesystem browser, artifact-content endpoint, or arbitrary URL proxy. Future operator mutations must be introduced as separately designed typed/audited operations rather than extending the dashboard into a general control channel.

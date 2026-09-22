@@ -54,8 +54,8 @@ Versioned declarative test plans with schema v4 persistence, typed executable pr
 ## Phase 17 — Intelligence Integration — Complete
 Real GitHub compare input, controller schema v5 intelligence job context, durable historical test-failure reconstruction, online worker capability/slot capacity, stored-plan matching, advisory and bounded automatic modes, immutable head-SHA job compilation, durable intelligence history, and hash-chained decision audits.
 
-## Phase 18 — Dashboard
-Local operator web dashboard for jobs, workers, test plans, artifacts, failure clusters, audit history, and settings without exposing arbitrary terminal access.
+## Phase 18 — Dashboard — Complete
+Authenticated loopback-only, read-only operator web dashboard for bounded views of jobs, workers, test plans, artifacts, persisted intelligence/failure clusters, hash-chained audit history, audit-chain verification, and safe dashboard settings. Static assets use restrictive browser security headers; API access requires a bearer token; mutating methods, arbitrary terminal access, raw commands, raw SQL, filesystem browsing, and artifact-content browsing are not exposed.
 
 ## Phase 19 — Linux Qualification
 Full Linux worker validation including Rust execution, containers, service operation, encrypted transport, artifacts, cancellation, advanced Rust lanes, and recovery.

@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 17 — Intelligence Integration — Complete
+Phase 18 — Dashboard — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, Phase 14 added validated audit/artifact/observability infrastructure, and Phase 15 added validated recovery/retry lifecycle control. Phase 16 added validated versioned declarative plans, controller schema v4 plan persistence, DAG dependencies/conditions, typed profile compilation, capability enforcement, typed artifacts, retry policy integration, target predicates, and plan operator tooling. Phase 17 connects Test Intelligence to real GitHub changes, durable historical failures, online worker capacity, stored plans, advisory/automatic modes, immutable head-SHA jobs, and hash-chained decision audits.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, Phase 14 added validated audit/artifact/observability infrastructure, and Phase 15 added validated recovery/retry lifecycle control. Phase 16 added validated versioned declarative plans, controller schema v4 plan persistence, DAG dependencies/conditions, typed profile compilation, capability enforcement, typed artifacts, retry policy integration, target predicates, and plan operator tooling. Phase 17 connects Test Intelligence to real GitHub changes, durable historical failures, online worker capacity, stored plans, advisory/automatic modes, immutable head-SHA jobs, and hash-chained decision audits. Phase 18 adds an authenticated loopback-only, read-only web dashboard over bounded durable controller projections for jobs, workers, plans, artifact metadata, intelligence/failure clusters, audit history, chain verification, and safe settings.
 
 ## Workspace
 
@@ -21,6 +21,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-policy/         worker authorization policy
       df-test-agent/          worker-side trust boundary
       df-test-controller/     scheduling/controller core
+      df-test-dashboard/      authenticated local read-only operator dashboard
       df-test-executor/       checkout/process/artifact execution
       df-test-github/         typed GitHub adapter
       df-test-sandbox/        native/container containment
@@ -58,6 +59,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-15.md
       PHASE-16.md
       PHASE-17.md
+      PHASE-18.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -84,6 +86,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase15.ps1
       test-phase16.ps1
       test-phase17.ps1
+      test-phase18.ps1
 
 ## Hyper-V host setup
 
@@ -399,10 +402,41 @@ End-to-end Phase 17 validation:
 
 See docs/PHASE-17.md for durable historical-failure context, worker-capacity behavior, advisory/automatic modes, audit records, and the deliberate automation limits.
 
+
+## Phase 18 Dashboard
+
+Required environment:
+
+    $env:DRAGONFORGE_DASHBOARD_TOKEN = "<at-least-32-random-characters>"
+
+Readiness:
+
+    cargo run -p dragonforge-test-lab -- dashboard-doctor
+
+Deterministic security/data fixture:
+
+    cargo run -p dragonforge-test-lab -- dashboard-fixture
+
+Start the local dashboard:
+
+    cargo run -p dragonforge-test-lab -- dashboard-serve
+
+Default browser URL:
+
+    http://127.0.0.1:8788/#token=<DRAGONFORGE_DASHBOARD_TOKEN>
+
+The Phase 18 dashboard is loopback-only and read-only. Authenticated views expose bounded controller data for jobs, workers, plans, artifact metadata, persisted intelligence/failure clusters, audit history/chain verification, and dashboard settings. It does not provide terminal access, raw command execution, raw SQL, filesystem browsing, artifact-content browsing, or state-changing HTTP actions.
+
+End-to-end Phase 18 validation:
+
+    .\scripts\test-phase18.ps1 -Revision main
+
+See docs/PHASE-18.md for routes, authentication, browser security headers, controller projections, validation, and deliberate limits.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, docs/PHASE-18.md, and docs/ROADMAP.md.

@@ -233,7 +233,7 @@ Schema v4 persists validated plan JSON and hash-chain audits create/update event
 
 ## Current enforcement
 
-Phases 1-16 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-18 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 
@@ -264,3 +264,26 @@ Security properties:
 - Intelligence decisions are persisted and hash-chain audited.
 
 The current live-capacity bridge deliberately uses a conservative single-slot scheduling model because durable worker registration does not yet carry full memory/load/service-parallelism telemetry. It must not be interpreted as a complete host-resource monitor.
+
+
+## Phase 18 — Dashboard boundary
+
+The dashboard is a local visibility surface, not a remote administration shell.
+
+Security properties:
+
+- bind validation rejects non-loopback addresses and port zero;
+- API authentication requires a 32–4096 byte bearer token;
+- the retained dashboard configuration stores only a SHA-256 token digest, not the plaintext token;
+- token comparison is constant-time over fixed-size digests;
+- the browser receives the token through the URL fragment, which is not sent to the HTTP server, then removes the fragment from browser history and uses an Authorization header;
+- all controller data routes are an explicit GET-only allowlist;
+- unknown API routes return 404 and all non-GET methods return 405;
+- controller projections use bounded query limits;
+- artifact views expose metadata only, not file contents;
+- settings expose dashboard security posture rather than arbitrary controller configuration values;
+- audit responses include current hash-chain verification;
+- responses disable caching, framing, MIME sniffing, referrer leakage, and unrestricted script/style/connect origins with fixed security headers;
+- there is no terminal, executable/argument field, raw command path, raw SQL path, filesystem browser, generic proxy, or state-mutating HTTP action.
+
+Phase 18 does not add a database migration. Opening the controller uses the existing schema-v5 migration logic; normal Phase 18 operation reads existing durable state through typed controller methods.
