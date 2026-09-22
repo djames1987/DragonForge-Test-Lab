@@ -313,8 +313,10 @@ pub fn prune_artifacts(
         }
     }
 
-    let mut retained: BTreeSet<String> =
-        ordered.iter().map(|entry| entry.relative_path.clone()).collect();
+    let mut retained: BTreeSet<String> = ordered
+        .iter()
+        .map(|entry| entry.relative_path.clone())
+        .collect();
     let mut retained_bytes = ordered
         .iter()
         .fold(0u64, |total, entry| total.saturating_add(entry.size_bytes));
@@ -491,9 +493,16 @@ fn validate_sha256(value: &str) -> Result<(), ObservabilityError> {
 
 fn is_sensitive_key(key: &str) -> bool {
     let lower = key.to_ascii_lowercase();
-    ["password", "passwd", "token", "secret", "private_key", "authorization"]
-        .iter()
-        .any(|needle| lower.contains(needle))
+    [
+        "password",
+        "passwd",
+        "token",
+        "secret",
+        "private_key",
+        "authorization",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
 }
 
 #[derive(Debug, Error)]
@@ -548,10 +557,8 @@ mod tests {
 
     #[test]
     fn structured_log_redacts_secret_fields() {
-        let root = std::env::temp_dir().join(format!(
-            "dragonforge-phase14-log-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("dragonforge-phase14-log-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let path = root.join("worker.jsonl");
@@ -684,7 +691,10 @@ mod tests {
             },
             100,
         );
-        assert!(matches!(result, Err(ObservabilityError::InvalidRelativePath)));
+        assert!(matches!(
+            result,
+            Err(ObservabilityError::InvalidRelativePath)
+        ));
         let _ = fs::remove_dir_all(root);
     }
 
