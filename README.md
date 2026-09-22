@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 12 — mTLS / Node Identity — Implementation complete
+Phase 12 — mTLS / Node Identity — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, and Phase 11 added validated SQLite-backed durable controller state. Phase 12 adds rustls mutual TLS, X.509 certificate-backed node identity, renewal/rotation overlap, revocation, fingerprint binding, and serializable trust metadata while retaining the older HMAC transport only as compatibility/private-lab mode.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, and Phase 11 added validated SQLite-backed durable controller state. Phase 12 adds validated rustls mutual TLS, X.509 certificate-backed node identity, renewal/rotation overlap, revocation, fingerprint binding, and serializable trust metadata while retaining the older HMAC transport only as compatibility/private-lab mode. Full Phase 12 Windows host validation passed on 2026-09-22.
 
 ## Workspace
 
