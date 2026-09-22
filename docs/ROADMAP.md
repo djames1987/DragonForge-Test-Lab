@@ -24,8 +24,8 @@ Typed Windows doctor and fixtures for registry, processes, TCP/UDP loopback netw
 ## Phase 7 — GUI Automation — Complete
 Typed Windows UI Automation for DragonForge-managed windows, deterministic JSON interaction plans, ValuePattern/InvokePattern actions, bounded assertions, window screenshots, artifact containment, deterministic WPF fixture application, owned-process crash/exit capture, readiness tooling, and uploadable validation logs. Host and Windows VM validation passed on 2026-09-22.
 
-## Phase 8 — Multi-machine & Network Lab
-Turn DragonForge Test Lab into a distributed capability-based test cluster. Authorized physical machines, VMs, container hosts, Raspberry Pi systems, Linux servers, Windows machines, and other supported hardware can register as worker nodes and receive only jobs matching their capabilities and policy. Add authenticated controller/agent transport, node lifecycle and health, capability/load-aware scheduling, artifact/result return, coordinated multi-node jobs, TCP/UDP/DNS fixtures, fault injection, hardware-in-the-loop support, and network-isolated test scenarios. Nodes should initiate authenticated outbound connections where practical; Test Lab must not become a general remote shell.
+## Phase 8 — Multi-machine & Network Lab — Implementation complete; validation pending
+Authenticated outbound-only node registration, replay-protected HMAC envelopes, lease/heartbeat health, OS/architecture/label/feature capability inventory, load-aware distinct-node scheduling, coordinated typed multi-node role plans, signed result return with SHA-256 artifact manifests, bounded framed transport, TCP/UDP/DNS fixtures, deterministic fault profiles, and a real host-to-node typed network-job probe. Public controller addresses, inbound agent listeners, and arbitrary remote commands remain forbidden.
 
 ## Phase 9 — ChatGPT/MCP Gateway
 Authenticated high-level tool surface for job submission, status, and artifact/result retrieval.
