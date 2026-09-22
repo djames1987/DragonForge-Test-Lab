@@ -1,6 +1,6 @@
 # Phase 6 — Windows Integration
 
-Status: implementation complete; host and VM validation pending.
+Status: complete; safe and privileged Windows validation passed on both the host and Windows VM on 2026-09-22.
 
 ## Goal
 
@@ -113,4 +113,4 @@ Optional MSI inspection:
 
 Windows VM validation uses the same script from inside the prepared Windows golden/validation VM.
 
-Upload the generated `test-logs/phase6-validation-*.log` for review before merging Phase 6.
+Validation completed successfully on both the Windows host and the prepared Windows VM on 2026-09-22. In both environments, the safe lane passed; the elevated lane also passed the transient Service Control Manager fixture and Application Event Log write fixture.
