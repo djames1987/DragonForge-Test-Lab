@@ -1,4 +1,5 @@
 use df_test_agent::Agent;
+use df_test_distributed::{run_distributed_fixtures, validate_controller_addr};
 use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor};
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
 use df_test_gui::{GuiAutomationClient, GuiPlan};
@@ -31,6 +32,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     match command {
         "doctor" => doctor(),
         "github-doctor" => github_doctor(),
+        "distributed-doctor" => distributed_doctor(),
+        "distributed-fixtures" => distributed_fixtures(),
         "gui-doctor" => gui_doctor(),
         "gui-run-plan" => gui_run_plan(&args[2..]),
         "gui-fixture" => gui_fixture(&args[2..]),
@@ -67,7 +70,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=7");
+    println!("phase=8");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -91,6 +94,51 @@ fn github_doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("DragonForge Test Lab GitHub doctor");
     println!("github_host=github.com");
     println!("status=github_ready");
+    Ok(())
+}
+
+fn distributed_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let loopback: std::net::SocketAddr = "127.0.0.1:1".parse()?;
+    let private: std::net::SocketAddr = "10.0.0.1:1".parse()?;
+    let public: std::net::SocketAddr = "8.8.8.8:53".parse()?;
+
+    validate_controller_addr(loopback)?;
+    validate_controller_addr(private)?;
+    if validate_controller_addr(public).is_ok() {
+        return Err("public controller address policy unexpectedly allowed a public IP".into());
+    }
+
+    println!("DragonForge Test Lab distributed doctor");
+    println!("node_transport=outbound_only");
+    println!("authentication=hmac_sha256");
+    println!("replay_protection=nonce_and_clock_window");
+    println!("controller_address_policy=loopback_private_link_local");
+    println!("lease_health=enabled");
+    println!("capability_scheduler=enabled");
+    println!("result_artifact_hashing=sha256");
+    println!("status=distributed_lab_ready");
+    Ok(())
+}
+
+fn distributed_fixtures() -> Result<(), Box<dyn std::error::Error>> {
+    let report = run_distributed_fixtures()?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+
+    if !report.registration_authenticated
+        || !report.replay_rejected
+        || !report.heartbeat_applied
+        || !report.distinct_role_assignment
+        || !report.artifact_hash_verified
+        || !report.outbound_transport_round_trip
+        || !report.network.tcp_loopback
+        || !report.network.udp_loopback
+        || !report.network.dns_localhost
+        || !report.network.fault_drop_observed
+    {
+        return Err("one or more distributed/network fixtures failed".into());
+    }
+
+    println!("status=distributed_fixtures_passed");
     Ok(())
 }
 
@@ -593,6 +641,8 @@ fn print_help() {
     println!("Usage:");
     println!("  dragonforge-test-lab doctor");
     println!("  dragonforge-test-lab github-doctor");
+    println!("  dragonforge-test-lab distributed-doctor");
+    println!("  dragonforge-test-lab distributed-fixtures");
     println!("  dragonforge-test-lab gui-doctor");
     println!("  dragonforge-test-lab gui-run-plan --plan <plan.json> [--artifact-dir <path>]");
     println!("  dragonforge-test-lab gui-fixture [--artifact-dir <path>]");
