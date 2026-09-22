@@ -233,7 +233,7 @@ fn distributed_node_connect(args: &[String]) -> Result<(), Box<dyn std::error::E
 fn distributed_shared_secret() -> Result<String, Box<dyn std::error::Error>> {
     let secret = std::env::var("DRAGONFORGE_NODE_SHARED_SECRET")
         .map_err(|_| "DRAGONFORGE_NODE_SHARED_SECRET must be set and at least 32 bytes")?;
-    if secret.as_bytes().len() < 32 {
+    if secret.len() < 32 {
         return Err("DRAGONFORGE_NODE_SHARED_SECRET must be at least 32 bytes".into());
     }
     Ok(secret)
