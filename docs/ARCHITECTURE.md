@@ -17,6 +17,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-windows: typed Windows registry/process/network/service/Event Log/installer fixtures with privilege separation.
 - df-test-gui: managed-window UI Automation, deterministic typed plans, screenshots, and owned-process crash capture.
 - df-test-distributed: authenticated node envelopes, lease/heartbeat inventory, capability/load-aware multi-node scheduling, framed outbound transport, typed network tasks, and hashed distributed result manifests.
+- df-test-mcp: loopback-only authenticated MCP HTTP gateway, protocol/version handling, named tool schemas, bounded asynchronous job registry, typed profile submission, and result/artifact metadata projection.
 - dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, deep-Rust tool readiness, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
@@ -132,6 +133,25 @@ Multi-node plans allocate named roles to distinct nodes based on OS, architectur
 The Phase 8 cross-node validation sends only the fixed `NetworkFixtureSuite` task. No shell string, executable path, arbitrary program arguments, firewall command, or remote desktop operation exists in the wire contract.
 
 Phase 8 message authentication provides integrity and replay protection. Cross-host use is restricted to private/link-local addresses; deployments crossing untrusted networks should additionally use a trusted VPN or future mTLS layer for confidentiality.
+
+## Phase 9 MCP flow
+
+    MCP-capable client
+      -> loopback HTTP /mcp
+      -> bearer authentication
+      -> JSON-RPC + MCP header validation
+      -> fixed tool dispatch
+      -> named typed test profile
+      -> Agent policy validation
+      -> LocalExecutor
+      -> bounded in-memory job state
+      -> status/result/artifact metadata tools
+
+The MCP layer does not bypass the worker trust boundary. Repository allowlisting and typed TestAction authorization are applied before LocalExecutor execution.
+
+Phase 9 returns result summaries, step status metadata, and SHA-256 artifact metadata. It does not return arbitrary filesystem content or raw stdout/stderr through MCP.
+
+The gateway supports modern stateless MCP discovery as well as the legacy initialize path, but remains bound to loopback. Internet-facing OAuth/TLS exposure is explicitly outside Phase 9.
 
 ## Distributed target
 
