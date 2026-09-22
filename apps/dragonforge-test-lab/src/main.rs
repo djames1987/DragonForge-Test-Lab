@@ -30,6 +30,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "doctor" => doctor(),
         "github-doctor" => github_doctor(),
         "sandbox-doctor" => sandbox_doctor(&args[2..]),
+        "rust-doctor" => rust_doctor(),
         "vm-doctor" => vm_doctor(&args[2..]),
         "vm-list" => vm_list(&args[2..]),
         "vm-create" => vm_create(&args[2..]),
@@ -57,7 +58,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=4");
+    println!("phase=5");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -81,6 +82,35 @@ fn github_doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("DragonForge Test Lab GitHub doctor");
     println!("github_host=github.com");
     println!("status=github_ready");
+    Ok(())
+}
+
+fn rust_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    println!("DragonForge Test Lab deep Rust doctor");
+
+    let nextest = tool_version("cargo", &["nextest", "--version"]);
+    let llvm_cov = tool_version("cargo", &["llvm-cov", "--version"]);
+    let fuzz = tool_version("cargo", &["fuzz", "--version"]);
+    let miri = tool_version("cargo", &["+nightly", "miri", "--version"]);
+
+    println!(
+        "cargo_nextest={}",
+        nextest.as_deref().unwrap_or("unavailable")
+    );
+    println!(
+        "cargo_llvm_cov={}",
+        llvm_cov.as_deref().unwrap_or("unavailable")
+    );
+    println!("cargo_fuzz={}", fuzz.as_deref().unwrap_or("unavailable"));
+    println!("miri={}", miri.as_deref().unwrap_or("unavailable"));
+
+    if nextest.is_none() || llvm_cov.is_none() {
+        return Err(
+            "Phase 5 requires cargo-nextest and cargo-llvm-cov; see docs/PHASE-5.md".into(),
+        );
+    }
+
+    println!("status=deep_rust_ready");
     Ok(())
 }
 
@@ -470,6 +500,7 @@ fn print_help() {
     println!("  dragonforge-test-lab doctor");
     println!("  dragonforge-test-lab github-doctor");
     println!("  dragonforge-test-lab sandbox-doctor [--sandbox native|docker|podman] [--worker-user <name>]");
+    println!("  dragonforge-test-lab rust-doctor");
     println!("  dragonforge-test-lab vm-doctor [--vm-root <path>] [--switch <name>]");
     println!("  dragonforge-test-lab vm-list");
     println!("  dragonforge-test-lab vm-create --name <DragonForge-...> --guest-os windows|linux --base-vhdx <path> [--memory-mib 4096] [--processors 2] [--switch <name>]");

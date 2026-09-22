@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 4 — VM Lab — Complete
+Phase 5 — Deep Rust Testing — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 adds typed Hyper-V VM orchestration for disposable Windows/Linux test machines. Managed VMs use DragonForge-* names, Generation 2 hardware, golden VHDX parents, per-instance differencing disks, clean DragonForge-Baseline checkpoints, and rollback/destroy lifecycle commands. Full Windows Hyper-V create/baseline/start/restore/stop/destroy validation passed on 2026-09-22.
+Phase 4 added typed Hyper-V VM orchestration for disposable Windows/Linux test machines and passed full Windows lifecycle validation on 2026-09-22. Phase 5 adds nextest, LLVM coverage, property testing, Criterion benchmarks, Miri, sanitizers, and bounded cargo-fuzz support with explicit platform-aware validation lanes. The mandatory Windows host Phase 5 validation passed on 2026-09-22.
 
 ## Workspace
 
@@ -34,6 +34,7 @@ Phase 4 adds typed Hyper-V VM orchestration for disposable Windows/Linux test ma
       PHASE-2.md
       PHASE-3.md
       PHASE-4.md
+      PHASE-5.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -41,6 +42,8 @@ Phase 4 adds typed Hyper-V VM orchestration for disposable Windows/Linux test ma
       test-phase2.ps1
       test-phase3.ps1
       test-phase4.ps1
+      test-phase5.ps1
+      check-rust-deep-tools.ps1
 
 ## Hyper-V host setup
 
@@ -82,10 +85,26 @@ Full VM lifecycle validation after a golden image is prepared:
 
     .\scripts\test-phase4.ps1 -VmRoot C:\DragonForge-Test-Lab-VMs -BaseVhdx C:\DragonForge-Test-Lab-VMs\images\windows-base.vhdx -GuestOs windows
 
+## Phase 5 deep Rust testing
+
+Readiness:
+
+    .\scripts\check-rust-deep-tools.ps1
+
+Mandatory validation:
+
+    .\scripts\test-phase5.ps1
+
+Install/update required cargo tools and validate:
+
+    .\scripts\test-phase5.ps1 -InstallTools
+
+See docs/PHASE-5.md for Miri, sanitizer, fuzzing, benchmark, and coverage lanes.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, and docs/ROADMAP.md.

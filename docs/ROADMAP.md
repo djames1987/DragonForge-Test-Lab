@@ -15,8 +15,8 @@ Dedicated worker-identity enforcement, race-resistant Windows Job Object contain
 ## Phase 4 — VM Lab — Complete
 Typed Hyper-V orchestration, Generation 2 Windows/Linux guest profiles, golden-image differencing disks, clean baseline checkpoints, rollback, managed lifecycle commands, host readiness tooling, and detailed setup documentation. Full Windows Hyper-V lifecycle validation passed on 2026-09-22.
 
-## Phase 5 — Deep Rust Testing
-Coverage, nextest, Miri, sanitizers, fuzzing, benchmarks, property testing.
+## Phase 5 — Deep Rust Testing — Complete
+Nextest workspace execution, LLVM coverage, deterministic property tests, Criterion benchmark targets, platform-neutral Miri checks, Linux sanitizer lanes, bounded cargo-fuzz targets, readiness tooling, and uploadable validation logs. Mandatory Windows host validation passed on 2026-09-22.
 
 ## Phase 6 — Windows Integration
 Services, Event Log, registry, process/network fixtures, installers, permissions.

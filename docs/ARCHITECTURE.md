@@ -14,7 +14,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-github: typed GitHub repository/ref resolution and commit-status reporting through the authenticated gh CLI.
 - df-test-sandbox: native/container sandbox selection, Windows Job Object containment, resource ceilings, worker-identity enforcement, and fixed Docker/Podman wrapping.
 - df-test-vm: typed Hyper-V host checks, golden-image differencing VM creation, managed lifecycle, checkpoints, and rollback.
-- dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, local execution, and GitHub-aware execution entry point.
+- dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, deep-Rust tool readiness, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
 
@@ -64,6 +64,21 @@ Windows native mode is the default on the current worker platform. Non-Windows n
       -> repeat or destroy managed VM
 
 Golden images live outside the Git repository. Managed VM storage is separate from the immutable parent image root. The VM adapter never accepts arbitrary PowerShell text.
+
+## Phase 5 deep Rust flow
+
+    repository
+      -> fmt / Clippy / baseline tests
+      -> cargo-nextest workspace execution
+      -> proptest invariants
+      -> cargo-llvm-cov summary
+      -> Criterion benchmark compile
+      -> optional Miri protocol checks
+      -> optional Linux AddressSanitizer
+      -> optional bounded cargo-fuzz target
+      -> transcript / regression artifacts
+
+Phase 5 keeps the remote job protocol typed. The deep-testing scripts are repository-maintained fixed workflows rather than caller-supplied command strings. Nightly and fuzz lanes are explicit opt-ins and are intended for disposable Linux workers/VMs when testing untrusted repositories.
 
 ## Distributed target
 
