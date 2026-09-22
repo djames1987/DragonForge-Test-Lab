@@ -91,8 +91,6 @@ pub enum PlanCondition {
 pub enum ArtifactKind {
     StepLogs,
     ExecutionReport,
-    CoverageSummary,
-    Screenshot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
