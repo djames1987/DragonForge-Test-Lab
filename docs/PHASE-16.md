@@ -1,6 +1,6 @@
 # Phase 16 — Test Plans
 
-Status: implementation complete; Windows host validation pending.
+Status: complete; Windows host validation passed on 2026-09-22.
 
 ## Goal
 
@@ -258,3 +258,8 @@ Validation covers:
 ## Exit criteria
 
 Phase 16 is complete when all validation is green on the Windows host.
+
+
+## Validation status
+
+Phase 16 validation completed successfully on the Windows host on 2026-09-22. The final run passed formatting, strict Clippy, the complete workspace and doc-test suite, schema migration through v4, checked-in plan validation and step compilation, dependency DAG/readiness behavior, target OS/node-label matching, durable plan storage/audit, extra capability enforcement, the Phase 15 lifecycle regression, Phase 14 observability regression, Phase 13 worker-service regression, Phase 12 mTLS regression, and the GitHub-aware native worker regression.
