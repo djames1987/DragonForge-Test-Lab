@@ -73,8 +73,9 @@ try {
     Assert-LastExitCode "cargo clippy"
 
     Write-Host "[3/8] cargo test"
-    cargo test --workspace --all-features
-    Assert-LastExitCode "cargo test"
+    Invoke-CargoCaptured -Step "cargo test" -Arguments @(
+        "test", "--workspace", "--all-features"
+    )
 
     Write-Host "[4/8] Distributed host readiness"
     & "$PSScriptRoot\check-distributed-host.ps1"
