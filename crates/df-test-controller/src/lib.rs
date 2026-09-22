@@ -2224,7 +2224,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_v1_migrates_through_v4_test_plan_tables() {
+    fn schema_v1_migrates_through_v5_intelligence_context() {
         let connection = Connection::open_in_memory().unwrap();
         connection
             .execute_batch(
@@ -2267,7 +2267,7 @@ mod tests {
             )
             .unwrap();
         let controller = DurableController::from_connection(connection).unwrap();
-        assert_eq!(controller.schema_version().unwrap(), 4);
+        assert_eq!(controller.schema_version().unwrap(), 5);
         assert!(controller.recent_logs(10).unwrap().is_empty());
         assert!(controller.recent_metrics(10).unwrap().is_empty());
     }
