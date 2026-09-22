@@ -13,7 +13,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     fs,
     io::{Read, Write},
-    net::{IpAddr, SocketAddr, TcpListener, TcpStream},
+    net::{SocketAddr, TcpListener, TcpStream},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
@@ -1045,6 +1045,9 @@ fn rpc_error(id: Value, code: i64, message: &str, data: Option<Value>) -> Value 
 
 fn stamp_modern_server_info(value: &mut Value) {
     if let Value::Object(object) = value {
+        object
+            .entry("resultType")
+            .or_insert_with(|| Value::String("complete".into()));
         let meta = object.entry("_meta").or_insert_with(|| json!({}));
         if let Value::Object(meta_object) = meta {
             meta_object.insert(
