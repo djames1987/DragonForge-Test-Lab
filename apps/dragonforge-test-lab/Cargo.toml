@@ -13,6 +13,7 @@ df-test-github = { path = "../../crates/df-test-github" }
 df-test-gui = { path = "../../crates/df-test-gui" }
 df-test-mcp = { path = "../../crates/df-test-mcp" }
 df-test-intelligence = { path = "../../crates/df-test-intelligence" }
+df-test-intelligence-integration = { path = "../../crates/df-test-intelligence-integration" }
 df-test-identity = { path = "../../crates/df-test-identity" }
 df-test-worker-service = { path = "../../crates/df-test-worker-service" }
 df-test-observability = { path = "../../crates/df-test-observability" }
