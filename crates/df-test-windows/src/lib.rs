@@ -219,7 +219,10 @@ impl WindowsIntegrationClient {
             ])
             .output()?;
         if !output.status.success() {
-            return Err(command_failed("write Application Event Log fixture", &output));
+            return Err(command_failed(
+                "write Application Event Log fixture",
+                &output,
+            ));
         }
         Ok(())
     }
@@ -288,9 +291,7 @@ fn udp_fixture() -> Result<(), WindowsError> {
 fn fixture_name(kind: &str) -> Result<String, WindowsError> {
     if kind.is_empty()
         || kind.len() > 24
-        || !kind
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        || !kind.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
     {
         return Err(WindowsError::InvalidFixtureKind);
     }
