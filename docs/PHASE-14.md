@@ -1,6 +1,6 @@
 # Phase 14 — Audit / Artifacts / Observability
 
-Status: implementation complete; Windows host validation pending.
+Status: complete; Windows host validation passed on 2026-09-22.
 
 ## Goal
 
@@ -216,3 +216,8 @@ Phase 14 is complete when validation proves:
 - Phase 13 worker services remain green;
 - Phase 12 mTLS remains green;
 - GitHub-aware native execution remains green.
+
+
+## Validation status
+
+Phase 14 validation completed successfully on the Windows host on 2026-09-22. The final run passed formatting, strict Clippy, the full workspace and doc-test suite, schema v1 to v2 migration, hash-chained audit verification, structured-log redaction, durable metrics, artifact SHA-256 cataloging and root-contained retention pruning, telemetry pruning, the Phase 13 worker-service regression, the Phase 12 mTLS regression, and the GitHub-aware native worker regression.
