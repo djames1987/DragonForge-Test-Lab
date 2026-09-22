@@ -615,7 +615,9 @@ fn validate_file_path(path: &Path) -> Result<(), WorkerServiceError> {
     let text = path.to_string_lossy();
     if text.is_empty()
         || text.len() > 2048
-        || text.chars().any(|ch| ch == '\r' || ch == '\n' || ch == '\0')
+        || text
+            .chars()
+            .any(|ch| ch == '\r' || ch == '\n' || ch == '\0')
     {
         return Err(WorkerServiceError::InvalidPath);
     }
