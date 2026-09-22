@@ -1,6 +1,6 @@
 # Phase 15 — Recovery / Retry / Job Lifecycle
 
-Status: implementation complete; Windows host validation pending.
+Status: complete; Windows host validation passed on 2026-09-22.
 
 ## Goal
 
@@ -241,3 +241,8 @@ Phase 15 is complete when validation proves:
 - Phase 13 worker services remain green;
 - Phase 12 mTLS remains green;
 - GitHub-aware execution remains green.
+
+
+## Validation status
+
+Phase 15 validation completed successfully on the Windows host on 2026-09-22. The final run passed formatting, strict Clippy, the full workspace and doc-test suite, schema migration through v3, bounded retry policy tests, retry scheduling and due-time enforcement, retry exhaustion, retry-pending cancellation, interrupted-job recovery policy, manual interrupted rescheduling with the global attempt ceiling, audit-chain verification, the Phase 14 observability regression, Phase 13 worker-service regression, Phase 12 mTLS regression, and the GitHub-aware native worker regression.
