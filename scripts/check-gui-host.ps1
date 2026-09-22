@@ -20,6 +20,7 @@ if (-not [Environment]::UserInteractive) {
 $uia = $false
 try {
     Add-Type -AssemblyName UIAutomationClient -ErrorAction Stop
+    Add-Type -AssemblyName UIAutomationTypes -ErrorAction Stop
     $uia = $true
 }
 catch {
