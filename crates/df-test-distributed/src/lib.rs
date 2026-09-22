@@ -370,8 +370,8 @@ impl NodeRequirement {
     fn matches(&self, profile: &NodeProfile) -> bool {
         self.required_features.is_subset(&profile.features)
             && self.required_labels.is_subset(&profile.labels)
-            && self.os.as_ref().map(|value| value == &profile.os).unwrap_or(true)
-            && self.arch.as_ref().map(|value| value == &profile.arch).unwrap_or(true)
+            && option_matches(&self.os, &profile.os)
+            && option_matches(&self.arch, &profile.arch)
     }
 }
 
@@ -1033,6 +1033,13 @@ fn signing_bytes<T: Serialize>(
     payload: &T,
 ) -> Result<Vec<u8>, DistributedError> {
     Ok(serde_json::to_vec(&(key_id, nonce, issued_at_secs, payload))?)
+}
+
+fn option_matches(expected: &Option<String>, actual: &str) -> bool {
+    match expected {
+        Some(value) => value == actual,
+        None => true,
+    }
 }
 
 fn validate_identifier(value: &str, max_len: usize) -> Result<(), DistributedError> {
