@@ -18,10 +18,7 @@ pub enum FailureClass {
 
 impl FailureClass {
     pub fn is_retryable(self) -> bool {
-        matches!(
-            self,
-            Self::InfrastructureTransient | Self::Interrupted
-        )
+        matches!(self, Self::InfrastructureTransient | Self::Interrupted)
     }
 }
 
@@ -98,11 +95,7 @@ impl RetryPolicy {
             .min(self.max_delay_secs))
     }
 
-    pub fn next_retry_at(
-        self,
-        now_secs: u64,
-        attempt_number: u32,
-    ) -> Result<u64, LifecycleError> {
+    pub fn next_retry_at(self, now_secs: u64, attempt_number: u32) -> Result<u64, LifecycleError> {
         Ok(now_secs.saturating_add(self.retry_delay_secs(attempt_number)?))
     }
 }
@@ -186,37 +179,19 @@ mod tests {
     fn transient_infrastructure_failures_back_off_and_stop() {
         let policy = RetryPolicy::bounded(3, 10, 60, false).unwrap();
         assert_eq!(
-            decide_failure(
-                policy,
-                FailureClass::InfrastructureTransient,
-                1,
-                100
-            )
-            .unwrap(),
+            decide_failure(policy, FailureClass::InfrastructureTransient, 1, 100).unwrap(),
             LifecycleDecision::RetryScheduled {
                 next_retry_at_secs: 110
             }
         );
         assert_eq!(
-            decide_failure(
-                policy,
-                FailureClass::InfrastructureTransient,
-                2,
-                100
-            )
-            .unwrap(),
+            decide_failure(policy, FailureClass::InfrastructureTransient, 2, 100).unwrap(),
             LifecycleDecision::RetryScheduled {
                 next_retry_at_secs: 120
             }
         );
         assert_eq!(
-            decide_failure(
-                policy,
-                FailureClass::InfrastructureTransient,
-                3,
-                100
-            )
-            .unwrap(),
+            decide_failure(policy, FailureClass::InfrastructureTransient, 3, 100).unwrap(),
             LifecycleDecision::RetryExhausted
         );
     }
