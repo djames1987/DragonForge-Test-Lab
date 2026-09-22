@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 7 — GUI Automation — Implementation complete
+Phase 7 — GUI Automation — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, and Phase 6 added validated Windows OS integration fixtures. Phase 7 adds typed Windows UI Automation, deterministic JSON interaction plans, managed-window screenshots, and owned-process crash capture.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, and Phase 6 added validated Windows OS integration fixtures. Phase 7 adds typed Windows UI Automation, deterministic JSON interaction plans, managed-window screenshots, and owned-process crash capture. Full Phase 7 validation passed on both the Windows host and Windows VM on 2026-09-22.
 
 ## Workspace
 
