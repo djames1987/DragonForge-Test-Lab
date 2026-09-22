@@ -18,6 +18,28 @@ function Assert-LastExitCode {
     }
 }
 
+function Invoke-CargoCaptured {
+    param(
+        [Parameter(Mandatory)][string]$Step,
+        [Parameter(Mandatory)][string[]]$Arguments
+    )
+
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & cargo @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+
+    $output | ForEach-Object { Write-Host $_ }
+    if ($exitCode -ne 0) {
+        throw "$Step failed: $exitCode"
+    }
+}
+
 if (-not (Test-Path $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
 }
@@ -79,15 +101,43 @@ try {
         }
 
         if ($CrossNodeRole -eq "controller") {
-            cargo run -p dragonforge-test-lab -- distributed-controller-once --bind $ControllerAddress --key-id $KeyId
-            Assert-LastExitCode "distributed-controller-once"
+            Write-Host "controller_bind=$ControllerAddress"
+            Write-Host "controller_note=keep this process running while starting the node-side validation"
+            Invoke-CargoCaptured -Step "distributed-controller-once" -Arguments @(
+                "run", "-p", "dragonforge-test-lab", "--",
+                "distributed-controller-once",
+                "--bind", $ControllerAddress,
+                "--key-id", $KeyId
+            )
         }
         else {
             if ([string]::IsNullOrWhiteSpace($NodeId)) {
                 $NodeId = "node-$env:COMPUTERNAME"
             }
-            cargo run -p dragonforge-test-lab -- distributed-node-connect --controller $ControllerAddress --node-id $NodeId --key-id $KeyId
-            Assert-LastExitCode "distributed-node-connect"
+
+            $separator = $ControllerAddress.LastIndexOf(":")
+            if ($separator -le 0 -or $separator -ge ($ControllerAddress.Length - 1)) {
+                throw "-ControllerAddress must use <ipv4-or-host>:<port> for this validation helper"
+            }
+            $controllerHost = $ControllerAddress.Substring(0, $separator)
+            $controllerPort = [int]$ControllerAddress.Substring($separator + 1)
+
+            Write-Host "Testing TCP reachability to controller before authenticated connect..."
+            $probe = Test-NetConnection -ComputerName $controllerHost -Port $controllerPort -WarningAction SilentlyContinue
+            Write-Host "controller_host=$controllerHost"
+            Write-Host "controller_port=$controllerPort"
+            Write-Host "tcp_test_succeeded=$($probe.TcpTestSucceeded)"
+            if (-not $probe.TcpTestSucceeded) {
+                throw "controller TCP endpoint is not reachable from this node; check bind address, VM routing, and Windows Firewall"
+            }
+
+            Invoke-CargoCaptured -Step "distributed-node-connect" -Arguments @(
+                "run", "-p", "dragonforge-test-lab", "--",
+                "distributed-node-connect",
+                "--controller", $ControllerAddress,
+                "--node-id", $NodeId,
+                "--key-id", $KeyId
+            )
         }
     }
 
