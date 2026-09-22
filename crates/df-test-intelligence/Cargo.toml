@@ -1,0 +1,15 @@
+[package]
+name = "df-test-intelligence"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+sha2.workspace = true
+hex.workspace = true
+df-test-protocol = { path = "../df-test-protocol" }

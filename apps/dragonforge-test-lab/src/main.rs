@@ -6,6 +6,7 @@ use df_test_distributed::{
 use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor};
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
 use df_test_gui::{GuiAutomationClient, GuiPlan};
+use df_test_intelligence::{analyze, IntelligenceInput, TestProfile, WorkerCapacity};
 use df_test_mcp::{McpGateway, McpGatewayConfig};
 use df_test_policy::ExecutionPolicy;
 use df_test_protocol::{
@@ -43,6 +44,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "mcp-doctor" => mcp_doctor(&args[2..]),
         "mcp-serve" => mcp_serve(&args[2..]),
         "mcp-fixture" => mcp_fixture(&args[2..]),
+        "intelligence-doctor" => intelligence_doctor(),
+        "intelligence-analyze" => intelligence_analyze(&args[2..]),
+        "intelligence-fixture" => intelligence_fixture(),
         "gui-doctor" => gui_doctor(),
         "gui-run-plan" => gui_run_plan(&args[2..]),
         "gui-fixture" => gui_fixture(&args[2..]),
@@ -79,7 +83,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=9");
+    println!("phase=10");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -377,6 +381,103 @@ fn mcp_config(args: &[String]) -> Result<McpGatewayConfig, Box<dyn std::error::E
         sandbox_mode: sandbox_mode(args)?,
         expected_worker_user: value_after(args, "--worker-user"),
     })
+}
+
+fn intelligence_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    println!("DragonForge Test Lab intelligence doctor");
+    println!("mode=deterministic_explainable");
+    println!("change_aware_selection=true");
+    println!("historical_regression_targeting=true");
+    println!("failure_clustering=sha256_normalized");
+    println!("resource_aware_scheduling=true");
+    println!(
+        "max_changed_files={}",
+        df_test_intelligence::MAX_CHANGED_FILES
+    );
+    println!(
+        "max_history_records={}",
+        df_test_intelligence::MAX_HISTORY_RECORDS
+    );
+    println!("max_workers={}", df_test_intelligence::MAX_WORKERS);
+    println!("status=test_intelligence_ready");
+    Ok(())
+}
+
+fn intelligence_analyze(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let input_path = value_after(args, "--input").ok_or("missing --input <intelligence.json>")?;
+    let input: IntelligenceInput = serde_json::from_slice(&std::fs::read(input_path)?)?;
+    let report = analyze(&input)?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    println!("status=test_intelligence_analysis_complete");
+    Ok(())
+}
+
+fn intelligence_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let input = IntelligenceInput {
+        changes: df_test_intelligence::ChangeSet {
+            files: vec![
+                "crates/df-test-mcp/src/lib.rs".into(),
+                "crates/df-test-controller/src/lib.rs".into(),
+            ],
+        },
+        history: vec![df_test_intelligence::HistoricalFailure {
+            id: "00000000-0000-4000-8000-000000000010".parse()?,
+            profile: TestProfile::McpGateway,
+            step: "mcp integration".into(),
+            message: "gateway fixture failed on port 55648".into(),
+            changed_files: vec!["crates/df-test-mcp/src/lib.rs".into()],
+            unix_time_secs: 1_000,
+        }],
+        workers: vec![
+            WorkerCapacity {
+                worker_id: "fixture-fast".into(),
+                supported_profiles: [
+                    TestProfile::RustFast,
+                    TestProfile::RustStandard,
+                    TestProfile::McpGateway,
+                ]
+                .into_iter()
+                .collect(),
+                total_memory_mib: 8192,
+                free_memory_mib: 6144,
+                max_parallel_jobs: 2,
+                active_jobs: 0,
+                load_percent: 10,
+            },
+            WorkerCapacity {
+                worker_id: "fixture-deep".into(),
+                supported_profiles: [TestProfile::RustDeep, TestProfile::FullRegression]
+                    .into_iter()
+                    .collect(),
+                total_memory_mib: 16384,
+                free_memory_mib: 12288,
+                max_parallel_jobs: 2,
+                active_jobs: 0,
+                load_percent: 20,
+            },
+        ],
+    };
+
+    let report = analyze(&input)?;
+    let mcp_selected = report
+        .recommendations
+        .iter()
+        .any(|item| item.profile == TestProfile::McpGateway && item.score >= 70);
+    let history_clustered = report
+        .failure_clusters
+        .iter()
+        .any(|cluster| cluster.occurrences == 1);
+    let mcp_scheduled = report
+        .schedule
+        .iter()
+        .any(|item| item.profile == TestProfile::McpGateway && item.worker_id == "fixture-fast");
+
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !mcp_selected || !history_clustered || !mcp_scheduled {
+        return Err("Phase 10 intelligence fixture failed".into());
+    }
+    println!("status=test_intelligence_fixture_passed");
+    Ok(())
 }
 
 fn gui_doctor() -> Result<(), Box<dyn std::error::Error>> {
@@ -881,6 +982,9 @@ fn print_help() {
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");
+    println!("  dragonforge-test-lab intelligence-doctor");
+    println!("  dragonforge-test-lab intelligence-analyze --input <intelligence.json>");
+    println!("  dragonforge-test-lab intelligence-fixture");
     println!("  dragonforge-test-lab distributed-doctor");
     println!("  dragonforge-test-lab distributed-fixtures");
     println!(

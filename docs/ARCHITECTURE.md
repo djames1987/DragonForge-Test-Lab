@@ -173,3 +173,24 @@ The Phase 8 topology is:
 Workers can be physical machines, VMs, container hosts, Raspberry Pi systems, or other authorized nodes. Scheduling should use capabilities, architecture, OS, availability, and eventually load rather than hard-coded machine names.
 
 Where practical, remote agents should establish outbound authenticated connections to the controller. Future transports must preserve worker-side authorization and the typed-execution boundary.
+
+
+## Phase 10 intelligence flow
+
+    changed repository paths
+      + bounded historical failures
+      + worker capacity snapshots
+             |
+             v
+    deterministic profile scoring
+             |
+             +--> historical regression score boosts
+             +--> normalized SHA-256 failure clusters
+             +--> explicit regression targets
+             v
+    resource-aware scheduler
+             |
+             +--> scheduled profile -> eligible worker
+             +--> unscheduled profile -> explicit report
+
+The intelligence crate does not launch processes or mutate workers. It produces recommendations consumed by existing typed execution boundaries.

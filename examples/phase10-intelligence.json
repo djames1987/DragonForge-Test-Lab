@@ -1,0 +1,72 @@
+{
+  "changes": {
+    "files": [
+      "crates/df-test-mcp/src/lib.rs",
+      "crates/df-test-controller/src/lib.rs",
+      "crates/df-test-distributed/src/lib.rs",
+      "Cargo.toml"
+    ]
+  },
+  "history": [
+    {
+      "id": "00000000-0000-4000-8000-000000000101",
+      "profile": "mcp_gateway",
+      "step": "mcp integration",
+      "message": "gateway fixture failed on port 55648",
+      "changed_files": [
+        "crates/df-test-mcp/src/lib.rs"
+      ],
+      "unix_time_secs": 1000
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000102",
+      "profile": "distributed_network",
+      "step": "network fixture",
+      "message": "connection failed at C:\\temp\\dragonforge\\12345",
+      "changed_files": [
+        "crates/df-test-distributed/src/lib.rs"
+      ],
+      "unix_time_secs": 1010
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000103",
+      "profile": "distributed_network",
+      "step": "network fixture",
+      "message": "connection failed at C:\\temp\\dragonforge\\99999",
+      "changed_files": [
+        "crates/df-test-distributed/src/lib.rs"
+      ],
+      "unix_time_secs": 1020
+    }
+  ],
+  "workers": [
+    {
+      "worker_id": "windows-fast",
+      "supported_profiles": [
+        "rust_fast",
+        "rust_standard",
+        "mcp_gateway",
+        "distributed_network"
+      ],
+      "total_memory_mib": 16384,
+      "free_memory_mib": 12288,
+      "max_parallel_jobs": 4,
+      "active_jobs": 0,
+      "load_percent": 12
+    },
+    {
+      "worker_id": "windows-deep",
+      "supported_profiles": [
+        "rust_deep",
+        "full_regression",
+        "windows_integration",
+        "gui_automation"
+      ],
+      "total_memory_mib": 32768,
+      "free_memory_mib": 24576,
+      "max_parallel_jobs": 2,
+      "active_jobs": 0,
+      "load_percent": 20
+    }
+  ]
+}
