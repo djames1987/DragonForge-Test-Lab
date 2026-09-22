@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 8 — Multi-machine & Network Lab — Implementation complete
+Phase 8 — Multi-machine & Network Lab — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, and Phase 7 added validated GUI automation. Phase 8 adds authenticated outbound-only distributed nodes, lease/heartbeat health, capability/load-aware multi-node scheduling, typed cross-node network jobs, TCP/UDP/DNS/fault fixtures, and hashed result manifests.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, and Phase 7 added validated GUI automation. Phase 8 adds authenticated outbound-only distributed nodes, lease/heartbeat health, capability/load-aware multi-node scheduling, typed cross-node network jobs, TCP/UDP/DNS/fault fixtures, and hashed result manifests. Full local and real host-to-VM Phase 8 validation passed on 2026-09-22.
 
 ## Workspace
 
