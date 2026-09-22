@@ -340,7 +340,7 @@ impl Controller {
              )",
             params![
                 result.job_id.to_string(),
-                attempt_terminal_state(result.status, final_state),
+                attempt_terminal_state(result.status),
                 to_i64(now_secs)?,
                 result.summary,
                 effective_class.map(failure_class_as_str)
@@ -562,7 +562,8 @@ impl Controller {
             .connection
             .query_row(
                 "SELECT request_json, state, assigned_worker,
-                        created_at_secs, updated_at_secs, last_error
+                        created_at_secs, updated_at_secs, last_error,
+                        retry_policy_json, failure_class, next_retry_at_secs, retry_reason
                  FROM jobs WHERE job_id = ?1",
                 [job_id.to_string()],
                 |row| {
@@ -573,13 +574,28 @@ impl Controller {
                         row.get::<_, i64>(3)?,
                         row.get::<_, i64>(4)?,
                         row.get::<_, Option<String>>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                        row.get::<_, Option<String>>(7)?,
+                        row.get::<_, Option<i64>>(8)?,
+                        row.get::<_, Option<String>>(9)?,
                     ))
                 },
             )
             .optional()?;
 
         row.map(
-            |(job_json, state, assigned_worker, created, updated, last_error)| {
+            |(
+                job_json,
+                state,
+                assigned_worker,
+                created,
+                updated,
+                last_error,
+                retry_policy_json,
+                failure_class,
+                next_retry_at,
+                retry_reason,
+            )| {
                 Ok(DurableJobRecord {
                     job: serde_json::from_str(&job_json)?,
                     state: DurableJobState::parse(&state)?,
@@ -587,6 +603,17 @@ impl Controller {
                     created_at_secs: to_u64(created)?,
                     updated_at_secs: to_u64(updated)?,
                     last_error,
+                    retry_policy: retry_policy_json
+                        .as_deref()
+                        .map(serde_json::from_str)
+                        .transpose()?
+                        .unwrap_or_else(RetryPolicy::no_retry),
+                    failure_class: failure_class
+                        .as_deref()
+                        .map(parse_failure_class)
+                        .transpose()?,
+                    next_retry_at_secs: next_retry_at.map(to_u64).transpose()?,
+                    retry_reason,
                 })
             },
         )
@@ -599,7 +626,7 @@ impl Controller {
     ) -> Result<Vec<DurableAttemptRecord>, DurableControllerError> {
         let mut statement = self.connection.prepare(
             "SELECT attempt_id, attempt_number, worker_id, state,
-                    started_at_secs, finished_at_secs, summary
+                    started_at_secs, finished_at_secs, summary, failure_class
              FROM job_attempts
              WHERE job_id = ?1
              ORDER BY attempt_number",
@@ -613,12 +640,22 @@ impl Controller {
                 row.get::<_, Option<i64>>(4)?,
                 row.get::<_, Option<i64>>(5)?,
                 row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
             ))
         })?;
 
         let mut attempts = Vec::new();
         for row in rows {
-            let (attempt_id, attempt_number, worker_id, state, started, finished, summary) = row?;
+            let (
+                attempt_id,
+                attempt_number,
+                worker_id,
+                state,
+                started,
+                finished,
+                summary,
+                failure_class,
+            ) = row?;
             attempts.push(DurableAttemptRecord {
                 attempt_id,
                 job_id,
@@ -629,6 +666,10 @@ impl Controller {
                 started_at_secs: started.map(to_u64).transpose()?,
                 finished_at_secs: finished.map(to_u64).transpose()?,
                 summary,
+                failure_class: failure_class
+                    .as_deref()
+                    .map(parse_failure_class)
+                    .transpose()?,
             });
         }
         Ok(attempts)
@@ -1103,6 +1144,41 @@ fn insert_audit(
     Ok(())
 }
 
+fn failure_class_as_str(class: FailureClass) -> &'static str {
+    match class {
+        FailureClass::TestFailure => "test_failure",
+        FailureClass::InfrastructureTransient => "infrastructure_transient",
+        FailureClass::InfrastructurePermanent => "infrastructure_permanent",
+        FailureClass::PolicyRejected => "policy_rejected",
+        FailureClass::Cancelled => "cancelled",
+        FailureClass::Interrupted => "interrupted",
+    }
+}
+
+fn parse_failure_class(value: &str) -> Result<FailureClass, DurableControllerError> {
+    match value {
+        "test_failure" => Ok(FailureClass::TestFailure),
+        "infrastructure_transient" => Ok(FailureClass::InfrastructureTransient),
+        "infrastructure_permanent" => Ok(FailureClass::InfrastructurePermanent),
+        "policy_rejected" => Ok(FailureClass::PolicyRejected),
+        "cancelled" => Ok(FailureClass::Cancelled),
+        "interrupted" => Ok(FailureClass::Interrupted),
+        _ => Err(DurableControllerError::InvalidStoredFailureClass(
+            value.to_owned(),
+        )),
+    }
+}
+
+fn attempt_terminal_state(status: df_test_protocol::JobStatus) -> &'static str {
+    match status {
+        df_test_protocol::JobStatus::Passed => "passed",
+        df_test_protocol::JobStatus::Failed => "failed",
+        df_test_protocol::JobStatus::Rejected => "rejected",
+        df_test_protocol::JobStatus::Cancelled => "cancelled",
+        _ => "failed",
+    }
+}
+
 fn log_level_as_str(level: LogLevel) -> &'static str {
     match level {
         LogLevel::Trace => "trace",
@@ -1169,10 +1245,14 @@ pub enum DurableControllerError {
     ProtocolMismatch,
     #[error("worker is not registered or not online")]
     UnknownWorker,
+    #[error("job was not found")]
+    UnknownJob,
     #[error("invalid durable job state transition")]
     InvalidTransition,
     #[error("completion result does not contain a terminal status")]
     InvalidCompletionStatus,
+    #[error("job has no durable attempt to classify")]
+    MissingAttempt,
     #[error("integer value is outside the supported SQLite range")]
     IntegerOutOfRange,
     #[error("invalid controller configuration key")]
@@ -1183,11 +1263,16 @@ pub enum DurableControllerError {
     InvalidQueryLimit,
     #[error("observability validation error: {0}")]
     Observability(#[from] df_test_observability::ObservabilityError),
+    #[error("job lifecycle validation error: {0}")]
+    Lifecycle(#[from] df_test_lifecycle::LifecycleError),
+    #[error("invalid stored failure classification: {0}")]
+    InvalidStoredFailureClass(String),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use df_test_lifecycle::{FailureClass, LifecycleDecision, RetryPolicy};
     use df_test_observability::{LogLevel, MetricPoint, StructuredLogEvent};
     use df_test_protocol::{Capability, JobStatus, RepositorySpec, TestAction};
     use std::{collections::BTreeSet, fs};
@@ -1368,11 +1453,30 @@ mod tests {
     }
 
     #[test]
-    fn schema_v1_migrates_to_v2_observability_tables() {
+    fn schema_v1_migrates_through_v3_lifecycle_tables() {
         let connection = Connection::open_in_memory().unwrap();
         connection
             .execute_batch(
-                "CREATE TABLE artifact_metadata (
+                "CREATE TABLE jobs (
+                    job_id TEXT PRIMARY KEY NOT NULL,
+                    request_json TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    assigned_worker TEXT,
+                    created_at_secs INTEGER NOT NULL,
+                    updated_at_secs INTEGER NOT NULL,
+                    last_error TEXT
+                 );
+                 CREATE TABLE job_attempts (
+                    attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT NOT NULL,
+                    attempt_number INTEGER NOT NULL,
+                    worker_id TEXT,
+                    state TEXT NOT NULL,
+                    started_at_secs INTEGER,
+                    finished_at_secs INTEGER,
+                    summary TEXT
+                 );
+                 CREATE TABLE artifact_metadata (
                     artifact_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     job_id TEXT NOT NULL,
                     name TEXT NOT NULL,
@@ -1392,7 +1496,7 @@ mod tests {
             )
             .unwrap();
         let controller = DurableController::from_connection(connection).unwrap();
-        assert_eq!(controller.schema_version().unwrap(), 2);
+        assert_eq!(controller.schema_version().unwrap(), 3);
         assert!(controller.recent_logs(10).unwrap().is_empty());
         assert!(controller.recent_metrics(10).unwrap().is_empty());
     }
@@ -1409,6 +1513,163 @@ mod tests {
             .audit_events_for("job", &job.id.to_string())
             .unwrap();
         assert!(events.iter().all(|event| event.event_sha256.is_some()));
+    }
+
+    #[test]
+    fn transient_infrastructure_failure_is_retried_after_due_time() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let job = test_job();
+        let policy = RetryPolicy::bounded(3, 10, 60, false).unwrap();
+        controller.enqueue_job_with_retry(&job, policy, 1).unwrap();
+        controller.register_worker(&test_worker(), 2).unwrap();
+        controller.assign_next("windows-1", 3).unwrap().unwrap();
+        controller.mark_running(job.id, 4).unwrap();
+
+        let decision = controller
+            .complete_job_with_classification(
+                &JobResult {
+                    job_id: job.id,
+                    status: JobStatus::Failed,
+                    summary: "worker transport dropped".into(),
+                    artifacts: vec![],
+                },
+                Some(FailureClass::InfrastructureTransient),
+                5,
+            )
+            .unwrap();
+        assert_eq!(
+            decision,
+            LifecycleDecision::RetryScheduled {
+                next_retry_at_secs: 15
+            }
+        );
+        let pending = controller.get_job(job.id).unwrap().unwrap();
+        assert_eq!(pending.state, DurableJobState::RetryPending);
+        assert_eq!(pending.next_retry_at_secs, Some(15));
+        assert!(controller.assign_next("windows-1", 14).unwrap().is_none());
+        assert_eq!(
+            controller.assign_next("windows-1", 15).unwrap().unwrap().id,
+            job.id
+        );
+        assert_eq!(controller.list_attempts(job.id).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_failure_remains_terminal_even_with_retry_policy() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let job = test_job();
+        controller
+            .enqueue_job_with_retry(
+                &job,
+                RetryPolicy::bounded(3, 1, 10, true).unwrap(),
+                1,
+            )
+            .unwrap();
+        controller.register_worker(&test_worker(), 2).unwrap();
+        controller.assign_next("windows-1", 3).unwrap().unwrap();
+        controller.mark_running(job.id, 4).unwrap();
+        let decision = controller
+            .complete_job_with_classification(
+                &JobResult {
+                    job_id: job.id,
+                    status: JobStatus::Failed,
+                    summary: "assertion failed".into(),
+                    artifacts: vec![],
+                },
+                Some(FailureClass::TestFailure),
+                5,
+            )
+            .unwrap();
+        assert_eq!(decision, LifecycleDecision::TerminalFailed);
+        assert_eq!(
+            controller.get_job(job.id).unwrap().unwrap().state,
+            DurableJobState::Failed
+        );
+    }
+
+    #[test]
+    fn interrupted_recovery_only_reschedules_when_policy_allows_it() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let retry_job = test_job();
+        let manual_job = test_job();
+        controller
+            .enqueue_job_with_retry(
+                &retry_job,
+                RetryPolicy::bounded(3, 5, 30, true).unwrap(),
+                1,
+            )
+            .unwrap();
+        controller.enqueue_job(&manual_job, 2).unwrap();
+        controller.register_worker(&test_worker(), 3).unwrap();
+
+        controller.assign_next("windows-1", 4).unwrap().unwrap();
+        controller.mark_running(retry_job.id, 5).unwrap();
+        controller.assign_next("windows-1", 6).unwrap().unwrap();
+        controller.mark_running(manual_job.id, 7).unwrap();
+
+        let interrupted = controller.recover_after_restart(10).unwrap();
+        assert_eq!(interrupted.len(), 2);
+
+        let retry = controller.get_job(retry_job.id).unwrap().unwrap();
+        assert_eq!(retry.state, DurableJobState::RetryPending);
+        assert_eq!(retry.next_retry_at_secs, Some(15));
+
+        let manual = controller.get_job(manual_job.id).unwrap().unwrap();
+        assert_eq!(manual.state, DurableJobState::Interrupted);
+        assert!(manual.next_retry_at_secs.is_none());
+
+        controller
+            .reschedule_interrupted_job(manual_job.id, 11)
+            .unwrap();
+        assert_eq!(
+            controller.get_job(manual_job.id).unwrap().unwrap().state,
+            DurableJobState::Queued
+        );
+    }
+
+    #[test]
+    fn retries_stop_at_persisted_attempt_limit() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let job = test_job();
+        controller
+            .enqueue_job_with_retry(
+                &job,
+                RetryPolicy::bounded(2, 1, 10, false).unwrap(),
+                1,
+            )
+            .unwrap();
+        controller.register_worker(&test_worker(), 2).unwrap();
+
+        for (assign_at, finish_at) in [(3, 4), (5, 6)] {
+            controller
+                .assign_next("windows-1", assign_at)
+                .unwrap()
+                .unwrap();
+            controller.mark_running(job.id, assign_at).unwrap();
+            let decision = controller
+                .complete_job_with_classification(
+                    &JobResult {
+                        job_id: job.id,
+                        status: JobStatus::Failed,
+                        summary: "transient infrastructure fault".into(),
+                        artifacts: vec![],
+                    },
+                    Some(FailureClass::InfrastructureTransient),
+                    finish_at,
+                )
+                .unwrap();
+            if finish_at == 4 {
+                assert!(matches!(decision, LifecycleDecision::RetryScheduled { .. }));
+            } else {
+                assert_eq!(decision, LifecycleDecision::RetryExhausted);
+            }
+        }
+
+        assert_eq!(
+            controller.get_job(job.id).unwrap().unwrap().state,
+            DurableJobState::Exhausted
+        );
+        assert_eq!(controller.list_attempts(job.id).unwrap().len(), 2);
     }
 
     #[test]
