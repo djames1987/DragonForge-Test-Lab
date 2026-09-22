@@ -1,6 +1,6 @@
 # Phase 11 — Durable Controller & State
 
-Status: implementation complete; Windows host validation pending.
+Status: complete; Windows host validation passed on 2026-09-22.
 
 ## Goal
 
@@ -148,3 +148,8 @@ Phase 11 is complete when Windows validation proves:
 - attempts/config/audit data persist;
 - capability-aware assignment still works;
 - the existing GitHub-aware worker regression remains green.
+
+
+## Validation status
+
+Phase 11 validation completed successfully on the Windows host on 2026-09-22. The final run passed formatting, strict Clippy, the full workspace and doc-test suite, all durable-controller unit tests, SQLite schema creation and second-process reopen, restart recovery of in-flight work to `interrupted`, the Phase 11/general doctors, and the GitHub-aware native worker regression.
