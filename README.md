@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 4 — VM Lab
+Phase 4 — VM Lab — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 adds typed Hyper-V VM orchestration for disposable Windows/Linux test machines. Managed VMs use DragonForge-* names, Generation 2 hardware, golden VHDX parents, per-instance differencing disks, clean DragonForge-Baseline checkpoints, and rollback/destroy lifecycle commands.
+Phase 4 adds typed Hyper-V VM orchestration for disposable Windows/Linux test machines. Managed VMs use DragonForge-* names, Generation 2 hardware, golden VHDX parents, per-instance differencing disks, clean DragonForge-Baseline checkpoints, and rollback/destroy lifecycle commands. Full Windows Hyper-V create/baseline/start/restore/stop/destroy validation passed on 2026-09-22.
 
 ## Workspace
 
