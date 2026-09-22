@@ -1,6 +1,8 @@
 use df_test_controller::DurableController;
 use df_test_github::{GhGitHubClient, GitComparison, GitHubError, GitHubRepository};
-use df_test_intelligence::{analyze, ChangeSet, IntelligenceInput, IntelligenceReport, TestProfile};
+use df_test_intelligence::{
+    analyze, ChangeSet, IntelligenceInput, IntelligenceReport, TestProfile,
+};
 use df_test_plans::{PlanProfile, TargetOs, TestPlan};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -114,11 +116,7 @@ pub fn integrate<S: ChangeSource>(
 ) -> Result<IntelligenceDecision, IntegrationError> {
     request.validate()?;
     let repository = GitHubRepository::parse_https(&request.repository_url)?;
-    let comparison = source.compare(
-        &repository,
-        &request.base_revision,
-        &request.head_revision,
-    )?;
+    let comparison = source.compare(&repository, &request.base_revision, &request.head_revision)?;
     let history = controller.intelligence_historical_failures(MAX_HISTORY_INPUT)?;
     let workers = controller.intelligence_worker_capacities()?;
     let input = IntelligenceInput {
@@ -348,7 +346,9 @@ mod tests {
             vec![
                 TestAction::Checkout,
                 TestAction::CargoFmtCheck,
-                TestAction::CargoClippy { deny_warnings: true },
+                TestAction::CargoClippy {
+                    deny_warnings: true,
+                },
                 TestAction::CargoTest { all_features: true },
             ],
         );
@@ -361,7 +361,10 @@ mod tests {
                 3,
             )
             .unwrap();
-        controller.assign_next("phase17-worker", 4).unwrap().unwrap();
+        controller
+            .assign_next("phase17-worker", 4)
+            .unwrap()
+            .unwrap();
         controller.mark_running(historical.id, 5).unwrap();
         controller
             .complete_job_with_classification(
