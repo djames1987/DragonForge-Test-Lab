@@ -44,7 +44,7 @@ impl McpGatewayConfig {
         if !self.bind.ip().is_loopback() || self.bind.port() == 0 {
             return Err(McpGatewayError::NonLoopbackBind);
         }
-        if self.bearer_token.len() < 32 || self.bearer_token.len() > 4096 {
+        if !(32..=4096).contains(&self.bearer_token.len()) {
             return Err(McpGatewayError::InvalidBearerToken);
         }
         if self.allowed_repository_prefixes.is_empty()
@@ -311,13 +311,6 @@ impl McpGateway {
         }
 
         if rpc.id.is_none() {
-            if rpc.method == "notifications/initialized" {
-                return HttpResponse {
-                    status: 202,
-                    headers: Vec::new(),
-                    body: None,
-                };
-            }
             return HttpResponse {
                 status: 202,
                 headers: Vec::new(),
@@ -382,12 +375,15 @@ impl McpGateway {
             .and_then(Value::as_str)
             .unwrap_or(MCP_LEGACY_VERSION);
 
-        if requested != MCP_LEGACY_VERSION && requested != MCP_MODERN_VERSION {
-            return Err(RpcFailure::new(-32602, "unsupported MCP protocol version"));
+        if requested != MCP_LEGACY_VERSION {
+            return Err(RpcFailure::new(
+                -32602,
+                "initialize supports the 2025-11-25 legacy MCP revision; use server/discover for 2026-07-28",
+            ));
         }
 
         Ok(json!({
-            "protocolVersion": if requested == MCP_MODERN_VERSION { MCP_MODERN_VERSION } else { MCP_LEGACY_VERSION },
+            "protocolVersion": MCP_LEGACY_VERSION,
             "capabilities": {"tools": {}},
             "serverInfo": {
                 "name": "dragonforge-test-lab",
@@ -1009,6 +1005,23 @@ fn validate_modern_headers(
         return Ok(());
     }
 
+    let meta = rpc
+        .params
+        .as_ref()
+        .and_then(|params| params.get("_meta"))
+        .and_then(Value::as_object)
+        .ok_or(McpGatewayError::McpHeaderMismatch)?;
+    if meta
+        .get("io.modelcontextprotocol/protocolVersion")
+        .and_then(Value::as_str)
+        != Some(MCP_MODERN_VERSION)
+        || !meta
+            .get("io.modelcontextprotocol/clientCapabilities")
+            .is_some_and(Value::is_object)
+    {
+        return Err(McpGatewayError::McpHeaderMismatch);
+    }
+
     if headers.get("mcp-protocol-version").map(String::as_str) != Some(MCP_MODERN_VERSION) {
         return Err(McpGatewayError::McpHeaderMismatch);
     }
@@ -1155,8 +1168,8 @@ fn tool_definitions() -> Vec<Value> {
 
 fn constant_time_equal(left: &[u8; 32], right: &[u8; 32]) -> bool {
     let mut difference = 0u8;
-    for index in 0..32 {
-        difference |= left[index] ^ right[index];
+    for (left_byte, right_byte) in left.iter().zip(right.iter()) {
+        difference |= left_byte ^ right_byte;
     }
     difference == 0
 }
