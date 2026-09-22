@@ -175,14 +175,6 @@ impl EnvelopeVerifier {
             .keys
             .get(&envelope.key_id)
             .ok_or(DistributedError::UnknownKey)?;
-        let expected = compute_mac(
-            &envelope.key_id,
-            &envelope.nonce,
-            envelope.issued_at_secs,
-            &envelope.payload,
-            secret,
-        )?;
-        let expected_bytes = hex::decode(expected).map_err(|_| DistributedError::InvalidMac)?;
         let provided = hex::decode(&envelope.mac_hex).map_err(|_| DistributedError::InvalidMac)?;
         let mut mac = HmacSha256::new_from_slice(secret).map_err(|_| DistributedError::InvalidMac)?;
         let signing_bytes = signing_bytes(
@@ -194,10 +186,6 @@ impl EnvelopeVerifier {
         mac.update(&signing_bytes);
         mac.verify_slice(&provided)
             .map_err(|_| DistributedError::InvalidMac)?;
-        if expected_bytes != provided {
-            return Err(DistributedError::InvalidMac);
-        }
-
         self.seen_nonces
             .retain(|_, seen_at| now_secs.saturating_sub(*seen_at) <= self.max_clock_skew_secs * 2);
         self.seen_nonces.insert(envelope.nonce.clone(), now_secs);
@@ -618,7 +606,7 @@ pub fn serve_registration_probe_once(
     bind: SocketAddr,
     key_id: &str,
     secret: &[u8],
-    now_secs: u64,
+    _now_secs: u64,
     timeout: Duration,
 ) -> Result<NodeRegistration, DistributedError> {
     validate_controller_addr(bind)?;
@@ -650,9 +638,10 @@ pub fn serve_registration_probe_once(
     stream.set_write_timeout(Some(timeout))?;
     let envelope: AuthenticatedEnvelope<NodeRegistration> = read_frame(&mut stream)?;
 
+    let current_time = current_unix_time_secs()?;
     let mut verifier = EnvelopeVerifier::new(30)?;
     verifier.add_key(key_id.to_string(), secret)?;
-    verifier.verify(&envelope, now_secs)?;
+    verifier.verify(&envelope, current_time)?;
     envelope.payload.validate()?;
     if envelope.key_id != key_id || envelope.payload.key_id != key_id {
         return Err(DistributedError::KeyIdentityMismatch);
@@ -664,7 +653,7 @@ pub fn serve_registration_probe_once(
         lease_seconds: DEFAULT_LEASE_SECONDS,
     };
     let ack_envelope =
-        AuthenticatedEnvelope::sign(key_id.to_string(), secret, now_secs, ack)?;
+        AuthenticatedEnvelope::sign(key_id.to_string(), secret, current_time, ack)?;
     let bytes = serde_json::to_vec(&ack_envelope)?;
     if bytes.len() > MAX_FRAME_BYTES {
         return Err(DistributedError::FrameTooLarge);
@@ -925,6 +914,13 @@ fn is_ipv6_link_local(ip: Ipv6Addr) -> bool {
     (ip.segments()[0] & 0xffc0) == 0xfe80
 }
 
+fn current_unix_time_secs() -> Result<u64, DistributedError> {
+    Ok(std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| DistributedError::SystemClockBeforeUnixEpoch)?
+        .as_secs())
+}
+
 fn compute_mac<T: Serialize>(
     key_id: &str,
     nonce: &str,
@@ -1051,6 +1047,8 @@ pub enum DistributedError {
     RegistrationRejected,
     #[error("registration probe timed out waiting for an outbound node connection")]
     RegistrationProbeTimeout,
+    #[error("system clock is before the Unix epoch")]
+    SystemClockBeforeUnixEpoch,
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
