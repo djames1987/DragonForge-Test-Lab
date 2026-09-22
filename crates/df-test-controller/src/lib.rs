@@ -441,10 +441,7 @@ impl DurableController {
         Ok(())
     }
 
-    pub fn get_test_plan(
-        &self,
-        name: &str,
-    ) -> Result<Option<TestPlan>, DurableControllerError> {
+    pub fn get_test_plan(&self, name: &str) -> Result<Option<TestPlan>, DurableControllerError> {
         let plan_json: Option<String> = self
             .connection
             .query_row(
