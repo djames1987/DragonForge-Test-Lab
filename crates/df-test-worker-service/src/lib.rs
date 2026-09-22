@@ -233,9 +233,9 @@ impl WorkerServiceRuntime {
         unix_time_secs: u64,
     ) -> Result<Vec<MetricPoint>, WorkerServiceError> {
         let mut metrics = MetricsRegistry::default();
-        metrics.increment(
+        metrics.set_gauge(
             "dragonforge_worker_active_jobs",
-            u64::from(self.snapshot.active_jobs),
+            f64::from(self.snapshot.active_jobs),
         )?;
         metrics.set_gauge(
             "dragonforge_worker_accepting_jobs",
