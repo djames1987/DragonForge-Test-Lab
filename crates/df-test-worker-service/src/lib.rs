@@ -603,7 +603,14 @@ fn validate_file_path(path: &Path) -> Result<(), WorkerServiceError> {
 
 fn validate_absolute_executable(path: &Path) -> Result<(), WorkerServiceError> {
     validate_file_path(path)?;
-    if !path.is_absolute() {
+    let text = path.to_string_lossy();
+    let windows_drive_absolute = text.len() >= 3
+        && text.as_bytes()[1] == b':'
+        && matches!(text.as_bytes()[2], b'\\' | b'/')
+        && text.as_bytes()[0].is_ascii_alphabetic();
+    let windows_unc_absolute = text.starts_with("\\\\");
+    let unix_absolute = text.starts_with('/');
+    if !path.is_absolute() && !windows_drive_absolute && !windows_unc_absolute && !unix_absolute {
         return Err(WorkerServiceError::ExecutableMustBeAbsolute);
     }
     Ok(())
