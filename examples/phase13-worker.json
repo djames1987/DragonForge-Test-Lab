@@ -1,0 +1,11 @@
+{
+  "worker_id": "dragonforge-worker-01",
+  "controller": "127.0.0.1:45900",
+  "controller_server_name": "localhost",
+  "heartbeat_seconds": 15,
+  "max_parallel_jobs": 2,
+  "state_path": ".dragonforge-test-lab/worker-state.json",
+  "ca_cert_path": "certs/ca.pem",
+  "client_cert_path": "certs/worker.pem",
+  "client_key_path": "certs/worker-key.pem"
+}
