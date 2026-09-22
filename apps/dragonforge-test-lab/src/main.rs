@@ -1,5 +1,8 @@
 use df_test_agent::Agent;
 use df_test_controller::{DurableController, DurableJobState, SCHEMA_VERSION};
+use df_test_dashboard::{
+    run_dashboard_fixture, Dashboard, DashboardConfig, DEFAULT_DASHBOARD_BIND,
+};
 use df_test_distributed::{
     connect_registration_probe, run_distributed_fixtures, serve_registration_probe_once,
     validate_controller_addr, NodeFeature, NodeProfile, NodeRegistration,
@@ -59,6 +62,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "doctor" => doctor(),
         "controller-state-doctor" => controller_state_doctor(&args[2..]),
         "controller-state-fixture" => controller_state_fixture(),
+        "dashboard-doctor" => dashboard_doctor(&args[2..]),
+        "dashboard-fixture" => dashboard_fixture(),
+        "dashboard-serve" => dashboard_serve(&args[2..]),
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
         "identity-fixture" => identity_fixture(),
@@ -130,7 +136,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=17");
+    println!("phase=18");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -240,6 +246,84 @@ fn controller_state_fixture() -> Result<(), Box<dyn std::error::Error>> {
     println!("status=durable_controller_fixture_passed");
     let _ = std::fs::remove_file(path);
     Ok(())
+}
+
+fn dashboard_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config = dashboard_config(args)?;
+    let dashboard = Dashboard::new(config)?;
+    let controller = DurableController::open(
+        value_after(args, "--state-db")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3")),
+    )?;
+
+    println!("DragonForge Test Lab dashboard doctor");
+    println!("controller_schema={}", controller.schema_version()?);
+    println!("bind={}", dashboard.bind_address());
+    println!("loopback_only=true");
+    println!("authentication=bearer_token_from_environment");
+    println!("token_retained_in_plaintext=false");
+    println!("read_only=true");
+    println!("terminal_access=false");
+    println!("raw_command_access=false");
+    println!("raw_sql_access=false");
+    println!("status=dashboard_ready");
+    Ok(())
+}
+
+fn dashboard_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let report = run_dashboard_fixture()?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !report.loopback_enforced
+        || !report.authentication_enforced
+        || !report.overview_available
+        || !report.jobs_available
+        || !report.workers_available
+        || !report.plans_available
+        || !report.artifacts_available
+        || !report.intelligence_available
+        || !report.audit_available
+        || !report.settings_safe
+        || !report.mutating_methods_rejected
+    {
+        return Err("one or more Phase 18 dashboard fixtures failed".into());
+    }
+    println!("status=dashboard_fixture_passed");
+    Ok(())
+}
+
+fn dashboard_serve(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let dashboard = Dashboard::new(dashboard_config(args)?)?;
+    println!("DragonForge Test Lab dashboard");
+    println!("bind={}", dashboard.bind_address());
+    println!("url=http://{}/#token=<DRAGONFORGE_DASHBOARD_TOKEN>", dashboard.bind_address());
+    println!("authentication=fragment_token_to_bearer_header");
+    println!("read_only=true");
+    println!("status=dashboard_listening");
+    dashboard.serve()?;
+    Ok(())
+}
+
+fn dashboard_config(args: &[String]) -> Result<DashboardConfig, Box<dyn std::error::Error>> {
+    let bind: std::net::SocketAddr = value_after(args, "--bind")
+        .unwrap_or_else(|| DEFAULT_DASHBOARD_BIND.into())
+        .parse()?;
+    let bearer_token = std::env::var("DRAGONFORGE_DASHBOARD_TOKEN")
+        .map_err(|_| "DRAGONFORGE_DASHBOARD_TOKEN must be set and at least 32 characters")?;
+    if bearer_token.len() < 32 {
+        return Err("DRAGONFORGE_DASHBOARD_TOKEN must be at least 32 characters".into());
+    }
+    let state_db = value_after(args, "--state-db")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
+    if let Some(parent) = state_db.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    Ok(DashboardConfig {
+        bind,
+        bearer_token,
+        state_db,
+    })
 }
 
 fn github_doctor() -> Result<(), Box<dyn std::error::Error>> {
@@ -2125,6 +2209,9 @@ fn print_help() {
     println!("  dragonforge-test-lab plan-list [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-doctor [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-fixture");
+    println!("  dragonforge-test-lab dashboard-doctor [--bind 127.0.0.1:8788] [--state-db <path>]");
+    println!("  dragonforge-test-lab dashboard-fixture");
+    println!("  dragonforge-test-lab dashboard-serve [--bind 127.0.0.1:8788] [--state-db <path>]");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");
