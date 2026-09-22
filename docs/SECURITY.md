@@ -59,6 +59,11 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 53. Certificate renewal uses explicit bounded overlap between generations, and revoked certificates fail closed.
 54. Serialized identity trust state contains certificate fingerprints/lifecycle metadata only and does not persist private keys.
 55. The built-in direct controller address policy remains loopback/private/link-local even when mTLS is enabled.
+56. Phase 13 workers initiate controller connections outbound over mTLS and do not expose inbound worker listeners.
+57. Drain mode stops new job admission immediately while preserving already-active job state for graceful shutdown; running services refresh the persisted drain/resume control before heartbeats.
+58. Worker restart snapshots contain lifecycle metadata only; TLS private keys remain file-backed operator secrets and are not serialized into runtime state.
+59. Windows service launch metadata is fixed to the DragonForgeTestWorker service identity and internally generated worker-service command shape.
+60. Service reconnect uses bounded exponential backoff and a restart never treats a previously online session as still authenticated.
 
 ## Local execution boundary
 
@@ -176,9 +181,15 @@ Private keys remain in operator-controlled PEM material and are not serialized i
 
 The older HMAC transport remains available for compatibility/private-lab use, but it is not relabeled as encrypted. New service-oriented distributed paths should use mTLS.
 
+## Phase 13 worker-service boundary
+
+Phase 13 makes the worker long-running without turning it into a remote shell. Workers connect outbound to the configured private/local controller over Phase 12 mTLS, then exchange only typed service registration and heartbeat frames. The service runtime exposes lifecycle controls such as drain/resume but does not accept executable command text.
+
+Windows uses a native Service Control Manager dispatcher and handles Stop by setting a shared stop flag, entering drain state, persisting the snapshot, and reporting Stopped. Linux systemd metadata includes restart behavior and service hardening. Runtime snapshots contain no TLS certificate or private-key bytes.
+
 ## Current enforcement
 
-Phases 1-12 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-13 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 

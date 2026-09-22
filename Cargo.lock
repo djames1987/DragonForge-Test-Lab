@@ -341,7 +341,7 @@ checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
 name = "df-test-agent"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "df-test-policy",
  "df-test-protocol",
@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-controller"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "df-test-protocol",
  "rusqlite",
@@ -362,7 +362,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-distributed"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "df-test-protocol",
  "hex",
@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-executor"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "df-test-protocol",
  "df-test-sandbox",
@@ -388,7 +388,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-github"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -397,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-gui"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -406,7 +406,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-identity"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "hex",
  "rcgen",
@@ -420,7 +420,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-intelligence"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "df-test-protocol",
  "hex",
@@ -433,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-mcp"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "df-test-agent",
  "df-test-executor",
@@ -450,7 +450,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-policy"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "df-test-protocol",
  "thiserror",
@@ -458,7 +458,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-protocol"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "criterion",
  "proptest",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-sandbox"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "thiserror",
  "uuid",
@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-vm"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -487,12 +487,25 @@ dependencies = [
 
 [[package]]
 name = "df-test-windows"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror",
  "uuid",
+]
+
+[[package]]
+name = "df-test-worker-service"
+version = "0.14.0"
+dependencies = [
+ "df-test-identity",
+ "df-test-protocol",
+ "rcgen",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -519,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "dragonforge-test-lab"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "df-test-agent",
  "df-test-controller",
@@ -535,7 +548,9 @@ dependencies = [
  "df-test-sandbox",
  "df-test-vm",
  "df-test-windows",
+ "df-test-worker-service",
  "serde_json",
+ "windows-service",
 ]
 
 [[package]]
@@ -1526,6 +1541,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "widestring"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72069c3113ab32ab29e5584db3c6ec55d416895e60715417b5b883a357c3e471"
+
+[[package]]
 name = "winapi-util"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1539,6 +1560,17 @@ name = "windows-link"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+
+[[package]]
+name = "windows-service"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "857224b3b211c6f3616921f081ee54721ee3ad2ace2fac6a6337e032f7b4dcf2"
+dependencies = [
+ "bitflags",
+ "widestring",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "windows-sys"

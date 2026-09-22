@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 12 — mTLS / Node Identity — Complete
+Phase 13 — Worker Services — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, and Phase 11 added validated SQLite-backed durable controller state. Phase 12 adds validated rustls mutual TLS, X.509 certificate-backed node identity, renewal/rotation overlap, revocation, fingerprint binding, and serializable trust metadata while retaining the older HMAC transport only as compatibility/private-lab mode. Full Phase 12 Windows host validation passed on 2026-09-22.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, and Phase 12 added validated rustls mTLS/X.509 node identity. Phase 13 adds validated long-running worker services with outbound mTLS registration, typed heartbeats, drain/resume, restart-state persistence, native Windows SCM hosting, and hardened systemd service definitions. Full Phase 13 Windows host validation passed on 2026-09-22.
 
 ## Workspace
 
@@ -31,6 +31,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-mcp/            authenticated MCP HTTP gateway and typed tool surface
       df-test-intelligence/   change analysis, regression targeting, clustering, scheduling
       df-test-identity/       mTLS, X.509 node identity, trust, rotation, revocation
+      df-test-worker-service/ long-running worker lifecycle and service hosting
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -48,6 +49,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-10.md
       PHASE-11.md
       PHASE-12.md
+      PHASE-13.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -69,6 +71,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase10.ps1
       test-phase11.ps1
       test-phase12.ps1
+      test-phase13.ps1
 
 ## Hyper-V host setup
 
@@ -258,10 +261,40 @@ Phase 12 uses rustls for certificate-authenticated encrypted transport and binds
 
 See docs/PHASE-12.md for certificate lifecycle, transport, compatibility, and security boundaries.
 
+## Phase 13 Worker Services
+
+Readiness and real service fixture:
+
+    cargo run -p dragonforge-test-lab -- worker-service-doctor
+    cargo run -p dragonforge-test-lab -- worker-service-fixture
+
+Run a foreground worker:
+
+    cargo run -p dragonforge-test-lab -- worker-service-run --config .\examples\phase13-worker.json
+
+Request drain/resume:
+
+    cargo run -p dragonforge-test-lab -- worker-service-drain --config .\examples\phase13-worker.json
+    cargo run -p dragonforge-test-lab -- worker-service-resume --config .\examples\phase13-worker.json
+
+Native Windows SCM entry point:
+
+    dragonforge-test-lab worker-service-windows --config <worker.json>
+
+Generate Windows/systemd service definitions:
+
+    cargo run -p dragonforge-test-lab -- worker-service-specs --executable <absolute-path> --config <worker.json>
+
+End-to-end Phase 13 validation:
+
+    .\scripts\test-phase13.ps1
+
+See docs/PHASE-13.md for service lifecycle, mTLS registration, drain behavior, restart recovery, Windows SCM hosting, systemd hardening, and security boundaries.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, and docs/ROADMAP.md.

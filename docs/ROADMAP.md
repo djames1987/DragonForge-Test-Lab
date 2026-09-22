@@ -39,8 +39,8 @@ Persistent controller state, SQLite migrations, restart recovery, durable jobs/a
 ## Phase 12 — mTLS / Node Identity — Complete
 Certificate-backed controller/worker identity, encrypted mutual-TLS transport primitives, enrollment, renewal with bounded overlap, revocation, serializable trust stores, SHA-256 certificate-to-node binding, private/local address policy, and key-rotation hooks. Legacy Phase 8 HMAC transport remains compatibility/private-lab mode. Windows host validation passed on 2026-09-22.
 
-## Phase 13 — Worker Services
-Automatic Windows Service and Linux systemd worker operation, outbound controller registration, heartbeats, graceful drain, restart recovery, and service diagnostics.
+## Phase 13 — Worker Services — Complete
+Native Windows SCM service hosting, hardened Linux systemd unit generation, outbound mTLS controller registration, typed heartbeats, graceful drain/resume, bounded reconnect backoff, non-secret restart-state recovery, and service diagnostics. Windows host validation passed on 2026-09-22.
 
 ## Phase 14 — Audit / Artifacts / Observability
 Durable audit/event history, artifact retention, structured logs, operational metrics, worker/job visibility, and query tooling.
