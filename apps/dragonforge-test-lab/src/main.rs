@@ -2133,7 +2133,9 @@ fn print_help() {
     println!("  dragonforge-test-lab intelligence-analyze --input <intelligence.json>");
     println!("  dragonforge-test-lab intelligence-fixture");
     println!("  dragonforge-test-lab intelligence-integration-doctor");
-    println!("  dragonforge-test-lab intelligence-integrate --repo <github-https-url> --base <revision> --head <revision> --plan <stored-plan-name> [--mode advisory|automatic] [--min-score 60] [--state-db <path>]");
+    println!(
+        "  dragonforge-test-lab intelligence-integrate --repo <github-https-url> --base <revision> --head <revision> --plan <stored-plan-name> [--mode advisory|automatic] [--min-score 60] [--state-db <path>]"
+    );
     println!("  dragonforge-test-lab distributed-doctor");
     println!("  dragonforge-test-lab distributed-fixtures");
     println!(
