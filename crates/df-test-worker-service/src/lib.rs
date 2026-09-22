@@ -1,5 +1,6 @@
 use df_test_identity::{
-    build_client_config, validate_private_controller_address, CertificateMaterial, IdentityError,
+    build_client_config, build_server_config, validate_private_controller_address,
+    CertificateMaterial, IdentityError,
 };
 use df_test_protocol::PROTOCOL_VERSION;
 use rustls::{pki_types::ServerName, ClientConfig, ClientConnection, StreamOwned};
@@ -7,7 +8,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     fs,
     io::{Read, Write},
-    net::{SocketAddr, TcpStream},
+    net::{SocketAddr, TcpListener, TcpStream},
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -373,6 +374,152 @@ impl SystemdServiceSpec {
     }
 }
 
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkerServiceFixtureReport {
+    pub mtls_registration: bool,
+    pub heartbeat_received: bool,
+    pub drain_blocks_new_jobs: bool,
+    pub restart_state_recovered: bool,
+    pub windows_service_spec_valid: bool,
+    pub systemd_unit_valid: bool,
+}
+
+pub fn run_worker_service_fixture() -> Result<WorkerServiceFixtureReport, WorkerServiceError> {
+    use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, IsCa, KeyPair};
+
+    let mut ca_params = CertificateParams::new(Vec::<String>::new())
+        .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+    ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+    let ca_key =
+        KeyPair::generate().map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+    let ca = CertifiedIssuer::self_signed(ca_params, ca_key)
+        .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+
+    let server_key =
+        KeyPair::generate().map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+    let server_params = CertificateParams::new(vec!["localhost".to_owned()])
+        .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+    let server_cert = server_params
+        .signed_by(&server_key, &ca)
+        .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+
+    let client_key =
+        KeyPair::generate().map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+    let client_params = CertificateParams::new(Vec::<String>::new())
+        .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+    let client_cert = client_params
+        .signed_by(&client_key, &ca)
+        .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+
+    let ca_pem = ca.pem();
+    let server_material = CertificateMaterial::from_pem(
+        server_cert.pem().as_bytes(),
+        server_key.serialize_pem().as_bytes(),
+    )?;
+    let client_material = CertificateMaterial::from_pem(
+        client_cert.pem().as_bytes(),
+        client_key.serialize_pem().as_bytes(),
+    )?;
+    let server_config = Arc::new(build_server_config(ca_pem.as_bytes(), server_material)?);
+    let client_config = Arc::new(build_client_config(ca_pem.as_bytes(), client_material)?);
+
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let controller = listener.local_addr()?;
+    let server = std::thread::spawn(move || -> Result<bool, String> {
+        let (tcp, _) = listener.accept().map_err(|error| error.to_string())?;
+        tcp.set_read_timeout(Some(Duration::from_secs(5)))
+            .map_err(|error| error.to_string())?;
+        tcp.set_write_timeout(Some(Duration::from_secs(5)))
+            .map_err(|error| error.to_string())?;
+        let connection =
+            rustls::ServerConnection::new(server_config).map_err(|error| error.to_string())?;
+        let mut stream = StreamOwned::new(connection, tcp);
+        let hello: WorkerServiceHello =
+            read_frame(&mut stream).map_err(|error| error.to_string())?;
+        if hello.protocol_version != PROTOCOL_VERSION || hello.worker_id != "fixture-worker" {
+            return Err("unexpected worker service hello".to_owned());
+        }
+        let ack = ControllerServiceAck {
+            accepted: true,
+            worker_id: hello.worker_id.clone(),
+            heartbeat_seconds: 5,
+        };
+        write_frame(&mut stream, &ack).map_err(|error| error.to_string())?;
+        let heartbeat: WorkerHeartbeat =
+            read_frame(&mut stream).map_err(|error| error.to_string())?;
+        Ok(heartbeat.worker_id == hello.worker_id && heartbeat.accepting_jobs)
+    });
+
+    let state_path = std::env::temp_dir().join(format!(
+        "dragonforge-worker-service-fixture-{}.json",
+        std::process::id()
+    ));
+    let _ = fs::remove_file(&state_path);
+    let config = WorkerServiceConfig {
+        worker_id: "fixture-worker".into(),
+        controller,
+        controller_server_name: "localhost".into(),
+        heartbeat_seconds: 5,
+        max_parallel_jobs: 2,
+        state_path: state_path.clone(),
+        ca_cert_path: PathBuf::from("fixture-ca.pem"),
+        client_cert_path: PathBuf::from("fixture-worker.pem"),
+        client_key_path: PathBuf::from("fixture-worker-key.pem"),
+    };
+
+    let mut runtime = WorkerServiceRuntime::new(config.clone())?;
+    runtime.mark_connecting();
+    let mut session =
+        MtlsWorkerSession::connect(&config, client_config, Duration::from_secs(5))?;
+    let ack = session.register(&runtime)?;
+    let mtls_registration = ack.accepted && ack.worker_id == config.worker_id;
+    runtime.mark_connected(100);
+    session.send_heartbeat(&runtime)?;
+    let heartbeat_received = server
+        .join()
+        .map_err(|_| WorkerServiceError::FixtureThreadPanicked)?
+        .map_err(WorkerServiceError::Fixture)?;
+
+    runtime.start_job()?;
+    runtime.request_drain();
+    let drain_blocks_new_jobs = !runtime.can_accept_job() && runtime.snapshot.active_jobs == 1;
+    runtime.persist()?;
+    let recovered = WorkerServiceRuntime::recover(config)?;
+    let restart_state_recovered = recovered.snapshot.state == WorkerServiceState::Draining
+        && recovered.snapshot.active_jobs == 1
+        && recovered.snapshot.drain_requested;
+    let _ = fs::remove_file(state_path);
+
+    let executable = if cfg!(windows) {
+        PathBuf::from(r"C:\Program Files\DragonForge\Test Lab\dragonforge-test-lab.exe")
+    } else {
+        PathBuf::from("/opt/dragonforge/bin/dragonforge-test-lab")
+    };
+    let windows = WindowsServiceSpec::new(executable, PathBuf::from("worker.json"))?;
+    let windows_service_spec_valid = windows.service_name == WINDOWS_SERVICE_NAME
+        && windows.start_type == "automatic"
+        && windows.command_line().contains("worker-service-run");
+
+    let systemd = SystemdServiceSpec::new(
+        PathBuf::from("/opt/dragonforge/bin/dragonforge-test-lab"),
+        PathBuf::from("/etc/dragonforge/test-worker.json"),
+    )?;
+    let unit = systemd.render_unit();
+    let systemd_unit_valid = unit.contains("Restart=on-failure")
+        && unit.contains("NoNewPrivileges=true")
+        && unit.contains("worker-service-run");
+
+    Ok(WorkerServiceFixtureReport {
+        mtls_registration,
+        heartbeat_received,
+        drain_blocks_new_jobs,
+        restart_state_recovered,
+        windows_service_spec_valid,
+        systemd_unit_valid,
+    })
+}
+
 pub fn load_worker_config(path: impl AsRef<Path>) -> Result<WorkerServiceConfig, WorkerServiceError> {
     let content = fs::read_to_string(path)?;
     let config: WorkerServiceConfig = serde_json::from_str(&content)?;
@@ -499,6 +646,12 @@ pub enum WorkerServiceError {
     FrameTooLarge,
     #[error("TLS error: {0}")]
     Tls(String),
+    #[error("certificate fixture error: {0}")]
+    CertificateFixture(String),
+    #[error("worker service fixture error: {0}")]
+    Fixture(String),
+    #[error("worker service fixture thread panicked")]
+    FixtureThreadPanicked,
     #[error("identity error: {0}")]
     Identity(#[from] IdentityError),
     #[error("JSON error: {0}")]
@@ -597,6 +750,17 @@ mod tests {
         assert!(unit.contains("NoNewPrivileges=true"));
         assert!(unit.contains("ProtectSystem=strict"));
         assert!(unit.contains("worker-service-run"));
+    }
+
+    #[test]
+    fn real_worker_service_fixture_passes() {
+        let report = run_worker_service_fixture().unwrap();
+        assert!(report.mtls_registration);
+        assert!(report.heartbeat_received);
+        assert!(report.drain_blocks_new_jobs);
+        assert!(report.restart_state_recovered);
+        assert!(report.windows_service_spec_valid);
+        assert!(report.systemd_unit_valid);
     }
 
     #[test]
