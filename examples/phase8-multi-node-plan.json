@@ -1,0 +1,21 @@
+{
+  "plan_id": "00000000-0000-4000-8000-000000000008",
+  "roles": [
+    {
+      "role": "interactive-gui",
+      "required_features": ["gui_automation", "tcp_fixture"],
+      "required_labels": ["interactive"],
+      "os": "windows",
+      "arch": "x86_64",
+      "max_load_percent": 80
+    },
+    {
+      "role": "network-fault",
+      "required_features": ["dns_fixture", "fault_injection"],
+      "required_labels": ["container"],
+      "os": "linux",
+      "arch": "x86_64",
+      "max_load_percent": 80
+    }
+  ]
+}
