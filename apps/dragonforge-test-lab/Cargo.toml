@@ -8,6 +8,7 @@ rust-version.workspace = true
 [dependencies]
 df-test-agent = { path = "../../crates/df-test-agent" }
 df-test-executor = { path = "../../crates/df-test-executor" }
+df-test-distributed = { path = "../../crates/df-test-distributed" }
 df-test-github = { path = "../../crates/df-test-github" }
 df-test-gui = { path = "../../crates/df-test-gui" }
 df-test-policy = { path = "../../crates/df-test-policy" }
