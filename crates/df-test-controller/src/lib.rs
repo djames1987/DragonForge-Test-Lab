@@ -556,7 +556,10 @@ impl DurableController {
         let changed = tx.execute(
             "UPDATE jobs
              SET state = 'assigned', assigned_worker = ?2, updated_at_secs = ?3,
-                 next_retry_at_secs = NULL
+                 next_retry_at_secs = NULL,
+                 failure_class = NULL,
+                 retry_reason = NULL,
+                 last_error = NULL
              WHERE job_id = ?1
                AND (state = 'queued'
                     OR (state = 'retry_pending' AND next_retry_at_secs IS NOT NULL
@@ -1034,7 +1037,8 @@ impl DurableController {
                  updated_at_secs = ?2,
                  failure_class = NULL,
                  next_retry_at_secs = NULL,
-                 retry_reason = NULL
+                 retry_reason = NULL,
+                 last_error = NULL
              WHERE job_id = ?1 AND state = 'interrupted'",
             params![job_id.to_string(), to_i64(now_secs)?],
         )?;
@@ -2209,6 +2213,39 @@ mod tests {
             DurableJobState::Exhausted
         );
         assert_eq!(controller.list_attempts(job.id).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn manual_reschedule_stops_at_global_attempt_limit() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let job = test_job();
+        controller.enqueue_job(&job, 1).unwrap();
+        controller.register_worker(&test_worker(), 2).unwrap();
+
+        let mut now = 3;
+        for attempt in 1..=df_test_lifecycle::MAX_ATTEMPTS {
+            controller
+                .assign_next("windows-1", now)
+                .unwrap()
+                .unwrap();
+            controller.mark_running(job.id, now + 1).unwrap();
+            controller.recover_after_restart(now + 2).unwrap();
+            if attempt < df_test_lifecycle::MAX_ATTEMPTS {
+                controller
+                    .reschedule_interrupted_job(job.id, now + 3)
+                    .unwrap();
+            }
+            now += 4;
+        }
+
+        assert!(matches!(
+            controller.reschedule_interrupted_job(job.id, now),
+            Err(DurableControllerError::ManualRescheduleLimitReached)
+        ));
+        assert_eq!(
+            controller.list_attempts(job.id).unwrap().len(),
+            df_test_lifecycle::MAX_ATTEMPTS as usize
+        );
     }
 
     #[test]
