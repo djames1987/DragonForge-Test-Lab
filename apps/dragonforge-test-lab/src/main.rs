@@ -363,7 +363,10 @@ fn mcp_config(args: &[String]) -> Result<McpGatewayConfig, Box<dyn std::error::E
         .map(str::to_owned)
         .collect();
     if allowed_repository_prefixes.is_empty() {
-        return Err("DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES must contain at least one HTTPS prefix".into());
+        return Err(
+            "DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES must contain at least one HTTPS prefix"
+                .into(),
+        );
     }
 
     Ok(McpGatewayConfig {

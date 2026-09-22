@@ -1,5 +1,7 @@
 use df_test_agent::Agent;
-use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor, StepStatus};
+use df_test_executor::{
+    CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor, StepStatus,
+};
 use df_test_policy::ExecutionPolicy;
 use df_test_protocol::{
     Capability, JobRequest, JobStatus, RepositorySpec, ResourceLimits, TestAction,
@@ -285,17 +287,19 @@ impl McpGateway {
         let rpc: RpcRequest = match serde_json::from_slice(&request.body) {
             Ok(value) => value,
             Err(_) => {
-                return HttpResponse::json(
-                    400,
-                    rpc_error(Value::Null, -32700, "parse error", None),
-                )
+                return HttpResponse::json(400, rpc_error(Value::Null, -32700, "parse error", None))
             }
         };
 
         if let Err(error) = validate_rpc_request(&rpc) {
             return HttpResponse::json(
                 400,
-                rpc_error(rpc.id.clone().unwrap_or(Value::Null), -32600, &error.to_string(), None),
+                rpc_error(
+                    rpc.id.clone().unwrap_or(Value::Null),
+                    -32600,
+                    &error.to_string(),
+                    None,
+                ),
             );
         }
 
@@ -342,10 +346,9 @@ impl McpGateway {
                 }
                 HttpResponse::json(200, rpc_success(id, value))
             }
-            Err(error) => HttpResponse::json(
-                200,
-                rpc_error(id, error.code, &error.message, error.data),
-            ),
+            Err(error) => {
+                HttpResponse::json(200, rpc_error(id, error.code, &error.message, error.data))
+            }
         }
     }
 
@@ -403,7 +406,10 @@ impl McpGateway {
             .get("name")
             .and_then(Value::as_str)
             .ok_or_else(|| RpcFailure::new(-32602, "missing tool name"))?;
-        let arguments = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+        let arguments = params
+            .get("arguments")
+            .cloned()
+            .unwrap_or_else(|| json!({}));
 
         let structured = match name {
             "dragonforge_lab_status" => self.tool_lab_status(),
@@ -426,7 +432,12 @@ impl McpGateway {
         let running = state
             .jobs
             .values()
-            .filter(|job| matches!(job.state, GatewayJobState::Queued | GatewayJobState::Running))
+            .filter(|job| {
+                matches!(
+                    job.state,
+                    GatewayJobState::Queued | GatewayJobState::Running
+                )
+            })
             .count();
         Ok(json!({
             "service": "DragonForge Test Lab MCP Gateway",
@@ -475,7 +486,12 @@ impl McpGateway {
             let active_jobs = state
                 .jobs
                 .values()
-                .filter(|job| matches!(job.state, GatewayJobState::Queued | GatewayJobState::Running))
+                .filter(|job| {
+                    matches!(
+                        job.state,
+                        GatewayJobState::Queued | GatewayJobState::Running
+                    )
+                })
                 .count();
             if active_jobs >= MAX_ACTIVE_GATEWAY_JOBS {
                 return Err(McpGatewayError::ActiveJobLimitExceeded);
@@ -624,7 +640,11 @@ fn execute_gateway_job(
         capabilities.clone(),
     );
     let registration = WorkerRegistration {
-        worker_id: format!("mcp-local-{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+        worker_id: format!(
+            "mcp-local-{}-{}",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        ),
         protocol_version: PROTOCOL_VERSION,
         os: std::env::consts::OS.into(),
         arch: std::env::consts::ARCH.into(),
@@ -654,7 +674,9 @@ fn execute_gateway_job(
     gateway_result_from_execution(&report)
 }
 
-fn gateway_result_from_execution(report: &ExecutionReport) -> Result<GatewayJobResult, McpGatewayError> {
+fn gateway_result_from_execution(
+    report: &ExecutionReport,
+) -> Result<GatewayJobResult, McpGatewayError> {
     let artifact_dir = PathBuf::from(&report.artifact_directory);
     let artifacts = collect_artifact_metadata(&artifact_dir)?;
 
@@ -737,7 +759,11 @@ fn collect_files_recursive(
 
 fn local_node_info() -> GatewayNodeInfo {
     GatewayNodeInfo {
-        node_id: format!("mcp-local-{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+        node_id: format!(
+            "mcp-local-{}-{}",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        ),
         os: std::env::consts::OS.into(),
         arch: std::env::consts::ARCH.into(),
         protocol_version: PROTOCOL_VERSION,
@@ -795,7 +821,9 @@ fn validate_revision(value: &str) -> Result<(), McpGatewayError> {
     if value.is_empty()
         || value.len() > 256
         || value.starts_with('-')
-        || value.bytes().any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+        || value
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
     {
         return Err(McpGatewayError::InvalidRevision);
     }
@@ -872,8 +900,8 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, McpGatewayEr
         }
     };
 
-    let header_text = std::str::from_utf8(&bytes[..header_end])
-        .map_err(|_| McpGatewayError::InvalidHttp)?;
+    let header_text =
+        std::str::from_utf8(&bytes[..header_end]).map_err(|_| McpGatewayError::InvalidHttp)?;
     let mut lines = header_text.split("\r\n");
     let request_line = lines.next().ok_or(McpGatewayError::InvalidHttp)?;
     let mut request_parts = request_line.split_whitespace();
@@ -992,7 +1020,9 @@ fn write_http_response(
 }
 
 fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1396,10 +1426,9 @@ mod tests {
         let body = response.body.unwrap();
         let tools = body["result"]["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 6);
-        assert!(tools.iter().all(|tool| !tool["name"]
-            .as_str()
-            .unwrap()
-            .contains("shell")));
+        assert!(tools
+            .iter()
+            .all(|tool| !tool["name"].as_str().unwrap().contains("shell")));
     }
 
     #[test]
