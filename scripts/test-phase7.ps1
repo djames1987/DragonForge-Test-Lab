@@ -64,7 +64,8 @@ try {
     $fixtureArgs = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $fixtureScript)
     $fixtureProcess = Start-Process powershell.exe -ArgumentList $fixtureArgs -PassThru
 
-    cargo run -p dragonforge-test-lab -- gui-run-plan --plan ".\examples\phase7-plan.json" --artifact-dir $artifactDir
+    cargo run -p dragonforge-test-lab -- gui-run-plan --plan ".\examples\phase7-plan.json" --artifact-dir $artifactDir 2>&1 | Tee-Object -Variable guiPlanOutput
+    $guiPlanOutput | ForEach-Object { Write-Host $_ }
     Assert-LastExitCode "gui-run-plan"
 
     $planScreenshot = Join-Path $artifactDir "phase7-plan.png"
@@ -79,7 +80,8 @@ try {
     $fixtureProcess = $null
 
     Write-Host "[7/9] Owned fixture, screenshot, and crash capture"
-    cargo run -p dragonforge-test-lab -- gui-fixture --artifact-dir $artifactDir
+    cargo run -p dragonforge-test-lab -- gui-fixture --artifact-dir $artifactDir 2>&1 | Tee-Object -Variable guiFixtureOutput
+    $guiFixtureOutput | ForEach-Object { Write-Host $_ }
     Assert-LastExitCode "gui-fixture"
 
     $fixtureScreenshot = Join-Path $artifactDir "phase7-fixture.png"
