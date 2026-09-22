@@ -1,0 +1,10 @@
+{
+  "window_title": "DragonForge-GUI-Fixture",
+  "actions": [
+    { "type": "wait_for_window", "timeout_ms": 10000 },
+    { "type": "set_value", "automation_id": "inputBox", "value": "DragonForge deterministic plan" },
+    { "type": "invoke", "automation_id": "applyButton" },
+    { "type": "assert_value", "automation_id": "outputBox", "expected": "DragonForge deterministic plan" },
+    { "type": "screenshot", "name": "phase7-plan.png" }
+  ]
+}

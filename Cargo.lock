@@ -189,7 +189,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "df-test-agent"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "df-test-policy",
  "df-test-protocol",
@@ -198,7 +198,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-controller"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "df-test-protocol",
  "uuid",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-executor"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "df-test-protocol",
  "df-test-sandbox",
@@ -218,7 +218,16 @@ dependencies = [
 
 [[package]]
 name = "df-test-github"
-version = "0.6.0"
+version = "0.8.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "df-test-gui"
+version = "0.8.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -227,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-policy"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "df-test-protocol",
  "thiserror",
@@ -235,7 +244,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-protocol"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "criterion",
  "proptest",
@@ -246,7 +255,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-sandbox"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "thiserror",
  "uuid",
@@ -255,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-vm"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -263,16 +272,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-test-windows"
+version = "0.8.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "dragonforge-test-lab"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "df-test-agent",
  "df-test-executor",
  "df-test-github",
+ "df-test-gui",
  "df-test-policy",
  "df-test-protocol",
  "df-test-sandbox",
  "df-test-vm",
+ "df-test-windows",
  "serde_json",
 ]
 

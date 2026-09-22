@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 6 — Windows Integration — Complete
+Phase 7 — GUI Automation — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added nextest, LLVM coverage, property testing, Criterion benchmarks, Miri, sanitizers, and bounded fuzzing. Phase 6 adds typed Windows OS fixtures for registry, processes, loopback networking, Service Control Manager, Event Log, Windows Installer discovery, MSI signature inspection, and privilege-sensitive validation. Safe and privileged Phase 6 validation passed on both the Windows host and Windows VM on 2026-09-22.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, and Phase 6 added validated Windows OS integration fixtures. Phase 7 adds typed Windows UI Automation, deterministic JSON interaction plans, managed-window screenshots, and owned-process crash capture. Full Phase 7 validation passed on both the Windows host and Windows VM on 2026-09-22.
 
 ## Workspace
 
@@ -26,6 +26,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-sandbox/        native/container containment
       df-test-vm/             Hyper-V VM Lab orchestration
       df-test-windows/        Windows integration fixtures
+      df-test-gui/            Windows GUI automation
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -37,6 +38,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-4.md
       PHASE-5.md
       PHASE-6.md
+      PHASE-7.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -48,6 +50,9 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       check-rust-deep-tools.ps1
       check-windows-integration.ps1
       test-phase6.ps1
+      check-gui-host.ps1
+      phase7-gui-fixture.ps1
+      test-phase7.ps1
 
 ## Hyper-V host setup
 
@@ -121,10 +126,26 @@ Elevated service/Event Log validation:
 
 See docs/PHASE-6.md for fixture boundaries, installer inspection, and permission behavior.
 
+## Phase 7 GUI automation
+
+Readiness:
+
+    .\scripts\check-gui-host.ps1
+
+End-to-end validation:
+
+    .\scripts\test-phase7.ps1
+
+Run a typed plan:
+
+    cargo run -p dragonforge-test-lab -- gui-run-plan --plan .\examples\phase7-plan.json
+
+See docs/PHASE-7.md for the managed-window boundary, screenshots, deterministic plans, and crash capture.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, and docs/ROADMAP.md.

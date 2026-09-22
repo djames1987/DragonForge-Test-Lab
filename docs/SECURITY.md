@@ -27,6 +27,10 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 21. Windows OS mutation is restricted to internally generated DragonForge fixture names and known fixture locations.
 22. Service/Event Log mutation requires elevation plus explicit confirmation; callers cannot provide service binary paths or Event Log command text.
 23. MSI support is inspection-only in Phase 6; Test Lab does not install, repair, uninstall, or execute caller-supplied installers.
+24. GUI plans may target only DragonForge-* managed windows and validated AutomationIds.
+25. GUI actions are limited to typed wait, value, invoke, assertion, and screenshot operations; raw input injection and arbitrary UI Automation patterns are not exposed.
+26. Screenshot artifacts are leaf PNG files contained beneath the selected artifact root.
+27. Crash capture is limited to Test Lab-owned fixture processes in Phase 7 validation.
 
 ## Local execution boundary
 
@@ -90,9 +94,19 @@ The privileged lane is separate. It requires an elevated token and explicit `--c
 
 MSI support is read-only inspection. Paths must resolve to existing .msi files; Authenticode status is queried, but Windows Installer execution is not invoked.
 
+## Phase 7 GUI automation boundary
+
+Phase 7 uses Windows UI Automation only against managed window titles beginning with `DragonForge-`. Plans are deserialized into a fixed action enum and independently validated before any UI Automation operation is generated.
+
+Control lookup uses exact AutomationId matching. Set/assert operations use ValuePattern and button-like activation uses InvokePattern. Plans cannot provide PowerShell fragments, executable names, COM pattern identifiers, raw keyboard input, mouse coordinates, or arbitrary desktop automation commands.
+
+Screenshots are restricted to the managed target window's UI Automation bounding rectangle and are written as validated leaf PNG files beneath the artifact directory.
+
+The crash-capture validation launches only the repository-maintained `phase7-gui-fixture.ps1`, owns the resulting child process, invokes a fixed crash fixture control, waits with a bounded timeout, and records the observed exit code.
+
 ## Current enforcement
 
-Phases 1-6 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-7 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 

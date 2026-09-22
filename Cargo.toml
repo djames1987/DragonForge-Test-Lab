@@ -11,10 +11,11 @@ members = [
     "crates/df-test-sandbox",
     "crates/df-test-vm",
     "crates/df-test-windows",
+    "crates/df-test-gui",
 ]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.80"
