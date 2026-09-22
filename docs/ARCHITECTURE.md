@@ -9,7 +9,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-protocol: versioned, serializable contracts shared by controllers and agents.
 - df-test-policy: repository, capability, and resource-limit authorization.
 - df-test-agent: worker-side trust boundary and protocol compatibility gate.
-- df-test-controller: queue/capability-aware scheduling plus SQLite-backed durable controller state, restart recovery, Phase 14 observability, and Phase 15 retry/lifecycle persistence.
+- df-test-controller: queue/capability-aware scheduling plus SQLite-backed durable controller state, restart recovery, Phase 14 observability, Phase 15 retry/lifecycle persistence, and Phase 16 plan storage/auditing.
 - df-test-executor: local workspace, fixed-command process execution, cancellation, output capture, artifact generation, and cleanup.
 - df-test-github: typed GitHub repository/ref resolution and commit-status reporting through the authenticated gh CLI.
 - df-test-sandbox: native/container sandbox selection, Windows Job Object containment, resource ceilings, worker-identity enforcement, and fixed Docker/Podman wrapping.
@@ -20,6 +20,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-mcp: loopback-only authenticated MCP HTTP gateway, protocol/version handling, named tool schemas, bounded asynchronous job registry, typed profile submission, and result/artifact metadata projection.
 - df-test-observability: structured log validation/redaction and JSONL rotation, metrics registry/snapshots, SHA-256 artifact cataloging, retention pruning, and audit digest construction.
 - df-test-lifecycle: typed failure classes, bounded retry policy, exponential backoff calculation, and lifecycle decisions without process execution.
+- df-test-plans: versioned declarative plans, DAG validation, typed profiles/actions, readiness evaluation, target predicates, and compilation into typed jobs.
 - dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, deep-Rust tool readiness, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
@@ -319,3 +320,30 @@ Controller restart treats assigned/running work as interrupted. The latest attem
 Manual interrupted-job rescheduling is auditable and bypasses only the job's automatic retry preference, not the global five-attempt safety ceiling. Every reassignment still returns through normal capability-aware scheduling and subsequently through the existing Agent/Policy/Executor worker trust boundary.
 
 Schema v3 stores retry policy, failure class, retry due time, retry reason, and attempt-level failure class. Retry due times are durable, so restart cannot make an early retry eligible.
+
+
+## Phase 16 test-plan flow
+
+    versioned plan JSON
+          |
+          +--> bounds/version validation
+          +--> dependency DAG validation
+          +--> typed profile / typed TestAction mapping
+          +--> resource + retry validation
+          +--> OS / node-label predicates
+          |
+          v
+    CompiledPlanStep
+          |
+          +--> JobRequest with extra required capabilities
+          +--> Phase 15 RetryPolicy
+          +--> typed artifact classes
+          |
+          v
+    normal controller capability scheduling
+          -> Agent/Policy
+          -> Executor fixed actions
+
+Controller schema v4 persists validated plans in test_plans and writes create/update events into the existing hash-chained audit stream. Plan persistence does not authorize execution.
+
+The legacy durable worker table does not contain node-label inventory. Phase 16 therefore exposes target predicates on CompiledPlanStep and requires plan/distributed orchestration to apply them before selecting a node; it does not falsely claim the older assign_next method enforces labels.

@@ -657,6 +657,7 @@ fn execute_gateway_job(
             revision: submission.revision.clone(),
         },
         actions: submission.profile.actions(),
+        extra_required_capabilities: Default::default(),
         limits: ResourceLimits::default(),
     };
     agent.validate_job(&job)?;

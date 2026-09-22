@@ -1,5 +1,6 @@
 use df_test_lifecycle::{decide_failure, FailureClass, LifecycleDecision, RetryPolicy};
 use df_test_observability::{next_audit_digest, LogLevel, MetricPoint, StructuredLogEvent};
+use df_test_plans::TestPlan;
 use df_test_protocol::{ArtifactRef, JobRequest, JobResult, WorkerRegistration, PROTOCOL_VERSION};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
@@ -63,7 +64,7 @@ pub enum ControllerError {
     UnknownWorker,
 }
 
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -364,7 +365,106 @@ impl DurableController {
             tx.commit()?;
         }
 
+        if current < 4 {
+            let tx = self
+                .connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute_batch(
+                "CREATE TABLE IF NOT EXISTS test_plans (
+                    plan_name TEXT PRIMARY KEY NOT NULL,
+                    plan_version INTEGER NOT NULL,
+                    plan_json TEXT NOT NULL,
+                    created_at_secs INTEGER NOT NULL,
+                    updated_at_secs INTEGER NOT NULL
+                 );
+
+                 CREATE INDEX IF NOT EXISTS idx_test_plans_updated
+                    ON test_plans(updated_at_secs, plan_name);
+
+                 PRAGMA user_version = 4;",
+            )?;
+            tx.commit()?;
+        }
+
         Ok(())
+    }
+
+    pub fn upsert_test_plan(
+        &mut self,
+        plan: &TestPlan,
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        plan.validate()?;
+        let plan_json = serde_json::to_string(plan)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let existed = tx
+            .query_row(
+                "SELECT 1 FROM test_plans WHERE plan_name = ?1",
+                [&plan.name],
+                |_row| Ok(()),
+            )
+            .optional()?
+            .is_some();
+        tx.execute(
+            "INSERT INTO test_plans(
+                plan_name, plan_version, plan_json, created_at_secs, updated_at_secs
+             ) VALUES (?1, ?2, ?3, ?4, ?4)
+             ON CONFLICT(plan_name) DO UPDATE SET
+                plan_version = excluded.plan_version,
+                plan_json = excluded.plan_json,
+                updated_at_secs = excluded.updated_at_secs",
+            params![
+                plan.name,
+                i64::from(plan.version),
+                plan_json,
+                to_i64(now_secs)?
+            ],
+        )?;
+        insert_audit(
+            &tx,
+            now_secs,
+            if existed {
+                "test_plan_updated"
+            } else {
+                "test_plan_created"
+            },
+            "test_plan",
+            &plan.name,
+            &serde_json::json!({
+                "version": plan.version,
+                "step_count": plan.steps.len()
+            }),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn get_test_plan(&self, name: &str) -> Result<Option<TestPlan>, DurableControllerError> {
+        let plan_json: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT plan_json FROM test_plans WHERE plan_name = ?1",
+                [name],
+                |row| row.get(0),
+            )
+            .optional()?;
+        plan_json
+            .map(|value| serde_json::from_str(&value).map_err(DurableControllerError::from))
+            .transpose()
+    }
+
+    pub fn list_test_plans(&self) -> Result<Vec<String>, DurableControllerError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT plan_name FROM test_plans ORDER BY plan_name")?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        let mut names = Vec::new();
+        for row in rows {
+            names.push(row?);
+        }
+        Ok(names)
     }
 
     pub fn enqueue_job(
@@ -1752,6 +1852,8 @@ pub enum DurableControllerError {
     Observability(#[from] df_test_observability::ObservabilityError),
     #[error("job lifecycle validation error: {0}")]
     Lifecycle(#[from] df_test_lifecycle::LifecycleError),
+    #[error("test plan validation error: {0}")]
+    Plan(#[from] df_test_plans::PlanError),
     #[error("invalid stored failure classification: {0}")]
     InvalidStoredFailureClass(String),
 }
@@ -1761,6 +1863,9 @@ mod tests {
     use super::*;
     use df_test_lifecycle::{FailureClass, LifecycleDecision, RetryPolicy};
     use df_test_observability::{LogLevel, MetricPoint, StructuredLogEvent};
+    use df_test_plans::{
+        ArtifactKind, PlanCondition, PlanProfile, PlanStep, TargetOs, TestPlan, TEST_PLAN_VERSION,
+    };
     use df_test_protocol::{Capability, JobStatus, RepositorySpec, TestAction};
     use std::{collections::BTreeSet, fs};
 
@@ -1940,7 +2045,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_v1_migrates_through_v3_lifecycle_tables() {
+    fn schema_v1_migrates_through_v4_test_plan_tables() {
         let connection = Connection::open_in_memory().unwrap();
         connection
             .execute_batch(
@@ -1983,9 +2088,62 @@ mod tests {
             )
             .unwrap();
         let controller = DurableController::from_connection(connection).unwrap();
-        assert_eq!(controller.schema_version().unwrap(), 3);
+        assert_eq!(controller.schema_version().unwrap(), 4);
         assert!(controller.recent_logs(10).unwrap().is_empty());
         assert!(controller.recent_metrics(10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_plans_persist_update_and_audit() {
+        let mut controller = DurableController::open_in_memory().unwrap();
+        let mut plan = TestPlan {
+            version: TEST_PLAN_VERSION,
+            name: "core-regression".into(),
+            repository: RepositorySpec {
+                url: "https://github.com/example/build.git".into(),
+                revision: "main".into(),
+            },
+            steps: vec![PlanStep {
+                id: "standard".into(),
+                profile: PlanProfile::RustStandard,
+                depends_on: vec![],
+                condition: PlanCondition::DependenciesPassed,
+                limits: Default::default(),
+                required_capabilities: Default::default(),
+                artifacts: vec![ArtifactKind::ExecutionReport],
+                retry: RetryPolicy::no_retry(),
+                target_os: TargetOs::Any,
+                node_labels: Default::default(),
+            }],
+        };
+        controller.upsert_test_plan(&plan, 1).unwrap();
+        assert_eq!(
+            controller.get_test_plan("core-regression").unwrap(),
+            Some(plan.clone())
+        );
+        assert_eq!(
+            controller.list_test_plans().unwrap(),
+            vec!["core-regression".to_owned()]
+        );
+
+        plan.steps[0].artifacts.push(ArtifactKind::StepLogs);
+        controller.upsert_test_plan(&plan, 2).unwrap();
+        assert_eq!(
+            controller
+                .get_test_plan("core-regression")
+                .unwrap()
+                .unwrap()
+                .steps[0]
+                .artifacts
+                .len(),
+            2
+        );
+        let audit = controller
+            .audit_events_for("test_plan", "core-regression")
+            .unwrap();
+        assert_eq!(audit.len(), 2);
+        assert_eq!(audit[0].kind, "test_plan_created");
+        assert_eq!(audit[1].kind, "test_plan_updated");
     }
 
     #[test]

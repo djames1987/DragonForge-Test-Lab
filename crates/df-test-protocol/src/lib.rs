@@ -68,6 +68,8 @@ pub struct JobRequest {
     pub repository: RepositorySpec,
     pub actions: Vec<TestAction>,
     #[serde(default)]
+    pub extra_required_capabilities: BTreeSet<Capability>,
+    #[serde(default)]
     pub limits: ResourceLimits,
 }
 
@@ -77,6 +79,7 @@ impl JobRequest {
             id: Uuid::new_v4(),
             repository,
             actions,
+            extra_required_capabilities: BTreeSet::new(),
             limits: ResourceLimits::default(),
         }
     }
@@ -85,6 +88,7 @@ impl JobRequest {
         self.actions
             .iter()
             .map(TestAction::required_capability)
+            .chain(self.extra_required_capabilities.iter().copied())
             .collect()
     }
 }
@@ -187,6 +191,22 @@ mod tests {
             let decoded: JobRequest = serde_json::from_slice(&encoded).unwrap();
             prop_assert_eq!(decoded, job);
         }
+    }
+
+    #[test]
+    fn extra_required_capabilities_are_enforced_by_derived_set() {
+        let mut job = JobRequest::new(
+            RepositorySpec {
+                url: "https://github.com/example/project.git".into(),
+                revision: "main".into(),
+            },
+            vec![TestAction::Checkout],
+        );
+        job.extra_required_capabilities
+            .insert(Capability::ReadArtifacts);
+        let required = job.required_capabilities();
+        assert!(required.contains(&Capability::CheckoutRepository));
+        assert!(required.contains(&Capability::ReadArtifacts));
     }
 
     #[test]

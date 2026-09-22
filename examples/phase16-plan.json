@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "name": "dragonforge-standard",
+  "repository": {
+    "url": "https://github.com/djames1987/DragonForge-Test-Lab.git",
+    "revision": "main"
+  },
+  "steps": [
+    {
+      "id": "fast",
+      "profile": { "type": "rust_fast" },
+      "depends_on": [],
+      "condition": "dependencies_passed",
+      "limits": {
+        "timeout_seconds": 900,
+        "max_memory_mib": 4096,
+        "max_disk_mib": 8192,
+        "max_processes": 64
+      },
+      "required_capabilities": [],
+      "artifacts": ["step_logs"],
+      "retry": {
+        "max_attempts": 1,
+        "base_delay_secs": 1,
+        "max_delay_secs": 1,
+        "retry_interrupted": false
+      },
+      "target_os": "any",
+      "node_labels": {}
+    },
+    {
+      "id": "standard",
+      "profile": { "type": "rust_standard" },
+      "depends_on": ["fast"],
+      "condition": "dependencies_passed",
+      "limits": {
+        "timeout_seconds": 1800,
+        "max_memory_mib": 4096,
+        "max_disk_mib": 8192,
+        "max_processes": 64
+      },
+      "required_capabilities": [
+        "checkout_repository",
+        "cargo_fmt_check",
+        "cargo_clippy",
+        "cargo_test"
+      ],
+      "artifacts": ["execution_report", "step_logs"],
+      "retry": {
+        "max_attempts": 2,
+        "base_delay_secs": 10,
+        "max_delay_secs": 60,
+        "retry_interrupted": false
+      },
+      "target_os": "windows",
+      "node_labels": {
+        "tier": "primary"
+      }
+    },
+    {
+      "id": "release",
+      "profile": { "type": "rust_release" },
+      "depends_on": ["standard"],
+      "condition": "dependencies_passed",
+      "limits": {
+        "timeout_seconds": 2400,
+        "max_memory_mib": 8192,
+        "max_disk_mib": 16384,
+        "max_processes": 96
+      },
+      "required_capabilities": [],
+      "artifacts": ["execution_report"],
+      "retry": {
+        "max_attempts": 1,
+        "base_delay_secs": 1,
+        "max_delay_secs": 1,
+        "retry_interrupted": false
+      },
+      "target_os": "any",
+      "node_labels": {}
+    }
+  ]
+}

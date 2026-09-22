@@ -15,6 +15,10 @@ use df_test_observability::{
     catalog_artifact, prune_artifacts, ArtifactRetentionPolicy, JsonlLogWriter, LogLevel,
     MetricPoint, MetricsRegistry, StructuredLogEvent,
 };
+use df_test_plans::{
+    ArtifactKind, PlanCondition, PlanProfile, PlanStep, PlanStepStatus, TargetOs, TestPlan,
+    TEST_PLAN_VERSION,
+};
 use df_test_policy::ExecutionPolicy;
 use df_test_protocol::{
     Capability, JobRequest, JobStatus, RepositorySpec, ResourceLimits, TestAction,
@@ -69,6 +73,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "lifecycle-fixture" => lifecycle_fixture(),
         "lifecycle-status" => lifecycle_status(&args[2..]),
         "lifecycle-reschedule" => lifecycle_reschedule(&args[2..]),
+        "plan-doctor" => plan_doctor(),
+        "plan-fixture" => plan_fixture(),
+        "plan-validate" => plan_validate(&args[2..]),
+        "plan-compile" => plan_compile(&args[2..]),
+        "plan-store" => plan_store(&args[2..]),
+        "plan-list" => plan_list(&args[2..]),
         "distributed-doctor" => distributed_doctor(),
         "distributed-fixtures" => distributed_fixtures(),
         "distributed-controller-once" => distributed_controller_once(&args[2..]),
@@ -115,7 +125,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=15");
+    println!("phase=16");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -289,12 +299,12 @@ fn lifecycle_doctor() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let controller = DurableController::open_in_memory()?;
-    if controller.schema_version()? != 3 {
-        return Err("controller lifecycle schema is not current".into());
+    if controller.schema_version()? < 3 {
+        return Err("controller lifecycle schema is unavailable".into());
     }
 
     println!("DragonForge Test Lab lifecycle doctor");
-    println!("controller_schema=3");
+    println!("controller_schema={}", controller.schema_version()?);
     println!("failure_classification=explicit");
     println!("test_failure_retry=disabled");
     println!("transient_infrastructure_retry=bounded");
@@ -409,7 +419,7 @@ fn lifecycle_fixture() -> Result<(), Box<dyn std::error::Error>> {
         && controller.get_job(manual_job.id)?.map(|job| job.state) == Some(DurableJobState::Queued);
 
     let audit_chain_verified = controller.verify_audit_chain()?;
-    let schema_v3 = controller.schema_version()? == 3;
+    let schema_v3 = controller.schema_version()? >= 3;
 
     let report = serde_json::json!({
         "schema_v3": schema_v3,
@@ -476,6 +486,247 @@ fn lifecycle_reschedule(args: &[String]) -> Result<(), Box<dyn std::error::Error
     println!("job_id={job_id}");
     println!("state=queued");
     println!("status=lifecycle_rescheduled");
+    Ok(())
+}
+
+fn plan_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let controller = DurableController::open_in_memory()?;
+    if controller.schema_version()? != 4 {
+        return Err("controller test-plan schema is not current".into());
+    }
+
+    let plan = phase16_fixture_plan();
+    plan.validate()?;
+    let order = plan.topological_order()?;
+    if order != vec!["fast".to_owned(), "standard".to_owned()] {
+        return Err("test-plan dependency ordering is not deterministic".into());
+    }
+
+    println!("DragonForge Test Lab plan doctor");
+    println!("plan_version={TEST_PLAN_VERSION}");
+    println!("controller_schema=4");
+    println!("typed_profiles=enabled");
+    println!("typed_actions=enabled");
+    println!("dependencies=dag_validated");
+    println!("conditions=enabled");
+    println!("retry_policy=phase15");
+    println!("target_os=enabled");
+    println!("node_labels=enabled");
+    println!("status=test_plans_ready");
+    Ok(())
+}
+
+fn plan_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let plan = phase16_fixture_plan();
+    plan.validate()?;
+    let dependency_order_valid =
+        plan.topological_order()? == vec!["fast".to_owned(), "standard".to_owned()];
+    let initial_ready = plan.ready_steps(&std::collections::BTreeMap::new())?;
+    let initial_ready_valid = initial_ready == vec!["fast".to_owned()];
+
+    let mut completed = std::collections::BTreeMap::new();
+    completed.insert("fast".to_owned(), PlanStepStatus::Passed);
+    let dependent_ready = plan.ready_steps(&completed)?;
+    let dependency_condition_valid = dependent_ready == vec!["standard".to_owned()];
+
+    let fast = plan.compile_step("fast")?;
+    let standard = plan.compile_step("standard")?;
+    let typed_actions_only = !fast.job.actions.is_empty() && !standard.job.actions.is_empty();
+    let target_constraints_valid = standard.matches_target(
+        "windows",
+        &std::collections::BTreeMap::from([("tier".to_owned(), "primary".to_owned())]),
+    ) && !standard.matches_target(
+        "linux",
+        &std::collections::BTreeMap::from([("tier".to_owned(), "primary".to_owned())]),
+    );
+
+    let mut controller = DurableController::open_in_memory()?;
+    controller.upsert_test_plan(&plan, 100)?;
+    let plan_persisted = controller.get_test_plan(&plan.name)? == Some(plan.clone())
+        && controller.list_test_plans()? == vec![plan.name.clone()];
+
+    controller.enqueue_job_with_retry(&fast.job, fast.retry, 101)?;
+
+    let incompatible = WorkerRegistration {
+        worker_id: "phase16-incompatible".into(),
+        protocol_version: PROTOCOL_VERSION,
+        os: "windows".into(),
+        arch: std::env::consts::ARCH.into(),
+        capabilities: [
+            Capability::CheckoutRepository,
+            Capability::CargoFmtCheck,
+            Capability::CargoTest,
+        ]
+        .into_iter()
+        .collect(),
+    };
+    controller.register_worker(&incompatible, 102)?;
+    let extra_capability_enforced = controller
+        .assign_next(&incompatible.worker_id, 103)?
+        .is_none();
+
+    let compatible = WorkerRegistration {
+        worker_id: "phase16-compatible".into(),
+        protocol_version: PROTOCOL_VERSION,
+        os: "windows".into(),
+        arch: std::env::consts::ARCH.into(),
+        capabilities: fast.job.required_capabilities(),
+    };
+    controller.register_worker(&compatible, 104)?;
+    let compiled_job_schedulable = controller
+        .assign_next(&compatible.worker_id, 105)?
+        .map(|job| job.id)
+        == Some(fast.job.id);
+
+    let plan_audit = controller.audit_events_for("test_plan", &plan.name)?;
+    let plan_audited = plan_audit.len() == 1 && plan_audit[0].kind == "test_plan_created";
+    let audit_chain_verified = controller.verify_audit_chain()?;
+    let schema_v4 = controller.schema_version()? == 4;
+
+    let report = serde_json::json!({
+        "schema_v4": schema_v4,
+        "dependency_order_valid": dependency_order_valid,
+        "initial_ready_valid": initial_ready_valid,
+        "dependency_condition_valid": dependency_condition_valid,
+        "typed_actions_only": typed_actions_only,
+        "target_constraints_valid": target_constraints_valid,
+        "plan_persisted": plan_persisted,
+        "extra_capability_enforced": extra_capability_enforced,
+        "compiled_job_schedulable": compiled_job_schedulable,
+        "plan_audited": plan_audited,
+        "audit_chain_verified": audit_chain_verified
+    });
+    println!("{}", serde_json::to_string_pretty(&report)?);
+
+    if !schema_v4
+        || !dependency_order_valid
+        || !initial_ready_valid
+        || !dependency_condition_valid
+        || !typed_actions_only
+        || !target_constraints_valid
+        || !plan_persisted
+        || !extra_capability_enforced
+        || !compiled_job_schedulable
+        || !plan_audited
+        || !audit_chain_verified
+    {
+        return Err("one or more Phase 16 test-plan fixtures failed".into());
+    }
+
+    println!("status=test_plan_fixture_passed");
+    Ok(())
+}
+
+fn phase16_fixture_plan() -> TestPlan {
+    TestPlan {
+        version: TEST_PLAN_VERSION,
+        name: "phase16-core".into(),
+        repository: RepositorySpec {
+            url: "https://github.com/djames1987/DragonForge-Test-Lab.git".into(),
+            revision: "main".into(),
+        },
+        steps: vec![
+            PlanStep {
+                id: "fast".into(),
+                profile: PlanProfile::RustFast,
+                depends_on: vec![],
+                condition: PlanCondition::DependenciesPassed,
+                limits: ResourceLimits::default(),
+                required_capabilities: [
+                    Capability::CheckoutRepository,
+                    Capability::CargoFmtCheck,
+                    Capability::CargoTest,
+                    Capability::ReadArtifacts,
+                ]
+                .into_iter()
+                .collect(),
+                artifacts: vec![ArtifactKind::StepLogs],
+                retry: RetryPolicy::no_retry(),
+                target_os: TargetOs::Any,
+                node_labels: Default::default(),
+            },
+            PlanStep {
+                id: "standard".into(),
+                profile: PlanProfile::RustStandard,
+                depends_on: vec!["fast".into()],
+                condition: PlanCondition::DependenciesPassed,
+                limits: ResourceLimits::default(),
+                required_capabilities: [
+                    Capability::CheckoutRepository,
+                    Capability::CargoFmtCheck,
+                    Capability::CargoClippy,
+                    Capability::CargoTest,
+                ]
+                .into_iter()
+                .collect(),
+                artifacts: vec![ArtifactKind::ExecutionReport],
+                retry: RetryPolicy::bounded(2, 5, 30, false)
+                    .expect("fixture retry policy is valid"),
+                target_os: TargetOs::Windows,
+                node_labels: std::collections::BTreeMap::from([("tier".into(), "primary".into())]),
+            },
+        ],
+    }
+}
+
+fn load_test_plan(path: &std::path::Path) -> Result<TestPlan, Box<dyn std::error::Error>> {
+    let metadata = std::fs::metadata(path)?;
+    if !metadata.is_file() || metadata.len() > 1024 * 1024 {
+        return Err("test plan must be a regular JSON file no larger than 1 MiB".into());
+    }
+    let plan: TestPlan = serde_json::from_slice(&std::fs::read(path)?)?;
+    plan.validate()?;
+    Ok(plan)
+}
+
+fn plan_validate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = PathBuf::from(value_after(args, "--plan").ok_or("missing --plan <plan.json>")?);
+    let plan = load_test_plan(&path)?;
+    println!("plan_name={}", plan.name);
+    println!("plan_version={}", plan.version);
+    println!("step_count={}", plan.steps.len());
+    println!("order={}", plan.topological_order()?.join(","));
+    println!("status=test_plan_valid");
+    Ok(())
+}
+
+fn plan_compile(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = PathBuf::from(value_after(args, "--plan").ok_or("missing --plan <plan.json>")?);
+    let step_id = value_after(args, "--step").ok_or("missing --step <id>")?;
+    let plan = load_test_plan(&path)?;
+    let compiled = plan.compile_step(&step_id)?;
+    println!("{}", serde_json::to_string_pretty(&compiled)?);
+    println!("status=test_plan_step_compiled");
+    Ok(())
+}
+
+fn plan_store(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = PathBuf::from(value_after(args, "--plan").ok_or("missing --plan <plan.json>")?);
+    let state_db = value_after(args, "--state-db")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
+    if let Some(parent) = state_db.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let plan = load_test_plan(&path)?;
+    let mut controller = DurableController::open(&state_db)?;
+    controller.upsert_test_plan(&plan, unix_time_secs()?)?;
+    println!("plan_name={}", plan.name);
+    println!("database={}", state_db.display());
+    println!("status=test_plan_stored");
+    Ok(())
+}
+
+fn plan_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let state_db = value_after(args, "--state-db")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
+    let controller = DurableController::open(&state_db)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&controller.list_test_plans()?)?
+    );
+    println!("status=test_plan_list_ready");
     Ok(())
 }
 
@@ -1795,6 +2046,12 @@ fn print_help() {
     println!("  dragonforge-test-lab lifecycle-fixture");
     println!("  dragonforge-test-lab lifecycle-status --job-id <uuid> [--state-db <path>]");
     println!("  dragonforge-test-lab lifecycle-reschedule --job-id <uuid> [--state-db <path>]");
+    println!("  dragonforge-test-lab plan-doctor");
+    println!("  dragonforge-test-lab plan-fixture");
+    println!("  dragonforge-test-lab plan-validate --plan <plan.json>");
+    println!("  dragonforge-test-lab plan-compile --plan <plan.json> --step <id>");
+    println!("  dragonforge-test-lab plan-store --plan <plan.json> [--state-db <path>]");
+    println!("  dragonforge-test-lab plan-list [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-doctor [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-fixture");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");

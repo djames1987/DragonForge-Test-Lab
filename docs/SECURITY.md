@@ -75,6 +75,13 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 69. Retry-pending jobs remain unschedulable until their durable next-retry timestamp and still pass normal capability/policy authorization when reassigned.
 70. Manual interrupted-job rescheduling is allowed only from interrupted state, is hash-chain audited, and remains subject to the global five-attempt ceiling.
 71. Cancelling a retry-pending job clears its retry due time so cancelled work cannot later become eligible.
+72. Phase 16 plans compile only to existing typed TestAction values; plan JSON cannot supply executables, shell text, arbitrary arguments, or PowerShell.
+73. Plan-declared extra capabilities are unioned into JobRequest required capabilities and therefore restrict eligible workers rather than granting authority.
+74. Plan dependencies must form a bounded DAG; missing/self/cyclic dependencies fail closed before persistence or compilation.
+75. Plan resource limits, retry policies, artifact classes, target OS, and node labels are bounded and validated before use.
+76. Plan artifact declarations are typed classes rather than caller-controlled filesystem paths/globs.
+77. Stored plans are validated before schema-v4 persistence, and create/update operations are hash-chain audited.
+78. Target OS/node-label predicates restrict scheduling candidates; they do not authorize a worker or bypass Agent/Policy/Executor checks.
 
 ## Local execution boundary
 
@@ -214,9 +221,19 @@ Retry policies are bounded to five total attempts, bounded delays, and persisted
 
 Controller restart closes uncertain assigned/running attempts as interrupted. Jobs without interrupted-retry opt-in remain interrupted. Operators may explicitly reschedule an interrupted job, but only while it is in that state and only below the global attempt limit. Every lifecycle transition is written to the existing hash-chained audit stream.
 
+## Phase 16 test-plan boundary
+
+Phase 16 adds a declarative orchestration format, not a scripting language. Profiles expand only to existing typed TestAction enum values, and the optional typed_actions form can contain only those same enum values. There is no field for an executable, shell, raw arguments, or arbitrary environment mutation.
+
+Extra plan capabilities are added to the JobRequest required-capability set, so a plan can only make worker eligibility stricter. Plans cannot grant capabilities. Dependency graphs are bounded and must be acyclic. Resource limits and Phase 15 retry policies are validated before compilation.
+
+OS and node-label constraints are exposed as explicit target predicates. The older durable worker record does not contain label inventory, so label enforcement belongs to the plan/distributed orchestration layer before a compiled job is submitted; worker-side policy remains authoritative afterward.
+
+Schema v4 persists validated plan JSON and hash-chain audits create/update events. Persistence does not imply authorization or execution.
+
 ## Current enforcement
 
-Phases 1-15 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-16 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 
