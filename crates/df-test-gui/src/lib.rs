@@ -187,7 +187,6 @@ impl GuiAutomationClient {
             .args([
                 "-NoLogo",
                 "-NoProfile",
-                "-NonInteractive",
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
@@ -348,7 +347,7 @@ fn action_name(action: &GuiAction) -> &'static str {
 fn wait_window_script(title: &str, timeout_ms: u64) -> String {
     format!(
         concat!(
-            "$ErrorActionPreference='Stop';Add-Type -AssemblyName UIAutomationClient;",
+            "$ErrorActionPreference='Stop';Add-Type -AssemblyName UIAutomationClient;Add-Type -AssemblyName UIAutomationTypes;",
             "$deadline=[DateTime]::UtcNow.AddMilliseconds({timeout});$window=$null;",
             "do{{$window=[System.Windows.Automation.AutomationElement]::RootElement.FindFirst(",
             "[System.Windows.Automation.TreeScope]::Children,",
@@ -365,7 +364,7 @@ fn wait_window_script(title: &str, timeout_ms: u64) -> String {
 fn element_script(title: &str, automation_id: &str, body: &str) -> String {
     format!(
         concat!(
-            "$ErrorActionPreference='Stop';Add-Type -AssemblyName UIAutomationClient;",
+            "$ErrorActionPreference='Stop';Add-Type -AssemblyName UIAutomationClient;Add-Type -AssemblyName UIAutomationTypes;",
             "$window=[System.Windows.Automation.AutomationElement]::RootElement.FindFirst(",
             "[System.Windows.Automation.TreeScope]::Children,",
             "(New-Object System.Windows.Automation.PropertyCondition(",
@@ -386,7 +385,7 @@ fn element_script(title: &str, automation_id: &str, body: &str) -> String {
 fn screenshot_script(title: &str, path: &Path) -> String {
     format!(
         concat!(
-            "$ErrorActionPreference='Stop';Add-Type -AssemblyName UIAutomationClient;",
+            "$ErrorActionPreference='Stop';Add-Type -AssemblyName UIAutomationClient;Add-Type -AssemblyName UIAutomationTypes;",
             "Add-Type -AssemblyName System.Drawing;",
             "$window=[System.Windows.Automation.AutomationElement]::RootElement.FindFirst(",
             "[System.Windows.Automation.TreeScope]::Children,",
