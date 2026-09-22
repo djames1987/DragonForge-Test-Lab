@@ -128,7 +128,10 @@ try {
     Write-Host "unscheduled=$($report.unscheduled_profiles.Count)"
     Write-Host "analysis_file=$analysisPath"
 
-    Write-Host "[6/7] General doctor reports Phase 10"
+    Write-Host "[6/7] Intelligence and general doctors"
+    Invoke-CargoCaptured -Step "intelligence-doctor" -Arguments @(
+        "run", "-p", "dragonforge-test-lab", "--", "intelligence-doctor"
+    )
     $doctor = & cargo run -p dragonforge-test-lab -- doctor 2>&1
     $doctor | ForEach-Object { Write-Host $_ }
     if ($LASTEXITCODE -ne 0 -or -not ($doctor -match "phase=10")) {
