@@ -130,6 +130,66 @@ pub struct WorkerRegistration {
 mod tests {
     use super::*;
 
+
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn property_required_capabilities_exactly_match_actions(
+            action_codes in prop::collection::vec(0u8..5, 0..128)
+        ) {
+            let actions: Vec<TestAction> = action_codes
+                .into_iter()
+                .map(|code| match code {
+                    0 => TestAction::Checkout,
+                    1 => TestAction::CargoBuild { release: false },
+                    2 => TestAction::CargoTest { all_features: true },
+                    3 => TestAction::CargoClippy { deny_warnings: true },
+                    _ => TestAction::CargoFmtCheck,
+                })
+                .collect();
+
+            let expected: BTreeSet<Capability> = actions
+                .iter()
+                .map(TestAction::required_capability)
+                .collect();
+            let job = JobRequest::new(
+                RepositorySpec {
+                    url: "https://github.com/example/project.git".into(),
+                    revision: "main".into(),
+                },
+                actions,
+            );
+
+            prop_assert_eq!(job.required_capabilities(), expected);
+        }
+
+        #[test]
+        fn property_job_request_json_round_trips(
+            timeout_seconds in 1u64..86_400,
+            max_memory_mib in 128u64..131_072,
+            max_disk_mib in 128u64..1_048_576,
+            max_processes in 1u32..4_096,
+        ) {
+            let mut job = JobRequest::new(
+                RepositorySpec {
+                    url: "https://github.com/example/project.git".into(),
+                    revision: "main".into(),
+                },
+                vec![TestAction::Checkout, TestAction::CargoTest { all_features: true }],
+            );
+            job.limits = ResourceLimits {
+                timeout_seconds,
+                max_memory_mib,
+                max_disk_mib,
+                max_processes,
+            };
+
+            let encoded = serde_json::to_vec(&job).unwrap();
+            let decoded: JobRequest = serde_json::from_slice(&encoded).unwrap();
+            prop_assert_eq!(decoded, job);
+        }
+    }
     #[test]
     fn capabilities_are_derived_from_typed_actions() {
         let job = JobRequest::new(
