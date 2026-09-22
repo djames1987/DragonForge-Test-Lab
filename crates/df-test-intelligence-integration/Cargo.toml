@@ -16,4 +16,5 @@ thiserror.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+df-test-lifecycle = { path = "../df-test-lifecycle" }
 df-test-protocol = { path = "../df-test-protocol" }
