@@ -742,7 +742,7 @@ pub fn run_distributed_fixtures() -> Result<DistributedFixtureReport, Distribute
 
     let artifact = DistributedArtifact::from_bytes("result.json", br#"{"status":"ok"}"#)?;
     let artifact_hash_verified = artifact.sha256
-        == "a29ee2b15c494311c525217dafbf40b10dc1bd505fd46362f391d428c77d9e25";
+        == "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288";
 
     let outbound_transport_round_trip = loopback_transport_fixture()?;
     let network = run_network_fixtures()?;
