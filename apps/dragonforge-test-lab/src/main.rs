@@ -10,6 +10,10 @@ use df_test_gui::{GuiAutomationClient, GuiPlan};
 use df_test_identity::{run_mtls_fixture, validate_private_controller_address};
 use df_test_intelligence::{analyze, IntelligenceInput, TestProfile, WorkerCapacity};
 use df_test_mcp::{McpGateway, McpGatewayConfig};
+use df_test_observability::{
+    catalog_artifact, prune_artifacts, ArtifactRetentionPolicy, JsonlLogWriter, LogLevel,
+    MetricPoint, MetricsRegistry, StructuredLogEvent,
+};
 use df_test_policy::ExecutionPolicy;
 use df_test_protocol::{
     Capability, JobRequest, JobStatus, RepositorySpec, ResourceLimits, TestAction,
@@ -57,6 +61,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "worker-service-drain" => worker_service_drain(&args[2..]),
         "worker-service-resume" => worker_service_resume(&args[2..]),
         "worker-service-specs" => worker_service_specs(&args[2..]),
+        "observability-doctor" => observability_doctor(),
+        "observability-fixture" => observability_fixture(),
+        "observability-summary" => observability_summary(&args[2..]),
         "distributed-doctor" => distributed_doctor(),
         "distributed-fixtures" => distributed_fixtures(),
         "distributed-controller-once" => distributed_controller_once(&args[2..]),
@@ -103,7 +110,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=13");
+    println!("phase=14");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -263,6 +270,169 @@ fn identity_fixture() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Phase 12 mTLS identity fixture failed".into());
     }
     println!("status=mtls_identity_fixture_passed");
+    Ok(())
+}
+
+fn observability_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let mut registry = MetricsRegistry::default();
+    registry.increment("dragonforge_jobs_total", 1)?;
+    registry.set_gauge("dragonforge_workers_online", 1.0)?;
+    let snapshot = registry.snapshot(unix_time_secs()?);
+    if snapshot.len() != 2 {
+        return Err("metrics registry did not produce expected snapshot".into());
+    }
+
+    let mut controller = DurableController::open_in_memory()?;
+    if controller.schema_version()? != SCHEMA_VERSION {
+        return Err("controller observability schema is not current".into());
+    }
+    controller.record_metric(&snapshot[0])?;
+    if controller.recent_metrics(10)?.is_empty() {
+        return Err("durable metric sample was not persisted".into());
+    }
+
+    println!("DragonForge Test Lab observability doctor");
+    println!("controller_schema={SCHEMA_VERSION}");
+    println!("audit_hash_chain=enabled");
+    println!("structured_logs=durable_and_jsonl");
+    println!("log_secret_redaction=enabled");
+    println!("metrics=durable");
+    println!("artifact_sha256_catalog=enabled");
+    println!("artifact_retention=root_contained");
+    println!("telemetry_pruning=enabled");
+    println!("status=observability_ready");
+    Ok(())
+}
+
+fn observability_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let root = std::env::temp_dir().join(format!(
+        "dragonforge-phase14-fixture-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root)?;
+    let log_path = root.join("logs").join("controller.jsonl");
+    let artifact_root = root.join("artifacts");
+    std::fs::create_dir_all(&artifact_root)?;
+
+    let mut fields = std::collections::BTreeMap::new();
+    fields.insert(
+        "api_token".to_owned(),
+        serde_json::Value::String("phase14-secret-must-not-persist".to_owned()),
+    );
+    let log_event = StructuredLogEvent {
+        unix_time_secs: 1_000,
+        level: LogLevel::Info,
+        component: "controller".into(),
+        message: "phase14 fixture connected worker".into(),
+        fields,
+        job_id: None,
+        worker_id: Some("phase14-worker".into()),
+    };
+
+    let log_writer = JsonlLogWriter::new(&log_path, 4096)?;
+    log_writer.append(log_event.clone())?;
+    let log_content = std::fs::read_to_string(&log_path)?;
+    let jsonl_redacted = log_content.contains("<redacted>")
+        && !log_content.contains("phase14-secret-must-not-persist");
+
+    let old_path = artifact_root.join("old.log");
+    let current_path = artifact_root.join("current.log");
+    std::fs::write(&old_path, b"old-artifact")?;
+    std::fs::write(&current_path, b"current-artifact")?;
+    let old = catalog_artifact(&artifact_root, &old_path, 100)?;
+    let current = catalog_artifact(&artifact_root, &current_path, 950)?;
+    let sha256_cataloged = old.sha256.len() == 64 && current.sha256.len() == 64;
+    let prune = prune_artifacts(
+        &artifact_root,
+        &[old.clone(), current.clone()],
+        ArtifactRetentionPolicy {
+            max_age_secs: 500,
+            max_total_bytes: 1024 * 1024,
+            max_artifacts: 10,
+        },
+        1_000,
+    )?;
+    let artifact_retention_verified =
+        prune.removed == vec![old.relative_path.clone()] && current_path.exists() && !old_path.exists();
+
+    let mut controller = DurableController::open_in_memory()?;
+    let job = JobRequest::new(
+        RepositorySpec {
+            url: "https://github.com/djames1987/DragonForge-Test-Lab.git".into(),
+            revision: "main".into(),
+        },
+        vec![TestAction::Checkout],
+    );
+    controller.enqueue_job(&job, 1_001)?;
+    controller.record_log(&log_event)?;
+
+    let metric = MetricPoint {
+        unix_time_secs: 1_002,
+        name: "dragonforge_workers_online".into(),
+        value: 1.0,
+        labels: Default::default(),
+    };
+    controller.record_metric(&metric)?;
+
+    let durable_log = controller.recent_logs(10)?;
+    let durable_log_redacted = durable_log
+        .first()
+        .and_then(|record| record.event.fields.get("api_token"))
+        == Some(&serde_json::Value::String("<redacted>".into()));
+    let durable_metric_persisted = controller
+        .recent_metrics(10)?
+        .first()
+        .map(|record| record.point.name.as_str())
+        == Some("dragonforge_workers_online");
+    let audit_chain_verified = controller.verify_audit_chain()?;
+    let schema_v2 = controller.schema_version()? == 2;
+    let telemetry_pruned = controller.prune_telemetry_before(2_000)? == (1, 1);
+
+    let report = serde_json::json!({
+        "schema_v2": schema_v2,
+        "audit_chain_verified": audit_chain_verified,
+        "jsonl_redacted": jsonl_redacted,
+        "durable_log_redacted": durable_log_redacted,
+        "durable_metric_persisted": durable_metric_persisted,
+        "sha256_cataloged": sha256_cataloged,
+        "artifact_retention_verified": artifact_retention_verified,
+        "telemetry_pruned": telemetry_pruned
+    });
+    println!("{}", serde_json::to_string_pretty(&report)?);
+
+    if !schema_v2
+        || !audit_chain_verified
+        || !jsonl_redacted
+        || !durable_log_redacted
+        || !durable_metric_persisted
+        || !sha256_cataloged
+        || !artifact_retention_verified
+        || !telemetry_pruned
+    {
+        return Err("one or more Phase 14 observability fixtures failed".into());
+    }
+
+    println!("status=observability_fixture_passed");
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+fn observability_summary(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--state-db")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let controller = DurableController::open(&path)?;
+    println!("DragonForge Test Lab observability summary");
+    println!("database={}", path.display());
+    println!("schema_version={}", controller.schema_version()?);
+    println!("audit_chain_valid={}", controller.verify_audit_chain()?);
+    println!("recent_logs={}", controller.recent_logs(100)?.len());
+    println!("recent_metrics={}", controller.recent_metrics(100)?.len());
+    println!("status=observability_summary_ready");
     Ok(())
 }
 
@@ -1411,6 +1581,9 @@ fn print_help() {
     println!("  dragonforge-test-lab worker-service-drain --config <worker.json>");
     println!("  dragonforge-test-lab worker-service-resume --config <worker.json>");
     println!("  dragonforge-test-lab worker-service-specs --executable <absolute-path> --config <worker.json>");
+    println!("  dragonforge-test-lab observability-doctor");
+    println!("  dragonforge-test-lab observability-fixture");
+    println!("  dragonforge-test-lab observability-summary [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-doctor [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-fixture");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
