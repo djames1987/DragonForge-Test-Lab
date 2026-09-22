@@ -223,8 +223,7 @@ impl McpGateway {
 
     pub fn serve_requests(&self, max_requests: Option<usize>) -> Result<(), McpGatewayError> {
         let listener = TcpListener::bind(self.inner.config.bind)?;
-        let mut handled = 0usize;
-        for incoming in listener.incoming() {
+        for (handled, incoming) in listener.incoming().enumerate() {
             let mut stream = incoming?;
             stream.set_read_timeout(Some(Duration::from_secs(15)))?;
             stream.set_write_timeout(Some(Duration::from_secs(15)))?;
@@ -236,8 +235,7 @@ impl McpGateway {
                     &[],
                 );
             }
-            handled += 1;
-            if max_requests.is_some_and(|limit| handled >= limit) {
+            if max_requests.is_some_and(|limit| handled + 1 >= limit) {
                 break;
             }
         }
