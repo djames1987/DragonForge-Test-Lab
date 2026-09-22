@@ -244,3 +244,23 @@ Phase 8 now adds authenticated node messages, replay protection, node identity, 
 Before Internet-facing MCP or distributed control, add standards-compliant OAuth/resource metadata, certificate-backed transport identity, durable audit storage, credential rotation, and explicit high-risk capability approval workflows.
 
 The project must not evolve into an unrestricted remote shell.
+
+
+## Phase 17 — Intelligence Integration
+
+Phase 17 does not turn Test Intelligence into a general execution authority.
+
+Security properties:
+
+- GitHub comparison accepts validated repository/revision inputs and returns a bounded changed-file set.
+- Historical regression input is reconstructed only from durable jobs that have an intelligence context and an explicit `test_failure` classification.
+- Worker eligibility is derived from existing typed capabilities and online durable state.
+- Advisory mode never enqueues jobs.
+- Automatic mode has an explicit score threshold and requires a live eligible worker recommendation.
+- Only exact `rust_fast` and `rust_standard` Phase 16 profiles can cross the automatic bridge.
+- Automatic steps must be dependency-free, target `any`, and have no node labels.
+- Jobs are compiled through Phase 16 and pinned to an immutable head SHA.
+- Existing Agent/Policy/Executor and retry/capability checks remain authoritative.
+- Intelligence decisions are persisted and hash-chain audited.
+
+The current live-capacity bridge deliberately uses a conservative single-slot scheduling model because durable worker registration does not yet carry full memory/load/service-parallelism telemetry. It must not be interpreted as a complete host-resource monitor.
