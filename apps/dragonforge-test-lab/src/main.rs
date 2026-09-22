@@ -126,8 +126,7 @@ fn gui_fixture(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("gui-artifacts"));
     let fixture_script = PathBuf::from("scripts").join("phase7-gui-fixture.ps1");
-    let (report, crash) =
-        GuiAutomationClient.run_phase7_fixture(&fixture_script, &artifact_dir)?;
+    let (report, crash) = GuiAutomationClient.run_phase7_fixture(&fixture_script, &artifact_dir)?;
     println!("{}", serde_json::to_string_pretty(&report)?);
     println!("{}", serde_json::to_string_pretty(&crash)?);
     if !report.passed || !crash.captured {

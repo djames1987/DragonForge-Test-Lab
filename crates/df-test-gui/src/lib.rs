@@ -43,11 +43,23 @@ impl GuiPlan {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GuiAction {
-    WaitForWindow { timeout_ms: u64 },
-    SetValue { automation_id: String, value: String },
-    Invoke { automation_id: String },
-    AssertValue { automation_id: String, expected: String },
-    Screenshot { name: String },
+    WaitForWindow {
+        timeout_ms: u64,
+    },
+    SetValue {
+        automation_id: String,
+        value: String,
+    },
+    Invoke {
+        automation_id: String,
+    },
+    AssertValue {
+        automation_id: String,
+        expected: String,
+    },
+    Screenshot {
+        name: String,
+    },
 }
 
 impl GuiAction {
@@ -128,11 +140,7 @@ impl GuiAutomationClient {
         Ok(serde_json::from_slice(&output.stdout)?)
     }
 
-    pub fn run_plan(
-        &self,
-        plan: &GuiPlan,
-        artifact_dir: &Path,
-    ) -> Result<GuiRunReport, GuiError> {
+    pub fn run_plan(&self, plan: &GuiPlan, artifact_dir: &Path) -> Result<GuiRunReport, GuiError> {
         require_windows()?;
         plan.validate()?;
         fs::create_dir_all(artifact_dir)?;
