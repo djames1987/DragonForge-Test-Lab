@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 14 — Audit / Artifacts / Observability — Implementation complete
+Phase 14 — Audit / Artifacts / Observability — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, and Phase 13 added validated long-running worker services. Phase 14 adds controller schema v2, hash-chained durable audit events, redacted structured logs, JSONL rotation, durable/worker metrics, SHA-256 artifact cataloging, root-contained retention pruning, and telemetry query/pruning tooling.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, and Phase 13 added validated long-running worker services. Phase 14 adds validated controller schema v2, hash-chained durable audit events, redacted structured logs, JSONL rotation, durable/worker metrics, SHA-256 artifact cataloging, root-contained retention pruning, and telemetry query/pruning tooling. Full Phase 14 Windows host validation passed on 2026-09-22.
 
 ## Workspace
 
