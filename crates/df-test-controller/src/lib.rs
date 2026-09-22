@@ -1,3 +1,4 @@
+use df_test_intelligence::{ChangeSet, HistoricalFailure, TestProfile, WorkerCapacity, MAX_HISTORY_RECORDS};
 use df_test_lifecycle::{decide_failure, FailureClass, LifecycleDecision, RetryPolicy};
 use df_test_observability::{next_audit_digest, LogLevel, MetricPoint, StructuredLogEvent};
 use df_test_plans::TestPlan;
@@ -64,7 +65,7 @@ pub enum ControllerError {
     UnknownWorker,
 }
 
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -382,6 +383,25 @@ impl DurableController {
                     ON test_plans(updated_at_secs, plan_name);
 
                  PRAGMA user_version = 4;",
+            )?;
+            tx.commit()?;
+        }
+
+        if current < 5 {
+            let tx = self
+                .connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute_batch(
+                "CREATE TABLE IF NOT EXISTS intelligence_job_context (
+                    job_id TEXT PRIMARY KEY NOT NULL,
+                    profile_json TEXT NOT NULL,
+                    changed_files_json TEXT NOT NULL,
+                    created_at_secs INTEGER NOT NULL,
+                    FOREIGN KEY(job_id) REFERENCES jobs(job_id) ON DELETE CASCADE
+                 );
+                 CREATE INDEX IF NOT EXISTS idx_intelligence_context_created
+                    ON intelligence_job_context(created_at_secs, job_id);
+                 PRAGMA user_version = 5;",
             )?;
             tx.commit()?;
         }
@@ -1313,6 +1333,151 @@ impl DurableController {
         Ok(artifacts)
     }
 
+    pub fn record_intelligence_job_context(
+        &mut self,
+        job_id: Uuid,
+        profile: TestProfile,
+        changed_files: &[String],
+        now_secs: u64,
+    ) -> Result<(), DurableControllerError> {
+        let changes = ChangeSet {
+            files: changed_files.to_vec(),
+        };
+        changes.validate()?;
+        if self.get_job(job_id)?.is_none() {
+            return Err(DurableControllerError::UnknownJob);
+        }
+        let profile_json = serde_json::to_string(&profile)?;
+        let files_json = serde_json::to_string(changed_files)?;
+        self.connection.execute(
+            "INSERT INTO intelligence_job_context(job_id, profile_json, changed_files_json, created_at_secs)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(job_id) DO UPDATE SET
+                profile_json = excluded.profile_json,
+                changed_files_json = excluded.changed_files_json,
+                created_at_secs = excluded.created_at_secs",
+            params![job_id.to_string(), profile_json, files_json, to_i64(now_secs)?],
+        )?;
+        Ok(())
+    }
+
+    pub fn intelligence_historical_failures(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<HistoricalFailure>, DurableControllerError> {
+        if limit == 0 || limit > MAX_HISTORY_RECORDS {
+            return Err(DurableControllerError::InvalidQueryLimit);
+        }
+        let mut statement = self.connection.prepare(
+            "SELECT j.job_id, c.profile_json, j.last_error, c.changed_files_json, j.updated_at_secs
+             FROM jobs j
+             INNER JOIN intelligence_job_context c ON c.job_id = j.job_id
+             WHERE j.state IN ('failed','exhausted')
+               AND j.failure_class = 'test_failure'
+             ORDER BY j.updated_at_secs DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement.query_map([i64::try_from(limit).map_err(|_| DurableControllerError::IntegerOutOfRange)?], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+            ))
+        })?;
+        let mut failures = Vec::new();
+        for row in rows {
+            let (job_id, profile_json, message, changed_files_json, updated_at) = row?;
+            failures.push(HistoricalFailure {
+                id: Uuid::parse_str(&job_id)?,
+                profile: serde_json::from_str(&profile_json)?,
+                step: "plan_job".into(),
+                message: message.unwrap_or_else(|| "test job failed".into()),
+                changed_files: serde_json::from_str(&changed_files_json)?,
+                unix_time_secs: to_u64(updated_at)?,
+            });
+        }
+        Ok(failures)
+    }
+
+    pub fn intelligence_worker_capacities(
+        &self,
+    ) -> Result<Vec<WorkerCapacity>, DurableControllerError> {
+        let workers = self.list_workers()?;
+        let mut result = Vec::new();
+        for worker in workers.into_iter().filter(|worker| worker.online) {
+            let active_i64: i64 = self.connection.query_row(
+                "SELECT COUNT(*) FROM jobs
+                 WHERE assigned_worker = ?1 AND state IN ('assigned','running')",
+                [&worker.registration.worker_id],
+                |row| row.get(0),
+            )?;
+            let active_jobs = u16::try_from(active_i64)
+                .map_err(|_| DurableControllerError::IntegerOutOfRange)?;
+            let capabilities = &worker.registration.capabilities;
+            let mut supported_profiles = std::collections::BTreeSet::new();
+            let fast_required = [
+                df_test_protocol::Capability::CheckoutRepository,
+                df_test_protocol::Capability::CargoFmtCheck,
+                df_test_protocol::Capability::CargoTest,
+            ];
+            if fast_required.iter().all(|cap| capabilities.contains(cap)) {
+                supported_profiles.insert(TestProfile::RustFast);
+            }
+            let standard_required = [
+                df_test_protocol::Capability::CheckoutRepository,
+                df_test_protocol::Capability::CargoFmtCheck,
+                df_test_protocol::Capability::CargoClippy,
+                df_test_protocol::Capability::CargoTest,
+            ];
+            if standard_required.iter().all(|cap| capabilities.contains(cap)) {
+                supported_profiles.insert(TestProfile::RustStandard);
+            }
+            if supported_profiles.is_empty() {
+                continue;
+            }
+            let max_parallel_jobs = 1u16;
+            result.push(WorkerCapacity {
+                worker_id: worker.registration.worker_id,
+                supported_profiles,
+                total_memory_mib: 8192,
+                free_memory_mib: if active_jobs == 0 { 8192 } else { 0 },
+                max_parallel_jobs,
+                active_jobs: active_jobs.min(max_parallel_jobs),
+                load_percent: if active_jobs == 0 { 0 } else { 100 },
+            });
+        }
+        Ok(result)
+    }
+
+    pub fn record_intelligence_decision(
+        &mut self,
+        decision_id: Uuid,
+        mode: &str,
+        report: &serde_json::Value,
+        now_secs: u64,
+    ) -> Result<i64, DurableControllerError> {
+        let report_json = serde_json::to_string(report)?;
+        let tx = self.connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
+            "INSERT INTO intelligence_history(report_json, created_at_secs)
+             VALUES (?1, ?2)",
+            params![report_json, to_i64(now_secs)?],
+        )?;
+        let row_id = tx.last_insert_rowid();
+        insert_audit(
+            &tx,
+            now_secs,
+            "intelligence_decision",
+            "intelligence_decision",
+            &decision_id.to_string(),
+            &serde_json::json!({"mode": mode, "history_id": row_id}),
+        )?;
+        tx.commit()?;
+        Ok(row_id)
+    }
+
     pub fn record_intelligence(
         &mut self,
         report: &serde_json::Value,
@@ -1852,6 +2017,8 @@ pub enum DurableControllerError {
     Observability(#[from] df_test_observability::ObservabilityError),
     #[error("job lifecycle validation error: {0}")]
     Lifecycle(#[from] df_test_lifecycle::LifecycleError),
+    #[error("test intelligence validation error: {0}")]
+    Intelligence(#[from] df_test_intelligence::IntelligenceError),
     #[error("test plan validation error: {0}")]
     Plan(#[from] df_test_plans::PlanError),
     #[error("invalid stored failure classification: {0}")]
