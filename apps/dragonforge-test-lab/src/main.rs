@@ -586,10 +586,10 @@ fn plan_fixture() -> Result<(), Box<dyn std::error::Error>> {
     let plan_audit = controller.audit_events_for("test_plan", &plan.name)?;
     let plan_audited = plan_audit.len() == 1 && plan_audit[0].kind == "test_plan_created";
     let audit_chain_verified = controller.verify_audit_chain()?;
-    let schema_v4 = controller.schema_version()? == 4;
+    let schema_supports_plans = controller.schema_version()? >= 4;
 
     let report = serde_json::json!({
-        "schema_v4": schema_v4,
+        "schema_supports_plans": schema_supports_plans,
         "dependency_order_valid": dependency_order_valid,
         "initial_ready_valid": initial_ready_valid,
         "dependency_condition_valid": dependency_condition_valid,
@@ -603,7 +603,7 @@ fn plan_fixture() -> Result<(), Box<dyn std::error::Error>> {
     });
     println!("{}", serde_json::to_string_pretty(&report)?);
 
-    if !schema_v4
+    if !schema_supports_plans
         || !dependency_order_valid
         || !initial_ready_valid
         || !dependency_condition_valid
