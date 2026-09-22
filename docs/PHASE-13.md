@@ -53,7 +53,7 @@ Registration sends a typed WorkerServiceHello after the TLS handshake. Heartbeat
 
 Drain mode immediately prevents new work from being accepted while preserving the count of already active jobs.
 
-The worker remains in draining state until the service is resumed or stopped.
+A running worker refreshes the persisted drain/resume control before each heartbeat, so the CLI control commands affect the live service without requiring a restart. The worker remains in draining state until the service is resumed or stopped.
 
 CLI:
 
@@ -107,7 +107,7 @@ The service:
 - persists state;
 - reports Stopped.
 
-The generated WindowsServiceSpec uses the fixed service name:
+The generated WindowsServiceSpec launches the native `worker-service-windows` SCM dispatcher and uses the fixed service name:
 
     DragonForgeTestWorker
 
