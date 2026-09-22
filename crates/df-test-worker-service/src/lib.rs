@@ -395,7 +395,6 @@ impl SystemdServiceSpec {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkerServiceFixtureReport {
     pub mtls_registration: bool,
@@ -412,21 +411,21 @@ pub fn run_worker_service_fixture() -> Result<WorkerServiceFixtureReport, Worker
     let mut ca_params = CertificateParams::new(Vec::<String>::new())
         .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
     ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-    let ca_key =
-        KeyPair::generate().map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+    let ca_key = KeyPair::generate()
+        .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
     let ca = CertifiedIssuer::self_signed(ca_params, ca_key)
         .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
 
-    let server_key =
-        KeyPair::generate().map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+    let server_key = KeyPair::generate()
+        .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
     let server_params = CertificateParams::new(vec!["localhost".to_owned()])
         .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
     let server_cert = server_params
         .signed_by(&server_key, &ca)
         .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
 
-    let client_key =
-        KeyPair::generate().map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
+    let client_key = KeyPair::generate()
+        .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
     let client_params = CertificateParams::new(Vec::<String>::new())
         .map_err(|error| WorkerServiceError::CertificateFixture(error.to_string()))?;
     let client_cert = client_params
@@ -491,8 +490,7 @@ pub fn run_worker_service_fixture() -> Result<WorkerServiceFixtureReport, Worker
 
     let mut runtime = WorkerServiceRuntime::new(config.clone())?;
     runtime.mark_connecting();
-    let mut session =
-        MtlsWorkerSession::connect(&config, client_config, Duration::from_secs(5))?;
+    let mut session = MtlsWorkerSession::connect(&config, client_config, Duration::from_secs(5))?;
     let ack = session.register(&runtime)?;
     let mtls_registration = ack.accepted && ack.worker_id == config.worker_id;
     runtime.mark_connected(100);
@@ -541,7 +539,9 @@ pub fn run_worker_service_fixture() -> Result<WorkerServiceFixtureReport, Worker
     })
 }
 
-pub fn load_worker_config(path: impl AsRef<Path>) -> Result<WorkerServiceConfig, WorkerServiceError> {
+pub fn load_worker_config(
+    path: impl AsRef<Path>,
+) -> Result<WorkerServiceConfig, WorkerServiceError> {
     let content = fs::read_to_string(path)?;
     let config: WorkerServiceConfig = serde_json::from_str(&content)?;
     config.validate()?;
