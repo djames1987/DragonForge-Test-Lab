@@ -296,7 +296,10 @@ fn dashboard_serve(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let dashboard = Dashboard::new(dashboard_config(args)?)?;
     println!("DragonForge Test Lab dashboard");
     println!("bind={}", dashboard.bind_address());
-    println!("url=http://{}/#token=<DRAGONFORGE_DASHBOARD_TOKEN>", dashboard.bind_address());
+    println!(
+        "url=http://{}/#token=<DRAGONFORGE_DASHBOARD_TOKEN>",
+        dashboard.bind_address()
+    );
     println!("authentication=fragment_token_to_bearer_header");
     println!("read_only=true");
     println!("status=dashboard_listening");
