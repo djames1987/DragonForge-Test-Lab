@@ -45,8 +45,8 @@ Native Windows SCM service hosting, hardened Linux systemd unit generation, outb
 ## Phase 14 — Audit / Artifacts / Observability — Complete
 Controller schema v2, hash-chained durable audit events, redacted structured logs, JSONL rotation, durable metrics, worker runtime metrics, SHA-256 artifact cataloging, root-contained retention pruning, artifact retention metadata, telemetry pruning, and operator query tooling. Windows host validation passed on 2026-09-22.
 
-## Phase 15 — Recovery / Retry / Job Lifecycle — Implementation complete; validation pending
-Controller schema v3, explicit failure classification, persisted bounded retry policies, retry-pending/exhausted states, due-time retry scheduling, interrupted restart decisions, manual interrupted-job rescheduling with a global attempt ceiling, retry cancellation, lifecycle query tooling, and audit integration.
+## Phase 15 — Recovery / Retry / Job Lifecycle — Complete
+Controller schema v3, explicit failure classification, persisted bounded retry policies, retry-pending/exhausted states, due-time retry scheduling, interrupted restart decisions, manual interrupted-job rescheduling with a global attempt ceiling, retry cancellation, lifecycle query tooling, and audit integration. Windows host validation passed on 2026-09-22.
 
 ## Phase 16 — Test Plans
 Versioned declarative test plans for typed profiles, dependencies, conditions, timeouts, capabilities, artifacts, retries, target OS, and node labels.
