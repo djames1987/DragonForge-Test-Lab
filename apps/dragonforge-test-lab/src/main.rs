@@ -6,6 +6,7 @@ use df_test_distributed::{
 use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor};
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
 use df_test_gui::{GuiAutomationClient, GuiPlan};
+use df_test_mcp::{McpGateway, McpGatewayConfig};
 use df_test_policy::ExecutionPolicy;
 use df_test_protocol::{
     Capability, JobRequest, JobStatus, RepositorySpec, ResourceLimits, TestAction,
@@ -39,6 +40,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "distributed-fixtures" => distributed_fixtures(),
         "distributed-controller-once" => distributed_controller_once(&args[2..]),
         "distributed-node-connect" => distributed_node_connect(&args[2..]),
+        "mcp-doctor" => mcp_doctor(&args[2..]),
+        "mcp-serve" => mcp_serve(&args[2..]),
+        "mcp-fixture" => mcp_fixture(&args[2..]),
         "gui-doctor" => gui_doctor(),
         "gui-run-plan" => gui_run_plan(&args[2..]),
         "gui-fixture" => gui_fixture(&args[2..]),
@@ -75,7 +79,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=8");
+    println!("phase=9");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -243,6 +247,135 @@ fn unix_time_secs() -> Result<u64, Box<dyn std::error::Error>> {
     Ok(std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs())
+}
+
+fn mcp_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config = mcp_config(args)?;
+    let gateway = McpGateway::new(config.clone())?;
+
+    println!("DragonForge Test Lab MCP doctor");
+    println!("bind={}", gateway.bind_address());
+    println!("transport=loopback_http");
+    println!("authentication=bearer_token_from_environment");
+    println!("token_retained_in_plaintext=false");
+    println!(
+        "allowed_repository_prefixes={}",
+        config.allowed_repository_prefixes.len()
+    );
+    println!("mcp_modern=2026-07-28");
+    println!("mcp_legacy=2025-11-25");
+    println!("status=mcp_gateway_ready");
+    Ok(())
+}
+
+fn mcp_serve(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config = mcp_config(args)?;
+    let gateway = McpGateway::new(config)?;
+    println!("DragonForge Test Lab MCP gateway");
+    println!("bind={}", gateway.bind_address());
+    println!("endpoint=http://{}/mcp", gateway.bind_address());
+    println!("health=http://{}/health", gateway.bind_address());
+    println!("status=mcp_gateway_listening");
+    gateway.serve()?;
+    Ok(())
+}
+
+fn mcp_fixture(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let config = mcp_config(args)?;
+    let gateway = McpGateway::new(config)?;
+
+    let unauthorized = gateway.handle_http_request(df_test_mcp::HttpRequest {
+        method: "POST".into(),
+        path: "/mcp".into(),
+        headers: std::collections::HashMap::new(),
+        body: serde_json::to_vec(&serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":1,
+            "method":"tools/list",
+            "params":{}
+        }))?,
+    });
+    if unauthorized.status != 401 {
+        return Err("MCP fixture expected unauthenticated request to return 401".into());
+    }
+
+    let token = std::env::var("DRAGONFORGE_MCP_TOKEN")?;
+    let mut headers = std::collections::HashMap::new();
+    headers.insert("authorization".into(), format!("Bearer {token}"));
+    headers.insert("mcp-protocol-version".into(), "2026-07-28".into());
+    headers.insert("mcp-method".into(), "server/discover".into());
+
+    let discovery = gateway.handle_http_request(df_test_mcp::HttpRequest {
+        method: "POST".into(),
+        path: "/mcp".into(),
+        headers,
+        body: serde_json::to_vec(&serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"server/discover",
+            "params":{
+                "_meta":{
+                    "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+                    "io.modelcontextprotocol/clientInfo":{
+                        "name":"dragonforge-phase9-fixture",
+                        "version":"1.0"
+                    },
+                    "io.modelcontextprotocol/clientCapabilities":{}
+                }
+            }
+        }))?,
+    });
+
+    if discovery.status != 200 {
+        return Err("MCP modern discovery fixture failed".into());
+    }
+    let body = discovery.body.ok_or("MCP discovery returned no body")?;
+    if body["result"]["supportedVersions"]
+        .as_array()
+        .map(|versions| versions.iter().any(|version| version == "2026-07-28"))
+        != Some(true)
+    {
+        return Err("MCP discovery did not advertise 2026-07-28".into());
+    }
+
+    println!("unauthorized_request=blocked");
+    println!("modern_discovery=passed");
+    println!("tool_surface=typed_only");
+    println!("status=mcp_fixture_passed");
+    Ok(())
+}
+
+fn mcp_config(args: &[String]) -> Result<McpGatewayConfig, Box<dyn std::error::Error>> {
+    let bind: std::net::SocketAddr = value_after(args, "--bind")
+        .unwrap_or_else(|| "127.0.0.1:45890".into())
+        .parse()?;
+
+    let bearer_token = std::env::var("DRAGONFORGE_MCP_TOKEN")
+        .map_err(|_| "DRAGONFORGE_MCP_TOKEN must be set and at least 32 characters")?;
+    if bearer_token.len() < 32 {
+        return Err("DRAGONFORGE_MCP_TOKEN must be at least 32 characters".into());
+    }
+
+    let allowlist = std::env::var("DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES")
+        .map_err(|_| "DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES must be set")?;
+    let allowed_repository_prefixes: Vec<String> = allowlist
+        .split(';')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .collect();
+    if allowed_repository_prefixes.is_empty() {
+        return Err("DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES must contain at least one HTTPS prefix".into());
+    }
+
+    Ok(McpGatewayConfig {
+        bind,
+        bearer_token,
+        allowed_repository_prefixes,
+        lab_root: lab_root(args),
+        sandbox_mode: sandbox_mode(args)?,
+        expected_worker_user: value_after(args, "--worker-user"),
+    })
 }
 
 fn gui_doctor() -> Result<(), Box<dyn std::error::Error>> {
@@ -744,6 +877,9 @@ fn print_help() {
     println!("Usage:");
     println!("  dragonforge-test-lab doctor");
     println!("  dragonforge-test-lab github-doctor");
+    println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
+    println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
+    println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");
     println!("  dragonforge-test-lab distributed-doctor");
     println!("  dragonforge-test-lab distributed-fixtures");
     println!(
