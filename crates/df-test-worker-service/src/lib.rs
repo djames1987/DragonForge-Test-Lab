@@ -499,7 +499,7 @@ pub fn run_worker_service_fixture() -> Result<WorkerServiceFixtureReport, Worker
     let windows = WindowsServiceSpec::new(executable, PathBuf::from("worker.json"))?;
     let windows_service_spec_valid = windows.service_name == WINDOWS_SERVICE_NAME
         && windows.start_type == "automatic"
-        && windows.command_line().contains("worker-service-run");
+        && windows.command_line().contains("worker-service-windows");
 
     let systemd = SystemdServiceSpec::new(
         PathBuf::from("/opt/dragonforge/bin/dragonforge-test-lab"),
@@ -735,7 +735,7 @@ mod tests {
         assert_eq!(spec.service_name, WINDOWS_SERVICE_NAME);
         assert_eq!(spec.start_type, "automatic");
         assert_eq!(spec.restart_delays_seconds, vec![5, 15, 60]);
-        assert!(spec.command_line().contains("worker-service-run"));
+        assert!(spec.command_line().contains("worker-service-windows"));
     }
 
     #[test]
