@@ -9,6 +9,9 @@ use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepo
 use df_test_gui::{GuiAutomationClient, GuiPlan};
 use df_test_identity::{run_mtls_fixture, validate_private_controller_address};
 use df_test_intelligence::{analyze, IntelligenceInput, TestProfile, WorkerCapacity};
+use df_test_intelligence_integration::{
+    integrate, IntegrationRequest, IntelligenceMode, DEFAULT_MIN_AUTOMATIC_SCORE,
+};
 use df_test_lifecycle::{FailureClass, LifecycleDecision, RetryPolicy};
 use df_test_mcp::{McpGateway, McpGatewayConfig};
 use df_test_observability::{
@@ -89,6 +92,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "intelligence-doctor" => intelligence_doctor(),
         "intelligence-analyze" => intelligence_analyze(&args[2..]),
         "intelligence-fixture" => intelligence_fixture(),
+        "intelligence-integration-doctor" => intelligence_integration_doctor(),
+        "intelligence-integrate" => intelligence_integrate(&args[2..]),
         "gui-doctor" => gui_doctor(),
         "gui-run-plan" => gui_run_plan(&args[2..]),
         "gui-fixture" => gui_fixture(&args[2..]),
@@ -125,7 +130,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=16");
+    println!("phase=17");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -1531,6 +1536,73 @@ fn intelligence_fixture() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn intelligence_integration_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let controller = DurableController::open_in_memory()?;
+    if controller.schema_version()? < 5 {
+        return Err("Phase 17 controller schema is unavailable".into());
+    }
+    if IntelligenceMode::parse("advisory")? != IntelligenceMode::Advisory
+        || IntelligenceMode::parse("automatic")? != IntelligenceMode::Automatic
+    {
+        return Err("Phase 17 intelligence modes are invalid".into());
+    }
+
+    println!("DragonForge Test Lab intelligence integration doctor");
+    println!("controller_schema={}", controller.schema_version()?);
+    println!("git_change_source=github_compare");
+    println!("historical_failures=durable_test_failure_context");
+    println!("worker_capacity=durable_online_workers_and_live_slots");
+    println!("advisory_mode=true");
+    println!("automatic_mode=typed_root_plan_steps_only");
+    println!("decision_audit=hash_chained");
+    println!("default_automatic_score={DEFAULT_MIN_AUTOMATIC_SCORE}");
+    println!("status=intelligence_integration_ready");
+    Ok(())
+}
+
+fn intelligence_integrate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let repository_url = value_after(args, "--repo").ok_or("missing --repo <github-https-url>")?;
+    let base_revision = value_after(args, "--base").ok_or("missing --base <revision>")?;
+    let head_revision = value_after(args, "--head").ok_or("missing --head <revision>")?;
+    let plan_name = value_after(args, "--plan").ok_or("missing --plan <stored-plan-name>")?;
+    let mode = IntelligenceMode::parse(
+        &value_after(args, "--mode").unwrap_or_else(|| "advisory".into()),
+    )?;
+    let min_automatic_score = value_after(args, "--min-score")
+        .map(|value| value.parse())
+        .transpose()?
+        .unwrap_or(DEFAULT_MIN_AUTOMATIC_SCORE);
+    let state_db = value_after(args, "--state-db")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
+    if let Some(parent) = state_db.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
+    let mut controller = DurableController::open(&state_db)?;
+    let github = GhGitHubClient::default();
+    github.doctor()?;
+    let decision = integrate(
+        &mut controller,
+        &github,
+        &IntegrationRequest {
+            repository_url,
+            base_revision,
+            head_revision,
+            plan_name,
+            mode,
+            min_automatic_score,
+            now_secs,
+        },
+    )?;
+    println!("{}", serde_json::to_string_pretty(&decision)?);
+    println!("status=intelligence_integration_complete");
+    Ok(())
+}
+
 fn gui_doctor() -> Result<(), Box<dyn std::error::Error>> {
     let report = GuiAutomationClient.doctor()?;
     println!("DragonForge Test Lab GUI doctor");
@@ -2060,6 +2132,8 @@ fn print_help() {
     println!("  dragonforge-test-lab intelligence-doctor");
     println!("  dragonforge-test-lab intelligence-analyze --input <intelligence.json>");
     println!("  dragonforge-test-lab intelligence-fixture");
+    println!("  dragonforge-test-lab intelligence-integration-doctor");
+    println!("  dragonforge-test-lab intelligence-integrate --repo <github-https-url> --base <revision> --head <revision> --plan <stored-plan-name> [--mode advisory|automatic] [--min-score 60] [--state-db <path>]");
     println!("  dragonforge-test-lab distributed-doctor");
     println!("  dragonforge-test-lab distributed-fixtures");
     println!(
