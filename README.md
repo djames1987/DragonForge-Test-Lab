@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 15 — Recovery / Retry / Job Lifecycle — Implementation complete
+Phase 15 — Recovery / Retry / Job Lifecycle — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, and Phase 14 added validated audit/artifact/observability infrastructure. Phase 15 adds controller schema v3, explicit failure classification, persisted bounded retry policies, retry-pending/exhausted states, restart-interruption decisions, safe manual rescheduling, and lifecycle query tooling.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, and Phase 14 added validated audit/artifact/observability infrastructure. Phase 15 adds validated controller schema v3, explicit failure classification, persisted bounded retry policies, retry-pending/exhausted states, restart-interruption decisions, safe manual rescheduling, and lifecycle query tooling. Full Phase 15 Windows host validation passed on 2026-09-22.
 
 ## Workspace
 
