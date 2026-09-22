@@ -21,8 +21,8 @@ Nextest workspace execution, LLVM coverage, deterministic property tests, Criter
 ## Phase 6 — Windows Integration — Complete
 Typed Windows doctor and fixtures for registry, processes, TCP/UDP loopback networking, Service Control Manager, Application Event Log writes, Windows Installer discovery, MSI Authenticode inspection, elevation detection, explicit privileged confirmation, readiness tooling, and uploadable validation logs. Safe and privileged validation passed on both the Windows host and Windows VM on 2026-09-22.
 
-## Phase 7 — GUI Automation — Implementation complete; validation pending
-Typed Windows UI Automation for DragonForge-managed windows, deterministic JSON interaction plans, ValuePattern/InvokePattern actions, bounded assertions, window screenshots, artifact containment, deterministic fixture application, owned-process crash/exit capture, readiness tooling, and uploadable validation logs.
+## Phase 7 — GUI Automation — Complete
+Typed Windows UI Automation for DragonForge-managed windows, deterministic JSON interaction plans, ValuePattern/InvokePattern actions, bounded assertions, window screenshots, artifact containment, deterministic WPF fixture application, owned-process crash/exit capture, readiness tooling, and uploadable validation logs. Host and Windows VM validation passed on 2026-09-22.
 
 ## Phase 8 — Multi-machine & Network Lab
 Turn DragonForge Test Lab into a distributed capability-based test cluster. Authorized physical machines, VMs, container hosts, Raspberry Pi systems, Linux servers, Windows machines, and other supported hardware can register as worker nodes and receive only jobs matching their capabilities and policy. Add authenticated controller/agent transport, node lifecycle and health, capability/load-aware scheduling, artifact/result return, coordinated multi-node jobs, TCP/UDP/DNS fixtures, fault injection, hardware-in-the-loop support, and network-isolated test scenarios. Nodes should initiate authenticated outbound connections where practical; Test Lab must not become a general remote shell.
