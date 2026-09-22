@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 6 — Windows Integration — Implementation complete
+Phase 6 — Windows Integration — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added nextest, LLVM coverage, property testing, Criterion benchmarks, Miri, sanitizers, and bounded fuzzing. Phase 6 adds typed Windows OS fixtures for registry, processes, loopback networking, Service Control Manager, Event Log, Windows Installer discovery, MSI signature inspection, and privilege-sensitive validation.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added nextest, LLVM coverage, property testing, Criterion benchmarks, Miri, sanitizers, and bounded fuzzing. Phase 6 adds typed Windows OS fixtures for registry, processes, loopback networking, Service Control Manager, Event Log, Windows Installer discovery, MSI signature inspection, and privilege-sensitive validation. Safe and privileged Phase 6 validation passed on both the Windows host and Windows VM on 2026-09-22.
 
 ## Workspace
 
