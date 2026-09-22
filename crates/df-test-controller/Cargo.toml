@@ -8,6 +8,7 @@ rust-version.workspace = true
 [dependencies]
 df-test-protocol = { path = "../df-test-protocol" }
 df-test-observability = { path = "../df-test-observability" }
+df-test-lifecycle = { path = "../df-test-lifecycle" }
 uuid.workspace = true
 serde.workspace = true
 serde_json.workspace = true
