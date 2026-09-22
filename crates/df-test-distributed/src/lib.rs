@@ -1368,7 +1368,11 @@ mod tests {
             profile: profile(
                 "node-after-probe",
                 "windows",
-                &[NodeFeature::TcpFixture, NodeFeature::UdpFixture, NodeFeature::DnsFixture],
+                &[
+                    NodeFeature::TcpFixture,
+                    NodeFeature::UdpFixture,
+                    NodeFeature::DnsFixture,
+                ],
             ),
             outbound_only: true,
             key_id: "probe-key".into(),
@@ -1388,7 +1392,10 @@ mod tests {
         assert_eq!(result.result.status, JobStatus::Passed);
 
         let server_result = server.join().unwrap();
-        assert_eq!(server_result.registration.profile.node_id, "node-after-probe");
+        assert_eq!(
+            server_result.registration.profile.node_id,
+            "node-after-probe"
+        );
         assert_eq!(server_result.result.status, JobStatus::Passed);
     }
 
