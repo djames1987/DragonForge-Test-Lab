@@ -667,6 +667,16 @@ pub fn serve_registration_probe_once(
     timeout: Duration,
 ) -> Result<CrossNodeServerResult, DistributedError> {
     validate_controller_addr(bind)?;
+    let listener = TcpListener::bind(bind)?;
+    serve_registration_probe_listener(listener, key_id, secret, timeout)
+}
+
+fn serve_registration_probe_listener(
+    listener: TcpListener,
+    key_id: &str,
+    secret: &[u8],
+    timeout: Duration,
+) -> Result<CrossNodeServerResult, DistributedError> {
     validate_identifier(key_id, 64)?;
     if secret.len() < 32 {
         return Err(DistributedError::WeakSharedSecret);
@@ -675,7 +685,6 @@ pub fn serve_registration_probe_once(
         return Err(DistributedError::InvalidConnectTimeout);
     }
 
-    let listener = TcpListener::bind(bind)?;
     listener.set_nonblocking(true)?;
     let deadline = Instant::now() + timeout;
     let mut verifier = EnvelopeVerifier::new(30)?;
@@ -1345,21 +1354,19 @@ mod tests {
         let secret = [0x33u8; 32];
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let address = listener.local_addr().unwrap();
-        drop(listener);
 
         let server_secret = secret;
         let server = std::thread::spawn(move || {
-            serve_registration_probe_once(
-                address,
+            serve_registration_probe_listener(
+                listener,
                 "probe-key",
                 &server_secret,
-                current_unix_time_secs().unwrap(),
                 Duration::from_secs(10),
             )
             .unwrap()
         });
 
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(25));
         let probe = TcpStream::connect(address).unwrap();
         drop(probe);
 
