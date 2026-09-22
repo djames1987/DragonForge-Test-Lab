@@ -1,6 +1,4 @@
-use df_test_protocol::{
-    ArtifactRef, JobRequest, JobResult, WorkerRegistration, PROTOCOL_VERSION,
-};
+use df_test_protocol::{ArtifactRef, JobRequest, JobResult, WorkerRegistration, PROTOCOL_VERSION};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -763,10 +761,7 @@ impl DurableController {
         Ok(workers)
     }
 
-    pub fn list_artifacts(
-        &self,
-        job_id: Uuid,
-    ) -> Result<Vec<ArtifactRef>, DurableControllerError> {
+    pub fn list_artifacts(&self, job_id: Uuid) -> Result<Vec<ArtifactRef>, DurableControllerError> {
         let mut statement = self.connection.prepare(
             "SELECT name, relative_path, size_bytes, sha256
              FROM artifact_metadata
@@ -967,9 +962,7 @@ pub enum DurableControllerError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use df_test_protocol::{
-        Capability, JobStatus, RepositorySpec, TestAction,
-    };
+    use df_test_protocol::{Capability, JobStatus, RepositorySpec, TestAction};
     use std::{collections::BTreeSet, fs};
 
     fn test_job() -> JobRequest {
@@ -978,7 +971,10 @@ mod tests {
                 url: "https://github.com/example/project.git".into(),
                 revision: "main".into(),
             },
-            vec![TestAction::Checkout, TestAction::CargoTest { all_features: true }],
+            vec![
+                TestAction::Checkout,
+                TestAction::CargoTest { all_features: true },
+            ],
         )
     }
 
@@ -988,10 +984,7 @@ mod tests {
             protocol_version: PROTOCOL_VERSION,
             os: "windows".into(),
             arch: "x86_64".into(),
-            capabilities: BTreeSet::from([
-                Capability::CheckoutRepository,
-                Capability::CargoTest,
-            ]),
+            capabilities: BTreeSet::from([Capability::CheckoutRepository, Capability::CargoTest]),
         }
     }
 
@@ -1032,10 +1025,8 @@ mod tests {
 
     #[test]
     fn durable_state_survives_reopen_and_completion() {
-        let path = std::env::temp_dir().join(format!(
-            "dragonforge-phase11-{}.sqlite3",
-            Uuid::new_v4()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("dragonforge-phase11-{}.sqlite3", Uuid::new_v4()));
         let job = test_job();
 
         {
