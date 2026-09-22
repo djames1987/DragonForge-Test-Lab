@@ -27,6 +27,7 @@ pub const MCP_LEGACY_VERSION: &str = "2025-11-25";
 pub const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
 pub const MAX_HTTP_BODY_BYTES: usize = 256 * 1024;
 pub const MAX_GATEWAY_JOBS: usize = 1024;
+pub const MAX_ACTIVE_GATEWAY_JOBS: usize = 4;
 pub const MAX_ARTIFACTS_PER_JOB: usize = 256;
 
 #[derive(Debug, Clone)]
@@ -107,7 +108,7 @@ impl GatewayJobSubmission {
         }
         if !prefixes
             .iter()
-            .any(|prefix| self.repository.starts_with(prefix))
+            .any(|prefix| repository_allowed(&self.repository, prefix))
         {
             return Err(McpGatewayError::RepositoryNotAllowed);
         }
@@ -471,6 +472,14 @@ impl McpGateway {
             if state.jobs.len() >= MAX_GATEWAY_JOBS {
                 return Err(McpGatewayError::JobCapacityExceeded);
             }
+            let active_jobs = state
+                .jobs
+                .values()
+                .filter(|job| matches!(job.state, GatewayJobState::Queued | GatewayJobState::Running))
+                .count();
+            if active_jobs >= MAX_ACTIVE_GATEWAY_JOBS {
+                return Err(McpGatewayError::ActiveJobLimitExceeded);
+            }
             state.jobs.insert(job_id, record);
         }
 
@@ -770,6 +779,16 @@ fn parse_job_id(arguments: &Value) -> Result<Uuid, McpGatewayError> {
         .and_then(Value::as_str)
         .ok_or(McpGatewayError::MissingJobId)?;
     Uuid::parse_str(value).map_err(|_| McpGatewayError::InvalidJobId)
+}
+
+fn repository_allowed(repository: &str, prefix: &str) -> bool {
+    if prefix.ends_with('/') {
+        return repository.starts_with(prefix);
+    }
+
+    let repository = repository.strip_suffix(".git").unwrap_or(repository);
+    let prefix = prefix.strip_suffix(".git").unwrap_or(prefix);
+    repository == prefix
 }
 
 fn validate_revision(value: &str) -> Result<(), McpGatewayError> {
@@ -1190,6 +1209,8 @@ pub enum McpGatewayError {
     InvalidRevision,
     #[error("gateway job capacity exceeded")]
     JobCapacityExceeded,
+    #[error("gateway concurrent job limit exceeded")]
+    ActiveJobLimitExceeded,
     #[error("unknown gateway job: {0}")]
     UnknownJob(Uuid),
     #[error("missing job_id")]
@@ -1284,6 +1305,16 @@ mod tests {
             invalid.validate(&["https://github.com/djames1987/".into()]),
             Err(McpGatewayError::RepositoryNotAllowed)
         ));
+
+        let lookalike = GatewayJobSubmission {
+            repository: "https://github.com/djames1987/project-evil.git".into(),
+            revision: "main".into(),
+            profile: GatewayJobProfile::RustTest,
+        };
+        assert!(matches!(
+            lookalike.validate(&["https://github.com/djames1987/project.git".into()]),
+            Err(McpGatewayError::RepositoryNotAllowed)
+        ));
     }
 
     #[test]
@@ -1371,7 +1402,10 @@ mod tests {
                 "id":1,
                 "method":"server/discover",
                 "params":{
-                    "_meta":{"io.modelcontextprotocol/protocolVersion":MCP_MODERN_VERSION}
+                    "_meta":{
+                        "io.modelcontextprotocol/protocolVersion":MCP_MODERN_VERSION,
+                        "io.modelcontextprotocol/clientCapabilities":{}
+                    }
                 }
             }))
             .unwrap(),
