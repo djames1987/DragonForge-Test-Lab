@@ -9,7 +9,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-protocol: versioned, serializable contracts shared by controllers and agents.
 - df-test-policy: repository, capability, and resource-limit authorization.
 - df-test-agent: worker-side trust boundary and protocol compatibility gate.
-- df-test-controller: queue/capability-aware scheduling plus SQLite-backed durable controller state, restart recovery, Phase 14 audit chaining, structured logs, metrics, and artifact retention metadata.
+- df-test-controller: queue/capability-aware scheduling plus SQLite-backed durable controller state, restart recovery, Phase 14 observability, and Phase 15 retry/lifecycle persistence.
 - df-test-executor: local workspace, fixed-command process execution, cancellation, output capture, artifact generation, and cleanup.
 - df-test-github: typed GitHub repository/ref resolution and commit-status reporting through the authenticated gh CLI.
 - df-test-sandbox: native/container sandbox selection, Windows Job Object containment, resource ceilings, worker-identity enforcement, and fixed Docker/Podman wrapping.
@@ -19,6 +19,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-distributed: authenticated node envelopes, lease/heartbeat inventory, capability/load-aware multi-node scheduling, framed outbound transport, typed network tasks, and hashed distributed result manifests.
 - df-test-mcp: loopback-only authenticated MCP HTTP gateway, protocol/version handling, named tool schemas, bounded asynchronous job registry, typed profile submission, and result/artifact metadata projection.
 - df-test-observability: structured log validation/redaction and JSONL rotation, metrics registry/snapshots, SHA-256 artifact cataloging, retention pruning, and audit digest construction.
+- df-test-lifecycle: typed failure classes, bounded retry policy, exponential backoff calculation, and lifecycle decisions without process execution.
 - dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, deep-Rust tool readiness, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
@@ -289,3 +290,32 @@ Controller schema v2 extends the durable Phase 11 database rather than creating 
 WorkerServiceRuntime exposes deterministic operational metrics for active jobs, job admission, drain state, and reconnect attempts. These metrics are intended to become input to the Phase 18 dashboard and later scheduling/intelligence integrations, but Phase 14 metrics do not themselves authorize or execute work.
 
 Artifact retention is filesystem-root constrained. Cataloging canonicalizes files beneath the configured artifact root, rejects symlinks and escapes, hashes content with SHA-256, and retention removes only eligible canonical regular files beneath that same root.
+
+
+## Phase 15 recovery / retry / lifecycle flow
+
+    typed durable job
+          |
+          +--> persisted RetryPolicy
+          |
+       assigned -> running
+          |
+          +--> passed/rejected/cancelled -> terminal
+          |
+          +--> test failure -> failed (never automatic retry)
+          |
+          +--> permanent infrastructure failure -> failed
+          |
+          +--> transient infrastructure failure
+                    |
+                    +--> attempts remain -> retry_pending + due timestamp
+                    |                         |
+                    |                         +--> due -> normal capability scheduler
+                    |                                      -> new durable attempt
+                    +--> limit reached -> exhausted
+
+Controller restart treats assigned/running work as interrupted. The latest attempt is closed as interrupted. Only jobs whose persisted policy explicitly enables interrupted retry can move automatically to retry_pending; otherwise they remain interrupted until an operator explicitly reschedules them.
+
+Manual interrupted-job rescheduling is auditable and bypasses only the job's automatic retry preference, not the global five-attempt safety ceiling. Every reassignment still returns through normal capability-aware scheduling and subsequently through the existing Agent/Policy/Executor worker trust boundary.
+
+Schema v3 stores retry policy, failure class, retry due time, retry reason, and attempt-level failure class. Retry due times are durable, so restart cannot make an early retry eligible.

@@ -69,6 +69,12 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 63. Artifact cataloging and deletion canonicalize paths beneath a configured artifact root, reject symlinks/traversal, and never delete arbitrary caller-selected filesystem paths.
 64. Telemetry pruning applies only to structured logs and metric samples; audit history is not deleted by the telemetry-prune operation.
 65. Metrics must use validated names and finite values and do not themselves authorize scheduling or execution.
+66. Phase 15 test failures are never automatically retried; retryable failure classification must be explicit.
+67. Automatic retry is limited to persisted retry policy with a hard global ceiling of five attempts and bounded exponential delay.
+68. Restart-interrupted jobs are not automatically replayed unless their persisted policy explicitly enables interrupted retry.
+69. Retry-pending jobs remain unschedulable until their durable next-retry timestamp and still pass normal capability/policy authorization when reassigned.
+70. Manual interrupted-job rescheduling is allowed only from interrupted state, is hash-chain audited, and remains subject to the global five-attempt ceiling.
+71. Cancelling a retry-pending job clears its retry due time so cancelled work cannot later become eligible.
 
 ## Local execution boundary
 
@@ -200,9 +206,17 @@ New audit rows contain a hash of their sequence, previous digest, timestamp, typ
 
 Artifact retention is deliberately root-contained. Cataloging and pruning canonicalize the configured artifact root and target file, reject symlinks and parent traversal, and remove only regular files under the root. Telemetry pruning deletes only old structured-log and metric rows and leaves audit history intact.
 
+## Phase 15 recovery / retry / lifecycle boundary
+
+Phase 15 introduces retry as a typed controller decision, not as a generic process restart mechanism. Failure classification is explicit. The legacy completion path treats ordinary failed tests as `test_failure`, preserving fail-closed behavior. Only `infrastructure_transient` is automatically retryable by default; `interrupted` additionally requires a persisted opt-in.
+
+Retry policies are bounded to five total attempts, bounded delays, and persisted due timestamps. A retry-pending job must wait until its due timestamp and then re-enter the normal capability-aware scheduling path. It does not retain execution authorization from an earlier attempt.
+
+Controller restart closes uncertain assigned/running attempts as interrupted. Jobs without interrupted-retry opt-in remain interrupted. Operators may explicitly reschedule an interrupted job, but only while it is in that state and only below the global attempt limit. Every lifecycle transition is written to the existing hash-chained audit stream.
+
 ## Current enforcement
 
-Phases 1-14 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-15 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 

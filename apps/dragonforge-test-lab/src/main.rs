@@ -9,6 +9,7 @@ use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepo
 use df_test_gui::{GuiAutomationClient, GuiPlan};
 use df_test_identity::{run_mtls_fixture, validate_private_controller_address};
 use df_test_intelligence::{analyze, IntelligenceInput, TestProfile, WorkerCapacity};
+use df_test_lifecycle::{FailureClass, LifecycleDecision, RetryPolicy};
 use df_test_mcp::{McpGateway, McpGatewayConfig};
 use df_test_observability::{
     catalog_artifact, prune_artifacts, ArtifactRetentionPolicy, JsonlLogWriter, LogLevel,
@@ -64,6 +65,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "observability-doctor" => observability_doctor(),
         "observability-fixture" => observability_fixture(),
         "observability-summary" => observability_summary(&args[2..]),
+        "lifecycle-doctor" => lifecycle_doctor(),
+        "lifecycle-fixture" => lifecycle_fixture(),
+        "lifecycle-status" => lifecycle_status(&args[2..]),
+        "lifecycle-reschedule" => lifecycle_reschedule(&args[2..]),
         "distributed-doctor" => distributed_doctor(),
         "distributed-fixtures" => distributed_fixtures(),
         "distributed-controller-once" => distributed_controller_once(&args[2..]),
@@ -110,7 +115,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=14");
+    println!("phase=15");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -273,6 +278,207 @@ fn identity_fixture() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn lifecycle_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let policy = RetryPolicy::bounded(3, 5, 60, true)?;
+    if policy.max_attempts != 3
+        || policy.base_delay_secs != 5
+        || policy.max_delay_secs != 60
+        || !policy.retry_interrupted
+    {
+        return Err("retry policy validation produced unexpected values".into());
+    }
+
+    let controller = DurableController::open_in_memory()?;
+    if controller.schema_version()? != 3 {
+        return Err("controller lifecycle schema is not current".into());
+    }
+
+    println!("DragonForge Test Lab lifecycle doctor");
+    println!("controller_schema=3");
+    println!("failure_classification=explicit");
+    println!("test_failure_retry=disabled");
+    println!("transient_infrastructure_retry=bounded");
+    println!("interrupted_retry=explicit_opt_in");
+    println!("max_attempts={}", df_test_lifecycle::MAX_ATTEMPTS);
+    println!("retry_backoff=bounded_exponential");
+    println!("manual_interrupted_reschedule=enabled");
+    println!("status=lifecycle_ready");
+    Ok(())
+}
+
+fn lifecycle_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let mut controller = DurableController::open_in_memory()?;
+    let worker = WorkerRegistration {
+        worker_id: "phase15-fixture-worker".into(),
+        protocol_version: PROTOCOL_VERSION,
+        os: std::env::consts::OS.into(),
+        arch: std::env::consts::ARCH.into(),
+        capabilities: [Capability::CheckoutRepository, Capability::CargoTest]
+            .into_iter()
+            .collect(),
+    };
+    controller.register_worker(&worker, 1)?;
+
+    let retry_job = JobRequest::new(
+        RepositorySpec {
+            url: "https://github.com/djames1987/DragonForge-Test-Lab.git".into(),
+            revision: "main".into(),
+        },
+        vec![
+            TestAction::Checkout,
+            TestAction::CargoTest { all_features: true },
+        ],
+    );
+    controller.enqueue_job_with_retry(&retry_job, RetryPolicy::bounded(3, 5, 30, false)?, 2)?;
+    controller
+        .assign_next(&worker.worker_id, 3)?
+        .ok_or("Phase 15 fixture did not assign initial retry job")?;
+    controller.mark_running(retry_job.id, 4)?;
+
+    let retry_decision = controller.complete_job_with_classification(
+        &df_test_protocol::JobResult {
+            job_id: retry_job.id,
+            status: JobStatus::Failed,
+            summary: "fixture transport interruption".into(),
+            artifacts: vec![],
+        },
+        Some(FailureClass::InfrastructureTransient),
+        5,
+    )?;
+    let transient_retry_scheduled = retry_decision
+        == LifecycleDecision::RetryScheduled {
+            next_retry_at_secs: 10,
+        };
+    let retry_not_early = controller.assign_next(&worker.worker_id, 9)?.is_none();
+    let retry_assigned_when_due = controller
+        .assign_next(&worker.worker_id, 10)?
+        .map(|job| job.id)
+        == Some(retry_job.id);
+    controller.mark_running(retry_job.id, 11)?;
+    let test_failure_decision = controller.complete_job_with_classification(
+        &df_test_protocol::JobResult {
+            job_id: retry_job.id,
+            status: JobStatus::Failed,
+            summary: "fixture assertion failure".into(),
+            artifacts: vec![],
+        },
+        Some(FailureClass::TestFailure),
+        12,
+    )?;
+    let test_failure_terminal = test_failure_decision == LifecycleDecision::TerminalFailed
+        && controller.get_job(retry_job.id)?.map(|job| job.state) == Some(DurableJobState::Failed);
+    let attempt_history_preserved = controller.list_attempts(retry_job.id)?.len() == 2;
+
+    let recovery_job = JobRequest::new(
+        RepositorySpec {
+            url: "https://github.com/djames1987/DragonForge-Test-Lab.git".into(),
+            revision: "main".into(),
+        },
+        vec![TestAction::Checkout],
+    );
+    controller.enqueue_job_with_retry(&recovery_job, RetryPolicy::bounded(2, 7, 30, true)?, 20)?;
+    controller
+        .assign_next(&worker.worker_id, 21)?
+        .ok_or("Phase 15 fixture did not assign recovery job")?;
+    controller.mark_running(recovery_job.id, 22)?;
+    controller.recover_after_restart(30)?;
+    let recovered = controller
+        .get_job(recovery_job.id)?
+        .ok_or("Phase 15 recovery job disappeared")?;
+    let interrupted_retry_scheduled = recovered.state == DurableJobState::RetryPending
+        && recovered.failure_class == Some(FailureClass::Interrupted)
+        && recovered.next_retry_at_secs == Some(37);
+
+    let manual_job = JobRequest::new(
+        RepositorySpec {
+            url: "https://github.com/djames1987/DragonForge-Test-Lab.git".into(),
+            revision: "main".into(),
+        },
+        vec![TestAction::Checkout],
+    );
+    controller.enqueue_job(&manual_job, 31)?;
+    controller
+        .assign_next(&worker.worker_id, 32)?
+        .ok_or("Phase 15 fixture did not assign manual recovery job")?;
+    controller.mark_running(manual_job.id, 33)?;
+    controller.recover_after_restart(34)?;
+    let manual_interrupted = controller.get_job(manual_job.id)?.map(|job| job.state)
+        == Some(DurableJobState::Interrupted);
+    controller.reschedule_interrupted_job(manual_job.id, 35)?;
+    let manual_interrupted_reschedule = manual_interrupted
+        && controller.get_job(manual_job.id)?.map(|job| job.state) == Some(DurableJobState::Queued);
+
+    let audit_chain_verified = controller.verify_audit_chain()?;
+    let schema_v3 = controller.schema_version()? == 3;
+
+    let report = serde_json::json!({
+        "schema_v3": schema_v3,
+        "transient_retry_scheduled": transient_retry_scheduled,
+        "retry_not_early": retry_not_early,
+        "retry_assigned_when_due": retry_assigned_when_due,
+        "test_failure_terminal": test_failure_terminal,
+        "interrupted_retry_scheduled": interrupted_retry_scheduled,
+        "manual_interrupted_reschedule": manual_interrupted_reschedule,
+        "attempt_history_preserved": attempt_history_preserved,
+        "audit_chain_verified": audit_chain_verified
+    });
+    println!("{}", serde_json::to_string_pretty(&report)?);
+
+    if !schema_v3
+        || !transient_retry_scheduled
+        || !retry_not_early
+        || !retry_assigned_when_due
+        || !test_failure_terminal
+        || !interrupted_retry_scheduled
+        || !manual_interrupted_reschedule
+        || !attempt_history_preserved
+        || !audit_chain_verified
+    {
+        return Err("one or more Phase 15 lifecycle fixtures failed".into());
+    }
+
+    println!("status=lifecycle_fixture_passed");
+    Ok(())
+}
+
+fn lifecycle_status(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--state-db")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
+    let job_id =
+        uuid::Uuid::parse_str(&value_after(args, "--job-id").ok_or("missing --job-id <uuid>")?)?;
+    let controller = DurableController::open(&path)?;
+    let job = controller
+        .get_job(job_id)?
+        .ok_or("job was not found in durable controller state")?;
+    let attempts = controller.list_attempts(job_id)?;
+    println!("DragonForge Test Lab lifecycle status");
+    println!("database={}", path.display());
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "job": job,
+            "attempts": attempts
+        }))?
+    );
+    println!("status=lifecycle_status_ready");
+    Ok(())
+}
+
+fn lifecycle_reschedule(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--state-db")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
+    let job_id =
+        uuid::Uuid::parse_str(&value_after(args, "--job-id").ok_or("missing --job-id <uuid>")?)?;
+    let mut controller = DurableController::open(&path)?;
+    controller.reschedule_interrupted_job(job_id, unix_time_secs()?)?;
+    println!("job_id={job_id}");
+    println!("state=queued");
+    println!("status=lifecycle_rescheduled");
+    Ok(())
+}
+
 fn observability_doctor() -> Result<(), Box<dyn std::error::Error>> {
     let mut registry = MetricsRegistry::default();
     registry.increment("dragonforge_jobs_total", 1)?;
@@ -387,7 +593,7 @@ fn observability_fixture() -> Result<(), Box<dyn std::error::Error>> {
         .map(|record| record.point.name.as_str())
         == Some("dragonforge_workers_online");
     let audit_chain_verified = controller.verify_audit_chain()?;
-    let schema_v2 = controller.schema_version()? == 2;
+    let schema_v2 = controller.schema_version()? >= 2;
     let telemetry_pruned = controller.prune_telemetry_before(2_000)? == (1, 1);
 
     let report = serde_json::json!({
@@ -1585,6 +1791,10 @@ fn print_help() {
     println!("  dragonforge-test-lab observability-doctor");
     println!("  dragonforge-test-lab observability-fixture");
     println!("  dragonforge-test-lab observability-summary [--state-db <path>]");
+    println!("  dragonforge-test-lab lifecycle-doctor");
+    println!("  dragonforge-test-lab lifecycle-fixture");
+    println!("  dragonforge-test-lab lifecycle-status --job-id <uuid> [--state-db <path>]");
+    println!("  dragonforge-test-lab lifecycle-reschedule --job-id <uuid> [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-doctor [--state-db <path>]");
     println!("  dragonforge-test-lab controller-state-fixture");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
