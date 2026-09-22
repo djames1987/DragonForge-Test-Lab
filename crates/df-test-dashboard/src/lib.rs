@@ -245,7 +245,8 @@ impl HttpResponse {
         Self {
             status,
             content_type: "application/json; charset=utf-8",
-            body: serde_json::to_vec(&value).unwrap_or_else(|_| b"{\"error\":\"serialization failed\"}".to_vec()),
+            body: serde_json::to_vec(&value)
+                .unwrap_or_else(|_| b"{\"error\":\"serialization failed\"}".to_vec()),
         }
     }
 
@@ -355,7 +356,10 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, DashboardErr
     })
 }
 
-fn write_http_response(stream: &mut TcpStream, response: HttpResponse) -> Result<(), DashboardError> {
+fn write_http_response(
+    stream: &mut TcpStream,
+    response: HttpResponse,
+) -> Result<(), DashboardError> {
     let reason = match response.status {
         200 => "OK",
         401 => "Unauthorized",
@@ -425,7 +429,8 @@ pub fn run_dashboard_fixture() -> Result<DashboardFixtureReport, DashboardError>
         ArtifactKind, PlanCondition, PlanProfile, PlanStep, TargetOs, TestPlan, TEST_PLAN_VERSION,
     };
     use df_test_protocol::{
-        Capability, JobRequest, RepositorySpec, ResourceLimits, WorkerRegistration, PROTOCOL_VERSION,
+        Capability, JobRequest, RepositorySpec, ResourceLimits, WorkerRegistration,
+        PROTOCOL_VERSION,
     };
     use std::collections::{BTreeMap, BTreeSet};
 
