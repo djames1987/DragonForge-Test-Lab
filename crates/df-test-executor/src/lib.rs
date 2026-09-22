@@ -716,14 +716,29 @@ fn discover_msvc_environment() -> Option<BTreeMap<String, String>> {
 
     let comspec =
         std::env::var("COMSPEC").unwrap_or_else(|_| r"C:\Windows\System32\cmd.exe".to_owned());
-    let script = format!(
-        "call \"{}\" -no_logo -arch=x64 -host_arch=x64 >nul && set",
+
+    // Use a short-lived helper script rather than embedding a quoted
+    // `call "C:\\Program Files\\..."` expression directly in `cmd /c`.
+    // Windows command-line quoting around batch files is surprisingly fragile;
+    // the helper file keeps the command fixed and the toolchain path comes only
+    // from trusted vswhere discovery.
+    let helper = std::env::temp_dir().join(format!(
+        "dragonforge-msvc-env-{}.cmd",
+        Uuid::new_v4()
+    ));
+    let helper_body = format!(
+        "@echo off\r\ncall \"{}\" -no_logo -arch=x64 -host_arch=x64 >nul\r\nif errorlevel 1 exit /b %errorlevel%\r\nset\r\n",
         vsdevcmd.display()
     );
+    fs::write(&helper, helper_body).ok()?;
+
     let output = Command::new(comspec)
-        .args(["/d", "/c", &script])
+        .args(["/d", "/c"])
+        .arg(&helper)
         .output()
-        .ok()?;
+        .ok();
+    let _ = fs::remove_file(&helper);
+    let output = output?;
     if !output.status.success() {
         return None;
     }
