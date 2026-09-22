@@ -722,44 +722,25 @@ impl DurableController {
                 let class = failure_class.unwrap_or(FailureClass::TestFailure);
                 let decision = decide_failure(retry_policy, class, attempt_number, now_secs)?;
                 match decision {
-                    LifecycleDecision::RetryScheduled {
-                        next_retry_at_secs,
-                    } => (
+                    LifecycleDecision::RetryScheduled { next_retry_at_secs } => (
                         decision,
                         DurableJobState::RetryPending,
                         Some(class),
                         Some(next_retry_at_secs),
                     ),
-                    LifecycleDecision::RetryExhausted => (
-                        decision,
-                        DurableJobState::Exhausted,
-                        Some(class),
-                        None,
-                    ),
-                    LifecycleDecision::TerminalRejected => (
-                        decision,
-                        DurableJobState::Rejected,
-                        Some(class),
-                        None,
-                    ),
-                    LifecycleDecision::TerminalCancelled => (
-                        decision,
-                        DurableJobState::Cancelled,
-                        Some(class),
-                        None,
-                    ),
-                    LifecycleDecision::InterruptedAwaitingDecision => (
-                        decision,
-                        DurableJobState::Interrupted,
-                        Some(class),
-                        None,
-                    ),
-                    _ => (
-                        decision,
-                        DurableJobState::Failed,
-                        Some(class),
-                        None,
-                    ),
+                    LifecycleDecision::RetryExhausted => {
+                        (decision, DurableJobState::Exhausted, Some(class), None)
+                    }
+                    LifecycleDecision::TerminalRejected => {
+                        (decision, DurableJobState::Rejected, Some(class), None)
+                    }
+                    LifecycleDecision::TerminalCancelled => {
+                        (decision, DurableJobState::Cancelled, Some(class), None)
+                    }
+                    LifecycleDecision::InterruptedAwaitingDecision => {
+                        (decision, DurableJobState::Interrupted, Some(class), None)
+                    }
+                    _ => (decision, DurableJobState::Failed, Some(class), None),
                 }
             }
             _ => return Err(DurableControllerError::InvalidCompletionStatus),
@@ -941,9 +922,9 @@ impl DurableController {
                 decide_failure(policy, FailureClass::Interrupted, attempt_number, now_secs)?;
 
             let (state, next_retry_at) = match decision {
-                LifecycleDecision::RetryScheduled {
-                    next_retry_at_secs,
-                } => (DurableJobState::RetryPending, Some(next_retry_at_secs)),
+                LifecycleDecision::RetryScheduled { next_retry_at_secs } => {
+                    (DurableJobState::RetryPending, Some(next_retry_at_secs))
+                }
                 LifecycleDecision::RetryExhausted => (DurableJobState::Exhausted, None),
                 _ => (DurableJobState::Interrupted, None),
             };
@@ -1025,8 +1006,8 @@ impl DurableController {
         if state != DurableJobState::Interrupted.as_str() {
             return Err(DurableControllerError::InvalidTransition);
         }
-        let attempt_count = u32::try_from(attempt_count)
-            .map_err(|_| DurableControllerError::IntegerOutOfRange)?;
+        let attempt_count =
+            u32::try_from(attempt_count).map_err(|_| DurableControllerError::IntegerOutOfRange)?;
         if attempt_count >= df_test_lifecycle::MAX_ATTEMPTS {
             return Err(DurableControllerError::ManualRescheduleLimitReached);
         }
@@ -2065,11 +2046,7 @@ mod tests {
         let mut controller = DurableController::open_in_memory().unwrap();
         let job = test_job();
         controller
-            .enqueue_job_with_retry(
-                &job,
-                RetryPolicy::bounded(3, 1, 10, true).unwrap(),
-                1,
-            )
+            .enqueue_job_with_retry(&job, RetryPolicy::bounded(3, 1, 10, true).unwrap(), 1)
             .unwrap();
         controller.register_worker(&test_worker(), 2).unwrap();
         controller.assign_next("windows-1", 3).unwrap().unwrap();
@@ -2099,11 +2076,7 @@ mod tests {
         let retry_job = test_job();
         let manual_job = test_job();
         controller
-            .enqueue_job_with_retry(
-                &retry_job,
-                RetryPolicy::bounded(3, 5, 30, true).unwrap(),
-                1,
-            )
+            .enqueue_job_with_retry(&retry_job, RetryPolicy::bounded(3, 5, 30, true).unwrap(), 1)
             .unwrap();
         controller.enqueue_job(&manual_job, 2).unwrap();
         controller.register_worker(&test_worker(), 3).unwrap();
@@ -2138,11 +2111,7 @@ mod tests {
         let mut controller = DurableController::open_in_memory().unwrap();
         let job = test_job();
         controller
-            .enqueue_job_with_retry(
-                &job,
-                RetryPolicy::bounded(3, 10, 60, false).unwrap(),
-                1,
-            )
+            .enqueue_job_with_retry(&job, RetryPolicy::bounded(3, 10, 60, false).unwrap(), 1)
             .unwrap();
         controller.register_worker(&test_worker(), 2).unwrap();
         controller.assign_next("windows-1", 3).unwrap().unwrap();
@@ -2176,11 +2145,7 @@ mod tests {
         let mut controller = DurableController::open_in_memory().unwrap();
         let job = test_job();
         controller
-            .enqueue_job_with_retry(
-                &job,
-                RetryPolicy::bounded(2, 1, 10, false).unwrap(),
-                1,
-            )
+            .enqueue_job_with_retry(&job, RetryPolicy::bounded(2, 1, 10, false).unwrap(), 1)
             .unwrap();
         controller.register_worker(&test_worker(), 2).unwrap();
 
@@ -2225,10 +2190,7 @@ mod tests {
 
         let mut now = 3;
         for attempt in 1..=df_test_lifecycle::MAX_ATTEMPTS {
-            controller
-                .assign_next("windows-1", now)
-                .unwrap()
-                .unwrap();
+            controller.assign_next("windows-1", now).unwrap().unwrap();
             controller.mark_running(job.id, now + 1).unwrap();
             controller.recover_after_restart(now + 2).unwrap();
             if attempt < df_test_lifecycle::MAX_ATTEMPTS {
