@@ -15,6 +15,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-sandbox: native/container sandbox selection, Windows Job Object containment, resource ceilings, worker-identity enforcement, and fixed Docker/Podman wrapping.
 - df-test-vm: typed Hyper-V host checks, golden-image differencing VM creation, managed lifecycle, checkpoints, and rollback.
 - df-test-windows: typed Windows registry/process/network/service/Event Log/installer fixtures with privilege separation.
+- df-test-gui: managed-window UI Automation, deterministic typed plans, screenshots, and owned-process crash capture.
 - dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, deep-Rust tool readiness, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
@@ -95,6 +96,21 @@ Phase 5 keeps the remote job protocol typed. The deep-testing scripts are reposi
       -> cleanup / transcript
 
 Safe and privileged fixtures are deliberately separated. Privileged mutation requires an elevated token and explicit CLI confirmation. Fixture names and registry locations are DragonForge-managed and generated internally; callers cannot supply service binary paths, registry scripts, Event Log commands, or arbitrary PowerShell.
+
+## Phase 7 GUI automation flow
+
+    interactive Windows desktop
+      -> validate DragonForge-* managed window target
+      -> replay typed JSON action plan
+      -> UI Automation exact window/control lookup
+      -> ValuePattern / InvokePattern operation
+      -> bounded assertion
+      -> target-window screenshot
+      -> optional owned fixture termination
+      -> exit-code/crash artifact
+      -> cleanup
+
+GUI plans cannot supply executable commands, raw PowerShell, arbitrary UI Automation properties, raw keyboard injection, or unrestricted desktop coordinates. Phase 7 requires an interactive desktop session and is intended to run on the Windows host or Windows VM console/RDP session.
 
 ## Distributed target
 
