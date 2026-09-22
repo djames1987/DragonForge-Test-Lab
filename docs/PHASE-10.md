@@ -129,6 +129,10 @@ Any recommendation that cannot be safely assigned is returned in unscheduled_pro
 
 ## CLI
 
+Readiness:
+
+    cargo run -p dragonforge-test-lab -- intelligence-doctor
+
 Run the deterministic fixture:
 
     cargo run -p dragonforge-test-lab -- intelligence-fixture
