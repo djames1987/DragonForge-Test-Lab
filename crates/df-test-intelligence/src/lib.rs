@@ -209,12 +209,19 @@ pub fn analyze(input: &IntelligenceInput) -> Result<IntelligenceReport, Intellig
     })
 }
 
-pub fn recommend_profiles(changes: &ChangeSet) -> Result<Vec<ProfileRecommendation>, IntelligenceError> {
+pub fn recommend_profiles(
+    changes: &ChangeSet,
+) -> Result<Vec<ProfileRecommendation>, IntelligenceError> {
     changes.validate()?;
     let mut scores: BTreeMap<TestProfile, (u32, BTreeSet<String>)> = BTreeMap::new();
 
     if changes.files.is_empty() {
-        add_score(&mut scores, TestProfile::RustFast, 10, "no changed files supplied");
+        add_score(
+            &mut scores,
+            TestProfile::RustFast,
+            10,
+            "no changed files supplied",
+        );
     }
 
     for path in &changes.files {
@@ -306,7 +313,11 @@ pub fn recommend_profiles(changes: &ChangeSet) -> Result<Vec<ProfileRecommendati
         }
     }
 
-    let cross_cutting = changes.files.iter().filter(|path| path.starts_with("crates/")).count();
+    let cross_cutting = changes
+        .files
+        .iter()
+        .filter(|path| path.starts_with("crates/"))
+        .count();
     if cross_cutting >= 4 {
         add_score(
             &mut scores,
@@ -328,7 +339,9 @@ pub fn recommend_profiles(changes: &ChangeSet) -> Result<Vec<ProfileRecommendati
     Ok(result)
 }
 
-pub fn cluster_failures(history: &[HistoricalFailure]) -> Result<Vec<FailureCluster>, IntelligenceError> {
+pub fn cluster_failures(
+    history: &[HistoricalFailure],
+) -> Result<Vec<FailureCluster>, IntelligenceError> {
     if history.len() > MAX_HISTORY_RECORDS {
         return Err(IntelligenceError::TooMuchHistory);
     }
@@ -338,15 +351,17 @@ pub fn cluster_failures(history: &[HistoricalFailure]) -> Result<Vec<FailureClus
         failure.validate()?;
         let normalized = normalize_failure_signature(&failure.step, &failure.message);
         let fingerprint = hex::encode(Sha256::digest(normalized.as_bytes()));
-        let entry = clusters.entry(fingerprint.clone()).or_insert_with(|| FailureCluster {
-            fingerprint,
-            normalized_signature: normalized,
-            profiles: BTreeSet::new(),
-            occurrences: 0,
-            first_seen_secs: failure.unix_time_secs,
-            last_seen_secs: failure.unix_time_secs,
-            sample_failure_ids: Vec::new(),
-        });
+        let entry = clusters
+            .entry(fingerprint.clone())
+            .or_insert_with(|| FailureCluster {
+                fingerprint,
+                normalized_signature: normalized,
+                profiles: BTreeSet::new(),
+                occurrences: 0,
+                first_seen_secs: failure.unix_time_secs,
+                last_seen_secs: failure.unix_time_secs,
+                sample_failure_ids: Vec::new(),
+            });
         entry.profiles.insert(failure.profile);
         entry.occurrences += 1;
         entry.first_seen_secs = entry.first_seen_secs.min(failure.unix_time_secs);
@@ -462,7 +477,10 @@ fn apply_history_scores(
     }
 
     for (profile, (bonus, reasons)) in bonuses {
-        if let Some(item) = recommendations.iter_mut().find(|item| item.profile == profile) {
+        if let Some(item) = recommendations
+            .iter_mut()
+            .find(|item| item.profile == profile)
+        {
             item.score = item.score.saturating_add(bonus).min(100);
             item.reasons.extend(reasons);
             item.reasons.sort();
@@ -483,13 +501,19 @@ fn add_score(
     score: u32,
     reason: impl Into<String>,
 ) {
-    let entry = scores.entry(profile).or_insert_with(|| (0, BTreeSet::new()));
+    let entry = scores
+        .entry(profile)
+        .or_insert_with(|| (0, BTreeSet::new()));
     entry.0 = entry.0.saturating_add(score).min(100);
     entry.1.insert(reason.into());
 }
 
 fn normalize_failure_signature(step: &str, message: &str) -> String {
-    let combined = format!("{}|{}", step.trim().to_ascii_lowercase(), message.trim().to_ascii_lowercase());
+    let combined = format!(
+        "{}|{}",
+        step.trim().to_ascii_lowercase(),
+        message.trim().to_ascii_lowercase()
+    );
     let mut output = String::with_capacity(combined.len());
     let mut token = String::new();
 
@@ -525,9 +549,14 @@ fn flush_normalized_token(output: &mut String, token: &mut String) {
 
 fn looks_volatile(token: &str) -> bool {
     let digits = token.bytes().filter(|byte| byte.is_ascii_digit()).count();
-    let hex_chars = token.bytes().filter(|byte| byte.is_ascii_hexdigit()).count();
+    let hex_chars = token
+        .bytes()
+        .filter(|byte| byte.is_ascii_hexdigit())
+        .count();
     let path_like = token.contains('\\') || token.contains('/');
-    let uuid_like = token.len() >= 32 && token.contains('-') && hex_chars + token.matches('-').count() >= token.len();
+    let uuid_like = token.len() >= 32
+        && token.contains('-')
+        && hex_chars + token.matches('-').count() >= token.len();
     let long_number = token.len() >= 4 && digits == token.len();
     let long_hex = token.len() >= 8 && hex_chars == token.len();
     path_like || uuid_like || long_number || long_hex

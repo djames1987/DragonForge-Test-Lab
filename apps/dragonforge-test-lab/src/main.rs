@@ -390,8 +390,14 @@ fn intelligence_doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("historical_regression_targeting=true");
     println!("failure_clustering=sha256_normalized");
     println!("resource_aware_scheduling=true");
-    println!("max_changed_files={}", df_test_intelligence::MAX_CHANGED_FILES);
-    println!("max_history_records={}", df_test_intelligence::MAX_HISTORY_RECORDS);
+    println!(
+        "max_changed_files={}",
+        df_test_intelligence::MAX_CHANGED_FILES
+    );
+    println!(
+        "max_history_records={}",
+        df_test_intelligence::MAX_HISTORY_RECORDS
+    );
     println!("max_workers={}", df_test_intelligence::MAX_WORKERS);
     println!("status=test_intelligence_ready");
     Ok(())
@@ -440,12 +446,9 @@ fn intelligence_fixture() -> Result<(), Box<dyn std::error::Error>> {
             },
             WorkerCapacity {
                 worker_id: "fixture-deep".into(),
-                supported_profiles: [
-                    TestProfile::RustDeep,
-                    TestProfile::FullRegression,
-                ]
-                .into_iter()
-                .collect(),
+                supported_profiles: [TestProfile::RustDeep, TestProfile::FullRegression]
+                    .into_iter()
+                    .collect(),
                 total_memory_mib: 16384,
                 free_memory_mib: 12288,
                 max_parallel_jobs: 2,
