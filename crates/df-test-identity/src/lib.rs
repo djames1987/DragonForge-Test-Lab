@@ -387,11 +387,12 @@ pub fn run_mtls_fixture() -> Result<MtlsFixtureReport, IdentityError> {
         let connection =
             rustls::ServerConnection::new(server_config).map_err(|error| error.to_string())?;
         let mut stream = rustls::StreamOwned::new(connection, tcp);
-        let mut request = [0u8; 10];
+        let expected_request = b"dragonforge";
+        let mut request = [0u8; 11];
         stream
             .read_exact(&mut request)
             .map_err(|error| error.to_string())?;
-        if &request != b"dragonforge" {
+        if request.as_slice() != expected_request {
             return Err("unexpected mTLS fixture payload".to_owned());
         }
         let client_certificate_observed = stream
