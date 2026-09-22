@@ -407,17 +407,17 @@ fn lifecycle_fixture() -> Result<(), Box<dyn std::error::Error>> {
         },
         vec![TestAction::Checkout],
     );
-    controller.enqueue_job(&manual_job, 40)?;
-    controller.assign_next(&worker.worker_id, 41)?.ok_or(
+    controller.enqueue_job(&manual_job, 31)?;
+    controller.assign_next(&worker.worker_id, 32)?.ok_or(
         "Phase 15 fixture did not assign manual recovery job",
     )?;
-    controller.mark_running(manual_job.id, 42)?;
-    controller.recover_after_restart(50)?;
+    controller.mark_running(manual_job.id, 33)?;
+    controller.recover_after_restart(34)?;
     let manual_interrupted = controller
         .get_job(manual_job.id)?
         .map(|job| job.state)
         == Some(DurableJobState::Interrupted);
-    controller.reschedule_interrupted_job(manual_job.id, 51)?;
+    controller.reschedule_interrupted_job(manual_job.id, 35)?;
     let manual_interrupted_reschedule = manual_interrupted
         && controller
             .get_job(manual_job.id)?
