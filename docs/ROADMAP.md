@@ -42,8 +42,8 @@ Certificate-backed controller/worker identity, encrypted mutual-TLS transport pr
 ## Phase 13 — Worker Services — Complete
 Native Windows SCM service hosting, hardened Linux systemd unit generation, outbound mTLS controller registration, typed heartbeats, graceful drain/resume, bounded reconnect backoff, non-secret restart-state recovery, and service diagnostics. Windows host validation passed on 2026-09-22.
 
-## Phase 14 — Audit / Artifacts / Observability
-Durable audit/event history, artifact retention, structured logs, operational metrics, worker/job visibility, and query tooling.
+## Phase 14 — Audit / Artifacts / Observability — Implementation complete; validation pending
+Controller schema v2, hash-chained durable audit events, redacted structured logs, JSONL rotation, durable metrics, worker runtime metrics, SHA-256 artifact cataloging, root-contained retention pruning, artifact retention metadata, telemetry pruning, and operator query tooling.
 
 ## Phase 15 — Recovery / Retry / Job Lifecycle
 Explicit job lifecycle states, test-vs-infrastructure failure classification, bounded retries, interrupted-job handling, and safe rescheduling.
