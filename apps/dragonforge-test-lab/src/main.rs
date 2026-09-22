@@ -1,4 +1,5 @@
 use df_test_agent::Agent;
+use df_test_controller::{DurableController, DurableJobState, SCHEMA_VERSION};
 use df_test_distributed::{
     connect_registration_probe, run_distributed_fixtures, serve_registration_probe_once,
     validate_controller_addr, NodeFeature, NodeProfile, NodeRegistration,
@@ -36,6 +37,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     match command {
         "doctor" => doctor(),
+        "controller-state-doctor" => controller_state_doctor(&args[2..]),
+        "controller-state-fixture" => controller_state_fixture(),
         "github-doctor" => github_doctor(),
         "distributed-doctor" => distributed_doctor(),
         "distributed-fixtures" => distributed_fixtures(),
@@ -83,7 +86,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=10");
+    println!("phase=11");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -98,6 +101,100 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("status=local_worker_ready");
+    Ok(())
+}
+
+fn controller_state_doctor(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--state-db")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("controller.sqlite3"));
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let controller = DurableController::open(&path)?;
+    println!("DragonForge Test Lab durable controller doctor");
+    println!("database={}", path.display());
+    println!("schema_version={}", controller.schema_version()?);
+    println!("expected_schema_version={SCHEMA_VERSION}");
+    println!("persistence=sqlite");
+    println!("restart_recovery=enabled");
+    println!("status=durable_controller_ready");
+    Ok(())
+}
+
+fn controller_state_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let path = std::env::temp_dir().join(format!(
+        "dragonforge-phase11-fixture-{}.sqlite3",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+
+    let job = JobRequest::new(
+        RepositorySpec {
+            url: "https://github.com/djames1987/DragonForge-Test-Lab.git".into(),
+            revision: "main".into(),
+        },
+        vec![
+            TestAction::Checkout,
+            TestAction::CargoTest { all_features: true },
+        ],
+    );
+    let worker = WorkerRegistration {
+        worker_id: "phase11-fixture-worker".into(),
+        protocol_version: PROTOCOL_VERSION,
+        os: std::env::consts::OS.into(),
+        arch: std::env::consts::ARCH.into(),
+        capabilities: [Capability::CheckoutRepository, Capability::CargoTest]
+            .into_iter()
+            .collect(),
+    };
+
+    {
+        let mut controller = DurableController::open(&path)?;
+        controller.enqueue_job(&job, 1_000)?;
+        controller.register_worker(&worker, 1_001)?;
+        let assigned = controller
+            .assign_next(&worker.worker_id, 1_002)?
+            .ok_or("Phase 11 fixture did not assign persisted job")?;
+        if assigned.id != job.id {
+            return Err("Phase 11 fixture assigned unexpected job".into());
+        }
+        controller.mark_running(job.id, 1_003)?;
+        controller.set_config("controller.fixture", "phase11", 1_004)?;
+        controller.record_intelligence(
+            &serde_json::json!({"fixture":"phase11","job_id":job.id}),
+            1_005,
+        )?;
+    }
+
+    let recovery = {
+        let mut controller = DurableController::open(&path)?;
+        let interrupted = controller.recover_after_restart(2_000)?;
+        let record = controller
+            .get_job(job.id)?
+            .ok_or("Phase 11 persisted job disappeared after reopen")?;
+        if interrupted != vec![job.id] || record.state != DurableJobState::Interrupted {
+            return Err("Phase 11 restart recovery did not mark in-flight job interrupted".into());
+        }
+        if controller.get_config("controller.fixture")?.as_deref() != Some("phase11") {
+            return Err("Phase 11 persisted controller configuration was not recovered".into());
+        }
+        let attempts = controller.list_attempts(job.id)?;
+        let audit = controller.audit_events_for("job", &job.id.to_string())?;
+        serde_json::json!({
+            "database": path.display().to_string(),
+            "schema_version": controller.schema_version()?,
+            "job_id": job.id,
+            "state": record.state,
+            "attempts": attempts.len(),
+            "audit_events": audit.len(),
+            "interrupted_jobs": interrupted.len()
+        })
+    };
+
+    println!("{}", serde_json::to_string_pretty(&recovery)?);
+    println!("status=durable_controller_fixture_passed");
+    let _ = std::fs::remove_file(path);
     Ok(())
 }
 
@@ -979,6 +1076,8 @@ fn print_help() {
     println!("Usage:");
     println!("  dragonforge-test-lab doctor");
     println!("  dragonforge-test-lab github-doctor");
+    println!("  dragonforge-test-lab controller-state-doctor [--state-db <path>]");
+    println!("  dragonforge-test-lab controller-state-fixture");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");

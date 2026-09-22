@@ -50,6 +50,10 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 44. Intelligence recommendations cannot execute jobs or bypass worker capability/policy checks.
 45. Resource-aware scheduling must explicitly report unscheduled profiles rather than silently weakening requested coverage.
 46. Failure clustering fingerprints normalized bounded text with SHA-256 and does not treat historical failure text as executable input.
+47. Phase 11 SQLite state is controller-owned and cannot bypass worker-side Agent/Policy authorization.
+48. SQL statements and migrations are fixed in Test Lab; jobs and remote clients cannot submit arbitrary SQL.
+49. Restart recovery marks uncertain assigned/running work interrupted instead of silently treating it as completed or automatically executing it again.
+50. Databases with a schema version newer than the running binary fail closed.
 
 ## Local execution boundary
 
@@ -153,9 +157,15 @@ Phase 10 is advisory. It scores typed TestProfile values, clusters historical fa
 
 Changed-file paths and historical records are bounded and validated before analysis. Scheduling uses declared support, free memory, parallel-job slots, and load; if no worker satisfies those constraints the profile remains explicitly unscheduled.
 
+## Phase 11 durable-state boundary
+
+Phase 11 persists controller metadata and typed payloads in SQLite. Persistence is not an execution authorization mechanism. Recovered jobs retain their typed JobRequest and must still pass the same worker capability and policy checks before execution.
+
+Controller migrations are fixed source-controlled SQL. The CLI selects only the database path; no API accepts SQL text. In-flight jobs found after restart become `interrupted`, producing an audit event and requiring a later explicit retry/rescheduling decision rather than risking duplicate execution.
+
 ## Current enforcement
 
-Phases 1-10 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-11 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 

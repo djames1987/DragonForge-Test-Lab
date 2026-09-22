@@ -32,3 +32,54 @@ Loopback-only authenticated MCP HTTP gateway with modern 2026-07-28 discovery an
 
 ## Phase 10 — Test Intelligence — Complete
 Deterministic change-aware profile scoring, historical regression targeting from changed-file overlap, normalized failure fingerprint clustering, explicit regression target selection, and resource-aware scheduling based on worker profile support, free memory, job slots, and load. Intelligence produces explainable recommendations only and never bypasses existing typed execution/policy boundaries. Windows host validation passed on 2026-09-22.
+
+## Phase 11 — Durable Controller & State — Complete
+Persistent controller state, SQLite migrations, restart recovery, durable jobs/attempts/workers/intelligence/artifact metadata/audit/configuration, and recovery validation. Windows host validation passed on 2026-09-22.
+
+## Phase 12 — mTLS / Node Identity
+Certificate-backed controller/worker identity, encrypted transport, enrollment, renewal, revocation, trust stores, and key rotation.
+
+## Phase 13 — Worker Services
+Automatic Windows Service and Linux systemd worker operation, outbound controller registration, heartbeats, graceful drain, restart recovery, and service diagnostics.
+
+## Phase 14 — Audit / Artifacts / Observability
+Durable audit/event history, artifact retention, structured logs, operational metrics, worker/job visibility, and query tooling.
+
+## Phase 15 — Recovery / Retry / Job Lifecycle
+Explicit job lifecycle states, test-vs-infrastructure failure classification, bounded retries, interrupted-job handling, and safe rescheduling.
+
+## Phase 16 — Test Plans
+Versioned declarative test plans for typed profiles, dependencies, conditions, timeouts, capabilities, artifacts, retries, target OS, and node labels.
+
+## Phase 17 — Intelligence Integration
+Connect Test Intelligence to real Git changes, durable historical failures, live worker capacity, advisory/automatic modes, and auditable decision explanations.
+
+## Phase 18 — Dashboard
+Local operator web dashboard for jobs, workers, test plans, artifacts, failure clusters, audit history, and settings without exposing arbitrary terminal access.
+
+## Phase 19 — Linux Qualification
+Full Linux worker validation including Rust execution, containers, service operation, encrypted transport, artifacts, cancellation, advanced Rust lanes, and recovery.
+
+## Phase 20 — ARM / Raspberry Pi
+Qualified ARM/Raspberry Pi worker support with typed hardware capabilities and safe hardware-in-the-loop operations.
+
+## Phase 21 — Installer / Upgrades
+Installable controller/worker packages, documented configuration/state/log layout, database/config migrations, upgrades, rollback, and uninstall support.
+
+## Phase 22 — Release Engineering
+Versioned release artifacts, checksums, SBOM, dependency/license audits, binary/installer signing, and dev/beta/stable release channels.
+
+## Phase 23 — Security Review
+Dedicated adversarial review of protocol, workers, paths, artifacts, MCP, certificates, transport, DoS bounds, secrets, logs, persistence, privileges, and installers.
+
+## Phase 24 — Reliability / Chaos
+Automated controller/worker/network/disk/database/certificate fault scenarios, long-running stress tests, and verification against lost state or uncontrolled duplicate execution.
+
+## Phase 25 — Dogfooding
+Use Test Lab as the normal validation platform for active DragonForge projects and eliminate routine manual validation where practical.
+
+## Phase 26 — Release Candidate
+Feature freeze, full qualification matrix, bug/security/reliability fixes only, and v1.0.0 release-candidate validation.
+
+## Phase 27 — v1.0
+Installable, persistent, recoverable, encrypted, observable, multi-platform Test Lab release with documented operations, upgrades, backup/restore, MCP/GitHub integration, and validated release artifacts.

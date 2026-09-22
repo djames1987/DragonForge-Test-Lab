@@ -9,7 +9,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-protocol: versioned, serializable contracts shared by controllers and agents.
 - df-test-policy: repository, capability, and resource-limit authorization.
 - df-test-agent: worker-side trust boundary and protocol compatibility gate.
-- df-test-controller: queue and capability-aware worker scheduling.
+- df-test-controller: queue/capability-aware scheduling plus Phase 11 SQLite-backed durable controller state and restart recovery.
 - df-test-executor: local workspace, fixed-command process execution, cancellation, output capture, artifact generation, and cleanup.
 - df-test-github: typed GitHub repository/ref resolution and commit-status reporting through the authenticated gh CLI.
 - df-test-sandbox: native/container sandbox selection, Windows Job Object containment, resource ceilings, worker-identity enforcement, and fixed Docker/Podman wrapping.
@@ -194,3 +194,23 @@ Where practical, remote agents should establish outbound authenticated connectio
              +--> unscheduled profile -> explicit report
 
 The intelligence crate does not launch processes or mutate workers. It produces recommendations consumed by existing typed execution boundaries.
+
+
+## Phase 11 durable controller flow
+
+    typed job / worker registration / intelligence report
+              |
+              v
+        DurableController
+              |
+        SQLite schema v1
+       +------+------+------+------+
+       |      |      |      |      |
+      jobs  attempts workers audit config
+       |                    |
+       +--> artifact metadata
+       +--> intelligence history
+
+On startup, queued and terminal jobs retain their state. Jobs persisted as assigned or running are changed to `interrupted` and their latest attempt is closed with a recovery audit event. Phase 11 deliberately does not automatically retry an interrupted job; retry classification and rescheduling are reserved for Phase 15.
+
+The database is controller-owned state only. A persisted assignment still has to pass the existing worker-side Agent/Policy trust boundary before any process execution occurs.

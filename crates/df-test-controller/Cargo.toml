@@ -8,3 +8,7 @@ rust-version.workspace = true
 [dependencies]
 df-test-protocol = { path = "../df-test-protocol" }
 uuid.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+rusqlite.workspace = true
