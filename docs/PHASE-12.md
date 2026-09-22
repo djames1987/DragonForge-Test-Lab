@@ -1,6 +1,6 @@
 # Phase 12 — mTLS / Node Identity
 
-Status: implementation complete; Windows host validation pending.
+Status: complete; Windows host validation passed on 2026-09-22.
 
 ## Goal
 
@@ -210,3 +210,8 @@ Phase 12 is complete when validation proves:
 - revoked certificates fail closed;
 - existing distributed/HMAC fixtures still pass;
 - existing GitHub-aware execution remains green.
+
+
+## Validation status
+
+Phase 12 validation completed successfully on the Windows host on 2026-09-22. The final run passed formatting, strict Clippy, the full workspace and doc-test suite, all mTLS/node-identity unit tests, the real mutual-TLS fixture, certificate renewal/revocation checks, legacy distributed/HMAC compatibility, the Phase 12/general doctors, and the GitHub-aware native worker regression.
