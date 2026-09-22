@@ -6,11 +6,11 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 16 — Test Plans — Complete
+Phase 17 — Intelligence Integration — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, Phase 14 added validated audit/artifact/observability infrastructure, and Phase 15 added validated recovery/retry lifecycle control. Phase 16 adds validated versioned declarative plans, controller schema v4 plan persistence, DAG dependencies/conditions, typed profile compilation, capability enforcement, typed artifacts, retry policy integration, target predicates, and plan operator tooling. Full Phase 16 Windows host validation passed on 2026-09-22.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, Phase 14 added validated audit/artifact/observability infrastructure, and Phase 15 added validated recovery/retry lifecycle control. Phase 16 added validated versioned declarative plans, controller schema v4 plan persistence, DAG dependencies/conditions, typed profile compilation, capability enforcement, typed artifacts, retry policy integration, target predicates, and plan operator tooling. Phase 17 connects Test Intelligence to real GitHub changes, durable historical failures, online worker capacity, stored plans, advisory/automatic modes, immutable head-SHA jobs, and hash-chained decision audits.
 
 ## Workspace
 
@@ -30,6 +30,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-distributed/    distributed nodes, scheduling, transport, network fixtures
       df-test-mcp/            authenticated MCP HTTP gateway and typed tool surface
       df-test-intelligence/   change analysis, regression targeting, clustering, scheduling
+      df-test-intelligence-integration/ real Git/controller/worker/plan intelligence orchestration
       df-test-identity/       mTLS, X.509 node identity, trust, rotation, revocation
       df-test-worker-service/ long-running worker lifecycle and service hosting
       df-test-observability/  audit/log/metrics/artifact observability and retention
@@ -56,6 +57,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-14.md
       PHASE-15.md
       PHASE-16.md
+      PHASE-17.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -81,6 +83,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase14.ps1
       test-phase15.ps1
       test-phase16.ps1
+      test-phase17.ps1
 
 ## Hyper-V host setup
 
@@ -378,10 +381,28 @@ Phase 16 upgrades the durable controller to schema v4 and adds versioned declara
 
 See docs/PHASE-16.md for the format, profile mappings, dependency semantics, bounds, persistence, and security boundary.
 
+## Phase 17 Intelligence Integration
+
+Readiness:
+
+    cargo run -p dragonforge-test-lab -- intelligence-integration-doctor
+
+Run a real GitHub comparison against a stored plan in advisory mode:
+
+    cargo run -p dragonforge-test-lab -- intelligence-integrate --repo https://github.com/djames1987/DragonForge-Test-Lab.git --base main --head <revision> --plan <stored-plan-name> --mode advisory
+
+Automatic mode is opt-in and only queues high-confidence, dependency-free, unconstrained `rust_fast` / `rust_standard` plan steps that have live eligible worker capacity. Enqueued jobs are pinned to the resolved head SHA and remain subject to existing controller, Agent, Policy, Executor, retry, and capability enforcement.
+
+End-to-end Phase 17 validation:
+
+    .\scripts\test-phase17.ps1
+
+See docs/PHASE-17.md for durable historical-failure context, worker-capacity behavior, advisory/automatic modes, audit records, and the deliberate automation limits.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, and docs/ROADMAP.md.
