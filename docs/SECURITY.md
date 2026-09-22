@@ -39,11 +39,13 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 33. Phase 8 fault injection is fixture-local delay/drop behavior only; Test Lab does not modify firewall, routes, NIC configuration, packet filters, or system DNS.
 34. The Phase 9 MCP gateway may bind only to loopback addresses.
 35. Every /mcp request requires a bearer token sourced only from DRAGONFORGE_MCP_TOKEN; the raw token is not retained after initialization.
-36. MCP repository targets must match operator-configured HTTPS allowlist prefixes.
+36. MCP repository targets must match operator-configured HTTPS allowlist entries; owner/org entries ending in `/` act as prefixes, while repository entries are exact identities after optional `.git` normalization.
 37. MCP job submission accepts only named typed profiles; arbitrary executable, shell, PowerShell, Cargo, or process-argument fields are not exposed.
 38. MCP HTTP headers and bodies are bounded before JSON-RPC dispatch.
 39. Modern MCP transport headers must agree with the JSON-RPC method/name before tool execution.
 40. MCP result retrieval excludes raw filesystem access and returns SHA-256 artifact metadata only.
+41. The MCP gateway permits at most four queued/running jobs and rejects new submissions above that limit.
+42. The MCP HTTP parser rejects duplicate headers and transfer-encoding to avoid ambiguous request framing.
 
 ## Local execution boundary
 
