@@ -10,5 +10,6 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 rustls.workspace = true
+rcgen.workspace = true
 df-test-identity = { path = "../df-test-identity" }
 df-test-protocol = { path = "../df-test-protocol" }
