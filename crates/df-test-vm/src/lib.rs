@@ -270,7 +270,12 @@ impl HyperVClient {
         Ok(())
     }
 
-    fn vm_action(&self, name: &str, template: &str, operation: &'static str) -> Result<(), VmError> {
+    fn vm_action(
+        &self,
+        name: &str,
+        template: &str,
+        operation: &'static str,
+    ) -> Result<(), VmError> {
         validate_vm_name(name)?;
         let command = template.replace("{name}", &ps_literal(name));
         let script = format!("$ErrorActionPreference='Stop';{command}");
