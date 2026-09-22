@@ -1,6 +1,6 @@
 # Phase 13 — Worker Services
 
-Status: implementation complete; Windows host validation pending.
+Status: complete; Windows host validation passed on 2026-09-22.
 
 ## Goal
 
@@ -201,3 +201,8 @@ Phase 13 is complete when host validation proves:
 - Windows and systemd service specifications are valid;
 - Phase 12 mTLS remains green;
 - existing GitHub-aware execution remains green.
+
+
+## Validation status
+
+Phase 13 validation completed successfully on the Windows host on 2026-09-22. The final run passed formatting, strict Clippy, the full workspace and doc-test suite, all worker-service unit tests, real mTLS worker registration/heartbeat, graceful drain behavior, restart-state recovery, Windows/systemd service-spec checks, Phase 12 mTLS compatibility, the Phase 13/general doctors, and the GitHub-aware native worker regression.
