@@ -7,6 +7,7 @@ rust-version.workspace = true
 
 [dependencies]
 df-test-protocol = { path = "../df-test-protocol" }
+df-test-intelligence = { path = "../df-test-intelligence" }
 df-test-observability = { path = "../df-test-observability" }
 df-test-lifecycle = { path = "../df-test-lifecycle" }
 df-test-plans = { path = "../df-test-plans" }
