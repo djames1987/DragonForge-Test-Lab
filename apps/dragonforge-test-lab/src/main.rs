@@ -158,7 +158,7 @@ fn distributed_controller_once(args: &[String]) -> Result<(), Box<dyn std::error
     println!("bind={address}");
     println!("waiting_for=one outbound authenticated node registration");
 
-    let registration = serve_registration_probe_once(
+    let probe = serve_registration_probe_once(
         address,
         &key_id,
         secret.as_bytes(),
@@ -166,10 +166,13 @@ fn distributed_controller_once(args: &[String]) -> Result<(), Box<dyn std::error
         std::time::Duration::from_secs(120),
     )?;
 
-    println!("node_id={}", registration.profile.node_id);
-    println!("node_os={}", registration.profile.os);
-    println!("node_arch={}", registration.profile.arch);
-    println!("status=distributed_registration_accepted");
+    println!("node_id={}", probe.registration.profile.node_id);
+    println!("node_os={}", probe.registration.profile.os);
+    println!("node_arch={}", probe.registration.profile.arch);
+    println!("job_id={}", probe.result.job_id);
+    println!("job_status={:?}", probe.result.status);
+    println!("artifacts={}", probe.result.artifacts.len());
+    println!("status=distributed_cross_node_fixture_passed");
     Ok(())
 }
 
@@ -208,7 +211,7 @@ fn distributed_node_connect(args: &[String]) -> Result<(), Box<dyn std::error::E
         key_id: key_id.clone(),
     };
 
-    let ack = connect_registration_probe(
+    let probe = connect_registration_probe(
         address,
         registration,
         &key_id,
@@ -218,9 +221,12 @@ fn distributed_node_connect(args: &[String]) -> Result<(), Box<dyn std::error::E
     )?;
 
     println!("controller={address}");
-    println!("node_id={}", ack.node_id);
-    println!("lease_seconds={}", ack.lease_seconds);
-    println!("status=distributed_registration_confirmed");
+    println!("node_id={}", probe.ack.node_id);
+    println!("lease_seconds={}", probe.ack.lease_seconds);
+    println!("job_id={}", probe.result.job_id);
+    println!("job_status={:?}", probe.result.status);
+    println!("artifacts={}", probe.result.artifacts.len());
+    println!("status=distributed_cross_node_fixture_passed");
     Ok(())
 }
 
