@@ -714,8 +714,8 @@ fn discover_msvc_environment() -> Option<BTreeMap<String, String>> {
         return None;
     }
 
-    let comspec = std::env::var("COMSPEC")
-        .unwrap_or_else(|_| r"C:\Windows\System32\cmd.exe".to_owned());
+    let comspec =
+        std::env::var("COMSPEC").unwrap_or_else(|_| r"C:\Windows\System32\cmd.exe".to_owned());
     let script = format!(
         "call \"{}\" -no_logo -arch=x64 -host_arch=x64 >nul && set",
         vsdevcmd.display()
@@ -733,7 +733,10 @@ fn discover_msvc_environment() -> Option<BTreeMap<String, String>> {
         let Some((key, value)) = line.split_once('=') else {
             continue;
         };
-        if IMPORTED.iter().any(|allowed| key.eq_ignore_ascii_case(allowed)) {
+        if IMPORTED
+            .iter()
+            .any(|allowed| key.eq_ignore_ascii_case(allowed))
+        {
             discovered.insert(key.to_owned(), value.to_owned());
         }
     }
@@ -744,7 +747,6 @@ fn discover_msvc_environment() -> Option<BTreeMap<String, String>> {
         Some(discovered)
     }
 }
-
 
 fn absolute_path(path: &Path) -> io::Result<PathBuf> {
     if path.is_absolute() {
