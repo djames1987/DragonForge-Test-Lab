@@ -1,6 +1,6 @@
 # Phase 7 — GUI Automation
 
-Status: implementation complete; Windows host and VM validation pending.
+Status: complete; Windows host and Windows VM validation passed on 2026-09-22.
 
 ## Goal
 
@@ -138,4 +138,4 @@ The validation performs:
 8. owned fixture crash capture;
 9. GitHub-aware native worker regression.
 
-Upload the generated `test-logs/phase7-validation-*.log` and the Phase 7 artifact directory before merging Phase 7.
+Validation completed successfully on both the Windows host and the prepared Windows VM on 2026-09-22. Both environments passed deterministic UI Automation, screenshots, owned fixture execution, expected exit-code capture, and the GitHub-aware regression.
