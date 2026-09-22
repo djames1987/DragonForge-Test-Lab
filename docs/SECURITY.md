@@ -37,6 +37,15 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 31. Remote Phase 8 work is typed; the built-in cross-node probe exposes only the fixed NetworkFixtureSuite task.
 32. Distributed result manifests are bounded and carry SHA-256 artifact digests.
 33. Phase 8 fault injection is fixture-local delay/drop behavior only; Test Lab does not modify firewall, routes, NIC configuration, packet filters, or system DNS.
+34. The Phase 9 MCP gateway may bind only to loopback addresses.
+35. Every /mcp request requires a bearer token sourced only from DRAGONFORGE_MCP_TOKEN; the raw token is not retained after initialization.
+36. MCP repository targets must match operator-configured HTTPS allowlist entries; owner/org entries ending in `/` act as prefixes, while repository entries are exact identities after optional `.git` normalization.
+37. MCP job submission accepts only named typed profiles; arbitrary executable, shell, PowerShell, Cargo, or process-argument fields are not exposed.
+38. MCP HTTP headers and bodies are bounded before JSON-RPC dispatch.
+39. Modern MCP transport headers must agree with the JSON-RPC method/name before tool execution.
+40. MCP result retrieval excludes raw filesystem access and returns SHA-256 artifact metadata only.
+41. The MCP gateway permits at most four queued/running jobs and rejects new submissions above that limit.
+42. The MCP HTTP parser rejects duplicate headers and transfer-encoding to avoid ambiguous request framing.
 
 ## Local execution boundary
 
@@ -120,9 +129,23 @@ The shared node secret is read from `DRAGONFORGE_NODE_SHARED_SECRET`; it is not 
 
 The cross-node validation path sends a fixed typed `NetworkFixtureSuite` command and receives a signed `NodeResultManifest`. It cannot send executable paths, arbitrary command lines, shell fragments, firewall commands, packet-capture instructions, or raw process arguments.
 
+## Phase 9 MCP gateway boundary
+
+Phase 9 exposes a loopback-only HTTP MCP endpoint. Binding to 0.0.0.0, LAN addresses, or public addresses is rejected by configuration validation.
+
+Every POST to /mcp requires a Bearer token read from DRAGONFORGE_MCP_TOKEN. The token must be at least 32 characters. The gateway hashes it with SHA-256 during construction, clears the raw token from retained configuration, and compares fixed-length digests without early exit. The token is not accepted on the command line.
+
+MCP-submitted repositories must match DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES and use HTTPS. Job calls select only a fixed named profile (rust_standard or rust_test); those profiles map to existing typed TestAction values and then pass through Agent policy validation before LocalExecutor execution.
+
+The gateway bounds HTTP headers to 16 KiB and request bodies to 256 KiB. It validates JSON-RPC 2.0, modern MCP protocol/method/name headers, and rejects header/body mismatches before dispatch.
+
+The MCP result surface exposes job status, bounded step metadata, and artifact metadata. Artifact paths are canonicalized beneath the LocalExecutor artifact root and SHA-256 hashed. Phase 9 does not expose raw artifact file reads, arbitrary filesystem browsing, or raw stdout/stderr through MCP.
+
+The gateway is intentionally local. Its static bearer authentication is defense-in-depth for a loopback service, not a standards-compliant Internet-facing OAuth deployment. Remote exposure requires a separate future design with OAuth/resource metadata, TLS or an authenticated tunnel, credential rotation, and durable auditing.
+
 ## Current enforcement
 
-Phases 1-8 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
+Phases 1-9 enforce repository allowlisting, HTTPS URLs, worker capabilities, protocol compatibility, total job timeout, bounded captured output, post-step disk usage ceilings, sanitized executor environments, GitHub repository/ref validation, immutable commit resolution, typed commit-status reporting, Windows process-tree containment, Windows aggregate memory/process ceilings, whole-tree cancellation/timeout, optional dedicated worker identity, Docker/Podman project-code isolation, typed Hyper-V VM lifecycle control, managed VM namespacing, golden-image containment, differencing disks, and deterministic checkpoint rollback.
 
 ## Sandbox and distributed-node work still required
 
@@ -130,6 +153,6 @@ Phase 4 provides disposable VM lifecycle and rollback, but truly hostile third-p
 
 Phase 8 now adds authenticated node messages, replay protection, node identity, lease expiry, outbound-only connection policy, and typed capability scheduling. The current transport is deliberately constrained to private/link-local networks and does not provide confidentiality itself; deployments on untrusted networks still require VPN/mTLS encryption. Nodes must not expose a general remote shell.
 
-Before MCP/Internet-facing distributed control, add certificate-backed transport identity, durable audit storage, credential rotation, and explicit high-risk capability approval workflows.
+Before Internet-facing MCP or distributed control, add standards-compliant OAuth/resource metadata, certificate-backed transport identity, durable audit storage, credential rotation, and explicit high-risk capability approval workflows.
 
 The project must not evolve into an unrestricted remote shell.

@@ -27,8 +27,8 @@ Typed Windows UI Automation for DragonForge-managed windows, deterministic JSON 
 ## Phase 8 — Multi-machine & Network Lab — Complete
 Authenticated outbound-only node registration, replay-protected HMAC envelopes, lease/heartbeat health, OS/architecture/label/feature capability inventory, load-aware distinct-node scheduling, coordinated typed multi-node role plans, signed result return with SHA-256 artifact manifests, bounded framed transport, TCP/UDP/DNS fixtures, deterministic fault profiles, and a real host-to-node typed network-job probe. Public controller addresses, inbound agent listeners, and arbitrary remote commands remain forbidden. Host, Windows VM, and real cross-node validation passed on 2026-09-22.
 
-## Phase 9 — ChatGPT/MCP Gateway
-Authenticated high-level tool surface for job submission, status, and artifact/result retrieval.
+## Phase 9 — ChatGPT/MCP Gateway — Complete
+Loopback-only authenticated MCP HTTP gateway with modern 2026-07-28 discovery and legacy 2025-11-25 initialization compatibility, typed lab/node/job/result/artifact tools, repository allowlisting, asynchronous named-profile execution through the existing Agent/Policy/Executor trust boundary, bounded HTTP/JSON-RPC handling, SHA-256 artifact metadata, and end-to-end validation tooling. Windows host validation passed on 2026-09-22.
 
 ## Phase 10 — Test Intelligence
 Change-aware profile selection, historical regression targeting, failure clustering, and resource-aware scheduling.

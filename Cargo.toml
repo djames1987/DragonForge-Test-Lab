@@ -13,10 +13,11 @@ members = [
     "crates/df-test-windows",
     "crates/df-test-gui",
     "crates/df-test-distributed",
+    "crates/df-test-mcp",
 ]
 
 [workspace.package]
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.80"
