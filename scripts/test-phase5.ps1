@@ -69,7 +69,7 @@ try {
     git --version
     cargo --version
     rustc --version
-    rustup --version
+    rustup show active-toolchain
     gh --version
     Write-Host ""
 
