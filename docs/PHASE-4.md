@@ -1,6 +1,6 @@
 # Phase 4 — VM Lab
 
-Status: implementation complete; host and lifecycle validation pending.
+Status: complete; Windows Hyper-V host and full VM lifecycle validation passed on 2026-09-22.
 
 ## Goal
 
@@ -98,3 +98,5 @@ Full lifecycle:
     .\scripts\test-phase4.ps1 -VmRoot C:\DragonForge-Test-Lab-VMs -BaseVhdx C:\DragonForge-Test-Lab-VMs\images\windows-base.vhdx -GuestOs windows
 
 Full lifecycle validation creates only DragonForge-Phase4-Validation and destroys it at the end.
+
+Validation completed successfully on a real Windows Hyper-V host on 2026-09-22. The run passed formatting, Clippy, workspace tests, Test Lab doctor, Hyper-V host readiness, VM Lab doctor, GitHub-aware native worker regression, disposable VM creation, baseline checkpoint creation, start/restore, stop, and managed VM destruction.
