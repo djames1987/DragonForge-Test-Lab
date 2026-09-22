@@ -429,15 +429,14 @@ struct FixtureCertificates {
 
 impl FixtureCertificates {
     fn generate() -> Result<Self, IdentityError> {
-        use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair};
+        use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, IsCa, KeyPair};
 
         let mut ca_params = CertificateParams::new(Vec::<String>::new())
             .map_err(|error| IdentityError::CertificateGeneration(error.to_string()))?;
         ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         let ca_key = KeyPair::generate()
             .map_err(|error| IdentityError::CertificateGeneration(error.to_string()))?;
-        let ca_cert = ca_params
-            .self_signed(&ca_key)
+        let ca = CertifiedIssuer::self_signed(ca_params, ca_key)
             .map_err(|error| IdentityError::CertificateGeneration(error.to_string()))?;
 
         let server_key = KeyPair::generate()
@@ -445,7 +444,7 @@ impl FixtureCertificates {
         let server_params = CertificateParams::new(vec!["localhost".to_owned()])
             .map_err(|error| IdentityError::CertificateGeneration(error.to_string()))?;
         let server_cert = server_params
-            .signed_by(&server_key, &ca_cert, &ca_key)
+            .signed_by(&server_key, &ca)
             .map_err(|error| IdentityError::CertificateGeneration(error.to_string()))?;
 
         let client_key = KeyPair::generate()
@@ -453,7 +452,7 @@ impl FixtureCertificates {
         let client_params = CertificateParams::new(Vec::<String>::new())
             .map_err(|error| IdentityError::CertificateGeneration(error.to_string()))?;
         let client_cert = client_params
-            .signed_by(&client_key, &ca_cert, &ca_key)
+            .signed_by(&client_key, &ca)
             .map_err(|error| IdentityError::CertificateGeneration(error.to_string()))?;
 
         let rotated_client_key = KeyPair::generate()
@@ -461,11 +460,11 @@ impl FixtureCertificates {
         let rotated_client_params = CertificateParams::new(Vec::<String>::new())
             .map_err(|error| IdentityError::CertificateGeneration(error.to_string()))?;
         let rotated_client_cert = rotated_client_params
-            .signed_by(&rotated_client_key, &ca_cert, &ca_key)
+            .signed_by(&rotated_client_key, &ca)
             .map_err(|error| IdentityError::CertificateGeneration(error.to_string()))?;
 
         Ok(Self {
-            ca_cert_pem: ca_cert.pem(),
+            ca_cert_pem: ca.pem(),
             server_cert_pem: server_cert.pem(),
             server_key_pem: server_key.serialize_pem(),
             client_cert_pem: client_cert.pem(),
