@@ -501,7 +501,7 @@ impl McpGateway {
 
         let profile = submission.profile;
         let gateway = self.clone();
-        thread::spawn(move || {
+        let _job_thread = thread::spawn(move || {
             gateway.run_job(job_id, submission);
         });
 
@@ -924,10 +924,14 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, McpGatewayEr
             return Err(McpGatewayError::InvalidHttp);
         };
         let name = name.trim().to_ascii_lowercase();
-        if headers.contains_key(&name) {
-            return Err(McpGatewayError::DuplicateHttpHeader);
+        match headers.entry(name) {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(value.trim().to_string());
+            }
+            std::collections::hash_map::Entry::Occupied(_) => {
+                return Err(McpGatewayError::DuplicateHttpHeader);
+            }
         }
-        headers.insert(name, value.trim().to_string());
     }
 
     if headers.contains_key("transfer-encoding") {
