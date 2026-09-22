@@ -895,7 +895,15 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, McpGatewayEr
         let Some((name, value)) = line.split_once(':') else {
             return Err(McpGatewayError::InvalidHttp);
         };
-        headers.insert(name.trim().to_ascii_lowercase(), value.trim().to_string());
+        let name = name.trim().to_ascii_lowercase();
+        if headers.contains_key(&name) {
+            return Err(McpGatewayError::DuplicateHttpHeader);
+        }
+        headers.insert(name, value.trim().to_string());
+    }
+
+    if headers.contains_key("transfer-encoding") {
+        return Err(McpGatewayError::UnsupportedTransferEncoding);
     }
 
     let content_length = headers
@@ -1227,6 +1235,10 @@ pub enum McpGatewayError {
     SystemClock,
     #[error("HTTP request is invalid")]
     InvalidHttp,
+    #[error("duplicate HTTP headers are not accepted")]
+    DuplicateHttpHeader,
+    #[error("HTTP transfer-encoding is not supported; use a bounded Content-Length")]
+    UnsupportedTransferEncoding,
     #[error("HTTP request ended unexpectedly")]
     UnexpectedHttpEof,
     #[error("HTTP headers exceed configured limit")]
@@ -1273,6 +1285,36 @@ mod tests {
         )]
         .into_iter()
         .collect()
+    }
+
+    #[test]
+    fn gateway_does_not_retain_plaintext_bearer_token() {
+        let gateway = McpGateway::new(config()).unwrap();
+        assert!(gateway.inner.config.bearer_token.is_empty());
+        assert_ne!(gateway.inner.token_digest, [0u8; 32]);
+    }
+
+    #[test]
+    fn wrong_bearer_token_is_rejected() {
+        let gateway = McpGateway::new(config()).unwrap();
+        let mut headers = HashMap::new();
+        headers.insert(
+            "authorization".into(),
+            "Bearer abcdefghijklmnopqrstuvwxyz012345".into(),
+        );
+        let response = gateway.handle_http_request(HttpRequest {
+            method: "POST".into(),
+            path: "/mcp".into(),
+            headers,
+            body: serde_json::to_vec(&json!({
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"tools/list",
+                "params":{}
+            }))
+            .unwrap(),
+        });
+        assert_eq!(response.status, 401);
     }
 
     #[test]
