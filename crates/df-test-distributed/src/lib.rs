@@ -1341,6 +1341,58 @@ mod tests {
     }
 
     #[test]
+    fn controller_ignores_health_probe_before_real_node() {
+        let secret = [0x33u8; 32];
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        drop(listener);
+
+        let server_secret = secret;
+        let server = std::thread::spawn(move || {
+            serve_registration_probe_once(
+                address,
+                "probe-key",
+                &server_secret,
+                current_unix_time_secs().unwrap(),
+                Duration::from_secs(10),
+            )
+            .unwrap()
+        });
+
+        std::thread::sleep(Duration::from_millis(100));
+        let probe = TcpStream::connect(address).unwrap();
+        drop(probe);
+
+        let registration = NodeRegistration {
+            protocol_version: PROTOCOL_VERSION,
+            profile: profile(
+                "node-after-probe",
+                "windows",
+                &[NodeFeature::TcpFixture, NodeFeature::UdpFixture, NodeFeature::DnsFixture],
+            ),
+            outbound_only: true,
+            key_id: "probe-key".into(),
+        };
+
+        let result = connect_registration_probe(
+            address,
+            registration,
+            "probe-key",
+            &secret,
+            current_unix_time_secs().unwrap(),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+
+        assert_eq!(result.ack.node_id, "node-after-probe");
+        assert_eq!(result.result.status, JobStatus::Passed);
+
+        let server_result = server.join().unwrap();
+        assert_eq!(server_result.registration.profile.node_id, "node-after-probe");
+        assert_eq!(server_result.result.status, JobStatus::Passed);
+    }
+
+    #[test]
     fn public_controller_addresses_are_rejected() {
         let public: SocketAddr = "8.8.8.8:443".parse().unwrap();
         assert!(validate_controller_addr(public).is_err());
