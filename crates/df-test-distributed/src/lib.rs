@@ -484,7 +484,7 @@ impl FaultProfile {
 
     pub fn should_drop(&self, sequence: u64) -> bool {
         self.drop_every_n
-            .map(|n| sequence > 0 && sequence.is_multiple_of(n as u64))
+            .map(|n| sequence > 0 && sequence % n as u64 == 0)
             .unwrap_or(false)
     }
 }
@@ -618,6 +618,144 @@ pub fn loopback_transport_fixture() -> Result<bool, DistributedError> {
         .join()
         .map_err(|_| DistributedError::FixtureThreadPanicked)??;
     Ok(echoed == heartbeat)
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DistributedFixtureReport {
+    pub registration_authenticated: bool,
+    pub replay_rejected: bool,
+    pub heartbeat_applied: bool,
+    pub distinct_role_assignment: bool,
+    pub artifact_hash_verified: bool,
+    pub outbound_transport_round_trip: bool,
+    pub network: NetworkFixtureReport,
+}
+
+pub fn run_distributed_fixtures() -> Result<DistributedFixtureReport, DistributedError> {
+    let win_secret = [0x11u8; 32];
+    let linux_secret = [0x22u8; 32];
+    let mut verifier = EnvelopeVerifier::new(30)?;
+    verifier.add_key("win-key", &win_secret)?;
+    verifier.add_key("linux-key", &linux_secret)?;
+    let mut registry = NodeRegistry::new(verifier, DEFAULT_LEASE_SECONDS)?;
+
+    let win_registration = NodeRegistration {
+        protocol_version: PROTOCOL_VERSION,
+        profile: NodeProfile {
+            node_id: "fixture-win".into(),
+            os: "windows".into(),
+            arch: "x86_64".into(),
+            labels: ["interactive".to_string()].into_iter().collect(),
+            features: [
+                NodeFeature::Rust,
+                NodeFeature::GuiAutomation,
+                NodeFeature::TcpFixture,
+                NodeFeature::UdpFixture,
+            ]
+            .into_iter()
+            .collect(),
+            max_parallel_jobs: 2,
+        },
+        outbound_only: true,
+        key_id: "win-key".into(),
+    };
+    let linux_registration = NodeRegistration {
+        protocol_version: PROTOCOL_VERSION,
+        profile: NodeProfile {
+            node_id: "fixture-linux".into(),
+            os: "linux".into(),
+            arch: "x86_64".into(),
+            labels: ["container".to_string()].into_iter().collect(),
+            features: [
+                NodeFeature::Rust,
+                NodeFeature::Docker,
+                NodeFeature::TcpFixture,
+                NodeFeature::DnsFixture,
+                NodeFeature::FaultInjection,
+            ]
+            .into_iter()
+            .collect(),
+            max_parallel_jobs: 4,
+        },
+        outbound_only: true,
+        key_id: "linux-key".into(),
+    };
+
+    let win_envelope =
+        AuthenticatedEnvelope::sign("win-key", &win_secret, 1_000, win_registration)?;
+    registry.register(&win_envelope, 1_000)?;
+    let replay_rejected = matches!(
+        registry.register(&win_envelope, 1_000),
+        Err(DistributedError::ReplayDetected)
+    );
+
+    let linux_envelope =
+        AuthenticatedEnvelope::sign("linux-key", &linux_secret, 1_000, linux_registration)?;
+    registry.register(&linux_envelope, 1_000)?;
+
+    let heartbeat = AuthenticatedEnvelope::sign(
+        "win-key",
+        &win_secret,
+        1_005,
+        NodeHeartbeat {
+            node_id: "fixture-win".into(),
+            load_percent: 12,
+            active_jobs: 0,
+        },
+    )?;
+    registry.heartbeat(&heartbeat, 1_005)?;
+    let heartbeat_applied = registry
+        .states()
+        .into_iter()
+        .find(|state| state.registration.profile.node_id == "fixture-win")
+        .map(|state| state.load_percent == 12 && state.last_seen_secs == 1_005)
+        .unwrap_or(false);
+
+    let plan = MultiNodePlan {
+        plan_id: Uuid::new_v4(),
+        roles: vec![
+            NodeRequirement {
+                role: "interactive-gui".into(),
+                required_features: [NodeFeature::GuiAutomation].into_iter().collect(),
+                required_labels: ["interactive".to_string()].into_iter().collect(),
+                os: Some("windows".into()),
+                arch: Some("x86_64".into()),
+                max_load_percent: 80,
+            },
+            NodeRequirement {
+                role: "network-fault".into(),
+                required_features: [NodeFeature::DnsFixture, NodeFeature::FaultInjection]
+                    .into_iter()
+                    .collect(),
+                required_labels: ["container".to_string()].into_iter().collect(),
+                os: Some("linux".into()),
+                arch: Some("x86_64".into()),
+                max_load_percent: 80,
+            },
+        ],
+    };
+    let assignment = registry.allocate_plan(&plan, 1_005)?;
+    let distinct_role_assignment = assignment.assignments.len() == 2
+        && assignment.assignments[0].node_id != assignment.assignments[1].node_id;
+    registry.release_assignment(&assignment);
+
+    let artifact = DistributedArtifact::from_bytes("result.json", br#"{"status":"ok"}"#)?;
+    let artifact_hash_verified = artifact.sha256
+        == "a29ee2b15c494311c525217dafbf40b10dc1bd505fd46362f391d428c77d9e25";
+
+    let outbound_transport_round_trip = loopback_transport_fixture()?;
+    let network = run_network_fixtures()?;
+
+    Ok(DistributedFixtureReport {
+        registration_authenticated: true,
+        replay_rejected,
+        heartbeat_applied,
+        distinct_role_assignment,
+        artifact_hash_verified,
+        outbound_transport_round_trip,
+        network,
+    })
 }
 
 fn tcp_loopback_round_trip() -> Result<bool, DistributedError> {
