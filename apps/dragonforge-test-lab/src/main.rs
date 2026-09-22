@@ -1,6 +1,7 @@
 use df_test_agent::Agent;
 use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor};
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
+use df_test_gui::{GuiAutomationClient, GuiPlan};
 use df_test_policy::ExecutionPolicy;
 use df_test_protocol::{
     Capability, JobRequest, JobStatus, RepositorySpec, ResourceLimits, TestAction,
@@ -30,6 +31,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     match command {
         "doctor" => doctor(),
         "github-doctor" => github_doctor(),
+        "gui-doctor" => gui_doctor(),
+        "gui-run-plan" => gui_run_plan(&args[2..]),
+        "gui-fixture" => gui_fixture(&args[2..]),
         "sandbox-doctor" => sandbox_doctor(&args[2..]),
         "rust-doctor" => rust_doctor(),
         "windows-doctor" => windows_doctor(),
@@ -63,7 +67,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=6");
+    println!("phase=7");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -87,6 +91,49 @@ fn github_doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("DragonForge Test Lab GitHub doctor");
     println!("github_host=github.com");
     println!("status=github_ready");
+    Ok(())
+}
+
+fn gui_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let report = GuiAutomationClient.doctor()?;
+    println!("DragonForge Test Lab GUI doctor");
+    println!("{}", serde_json::to_string_pretty(&report)?);
+
+    if !report.user_interactive || !report.ui_automation_available || !report.drawing_available {
+        return Err("interactive desktop, UI Automation, and drawing support are required".into());
+    }
+
+    println!("status=gui_automation_ready");
+    Ok(())
+}
+
+fn gui_run_plan(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let plan_path = value_after(args, "--plan").ok_or("missing --plan <plan.json>")?;
+    let artifact_dir = value_after(args, "--artifact-dir")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("gui-artifacts"));
+    let plan: GuiPlan = serde_json::from_slice(&std::fs::read(plan_path)?)?;
+    let report = GuiAutomationClient.run_plan(&plan, &artifact_dir)?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !report.passed {
+        return Err("GUI plan failed".into());
+    }
+    Ok(())
+}
+
+fn gui_fixture(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let artifact_dir = value_after(args, "--artifact-dir")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".dragonforge-test-lab").join("gui-artifacts"));
+    let fixture_script = PathBuf::from("scripts").join("phase7-gui-fixture.ps1");
+    let (report, crash) =
+        GuiAutomationClient.run_phase7_fixture(&fixture_script, &artifact_dir)?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    println!("{}", serde_json::to_string_pretty(&crash)?);
+    if !report.passed || !crash.captured {
+        return Err("Phase 7 GUI fixture failed".into());
+    }
+    println!("status=gui_fixture_passed");
     Ok(())
 }
 
@@ -547,6 +594,9 @@ fn print_help() {
     println!("Usage:");
     println!("  dragonforge-test-lab doctor");
     println!("  dragonforge-test-lab github-doctor");
+    println!("  dragonforge-test-lab gui-doctor");
+    println!("  dragonforge-test-lab gui-run-plan --plan <plan.json> [--artifact-dir <path>]");
+    println!("  dragonforge-test-lab gui-fixture [--artifact-dir <path>]");
     println!("  dragonforge-test-lab sandbox-doctor [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab rust-doctor");
     println!("  dragonforge-test-lab windows-doctor");
