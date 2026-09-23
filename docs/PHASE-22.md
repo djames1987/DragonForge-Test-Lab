@@ -184,4 +184,4 @@ Signing secrets remain outside the repository. Stable workflows fail closed when
 
 ## Validation status
 
-Implementation is complete. Windows/Linux qualification and production signing verification remain pending.
+Implementation is complete. Windows host qualification passed on 2026-09-23 using `scripts/test-phase22.ps1`, covering rustfmt, strict Clippy, full workspace tests, release doctor/fixture, dev/beta/stable channel policy, cargo-audit/cargo-deny gates, CycloneDX SBOM generation, Windows dev release packaging, release bundle assembly/verification, and the Phase 22 doctor marker. Linux qualification and production stable signing verification remain pending.
