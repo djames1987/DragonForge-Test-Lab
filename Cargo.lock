@@ -341,7 +341,7 @@ checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
 name = "df-test-agent"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-policy",
  "df-test-protocol",
@@ -349,8 +349,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "df-test-arm"
+version = "0.21.0"
+dependencies = [
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "df-test-controller"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-intelligence",
  "df-test-lifecycle",
@@ -366,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-dashboard"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-controller",
  "df-test-lifecycle",
@@ -381,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-distributed"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-protocol",
  "hex",
@@ -395,7 +403,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-executor"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-protocol",
  "df-test-sandbox",
@@ -407,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-github"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -416,7 +424,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-gui"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -425,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-identity"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "hex",
  "rcgen",
@@ -439,7 +447,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-intelligence"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-protocol",
  "hex",
@@ -452,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-intelligence-integration"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-controller",
  "df-test-github",
@@ -468,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-lifecycle"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "serde",
  "thiserror",
@@ -476,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-mcp"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-agent",
  "df-test-executor",
@@ -493,7 +501,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-observability"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "hex",
  "serde",
@@ -504,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-plans"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-lifecycle",
  "df-test-protocol",
@@ -515,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-policy"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-protocol",
  "thiserror",
@@ -523,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-protocol"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "criterion",
  "proptest",
@@ -534,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-sandbox"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "libc",
  "thiserror",
@@ -544,7 +552,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-vm"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -553,7 +561,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-windows"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -563,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "df-test-worker-service"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-identity",
  "df-test-observability",
@@ -599,9 +607,10 @@ dependencies = [
 
 [[package]]
 name = "dragonforge-test-lab"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "df-test-agent",
+ "df-test-arm",
  "df-test-controller",
  "df-test-dashboard",
  "df-test-distributed",
