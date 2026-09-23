@@ -443,7 +443,9 @@ mod linux {
             *self
                 .process_group
                 .lock()
-                .map_err(|_| SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned")))? =
+                .map_err(|_| {
+                    SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned"))
+                })? =
                 Some(pid);
             Ok(())
         }
@@ -452,7 +454,9 @@ mod linux {
             let Some(group) = *self
                 .process_group
                 .lock()
-                .map_err(|_| SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned")))?
+                .map_err(|_| {
+                    SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned"))
+                })?
             else {
                 return Ok(false);
             };
@@ -675,7 +679,7 @@ pub enum SandboxError {
     },
     #[error("container runtime is unavailable: {0}")]
     RuntimeUnavailable(String),
-    #[error("container image {image} is unavailable in {runtime}; build it with scripts/build-sandbox-image.ps1")]
+    #[error("container image {image} is unavailable in {runtime}; build it with scripts/build-sandbox-image.ps1 or scripts/build-sandbox-image.sh")]
     ContainerImageUnavailable { runtime: String, image: String },
     #[error("failed to remove sandbox container {name} with {runtime}: {output}")]
     ContainerCleanupFailed {
