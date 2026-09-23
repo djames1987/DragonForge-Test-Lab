@@ -65,6 +65,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "dashboard-doctor" => dashboard_doctor(&args[2..]),
         "dashboard-fixture" => dashboard_fixture(),
         "dashboard-serve" => dashboard_serve(&args[2..]),
+        "linux-doctor" => linux_doctor(),
+        "linux-fixture" => linux_fixture(),
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
         "identity-fixture" => identity_fixture(),
@@ -136,7 +138,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=18");
+    println!("phase=19");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -327,6 +329,88 @@ fn dashboard_config(args: &[String]) -> Result<DashboardConfig, Box<dyn std::err
         bearer_token,
         state_db,
     })
+}
+
+fn linux_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::consts::OS != "linux" {
+        return Err("linux-doctor must run on a Linux host or Linux VM".into());
+    }
+
+    let limits = SandboxLimits {
+        max_memory_mib: 512,
+        max_processes: 8,
+    };
+    let guard = ProcessTreeGuard::new(SandboxMode::Native, limits)?;
+    let systemd = SystemdServiceSpec::new(
+        PathBuf::from("/opt/dragonforge/bin/dragonforge-test-lab"),
+        PathBuf::from("/etc/dragonforge/test-worker.json"),
+    )?;
+    let unit = systemd.render_unit();
+
+    println!("DragonForge Test Lab Linux doctor");
+    println!("os={}", std::env::consts::OS);
+    println!("arch={}", std::env::consts::ARCH);
+    println!("native_containment={}", guard.mechanism());
+    println!("systemd_unit={}", systemd.unit_name);
+    println!("systemd_no_new_privileges={}", unit.contains("NoNewPrivileges=true"));
+    println!("systemd_protect_system={}", unit.contains("ProtectSystem=strict"));
+    println!("outbound_mtls=true");
+    println!("container_modes=docker,podman");
+    println!("status=linux_worker_ready");
+    Ok(())
+}
+
+fn linux_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::consts::OS != "linux" {
+        return Err("linux-fixture must run on a Linux host or Linux VM".into());
+    }
+
+    let guard = ProcessTreeGuard::new(
+        SandboxMode::Native,
+        SandboxLimits {
+            max_memory_mib: 256,
+            max_processes: 8,
+        },
+    )?;
+    let mut command = Command::new("sleep");
+    command.arg("30");
+    command.stdin(std::process::Stdio::null());
+    command.stdout(std::process::Stdio::null());
+    command.stderr(std::process::Stdio::null());
+    guard.prepare_command(&mut command)?;
+    let mut child = command.spawn()?;
+    guard.attach(&mut child)?;
+    let cancellation_tree_killed = guard.terminate_tree()?;
+    let _ = child.wait();
+
+    let service = run_worker_service_fixture()?;
+    let identity = run_mtls_fixture()?;
+    let report = serde_json::json!({
+        "native_containment": guard.mechanism() == "linux_process_group_rlimit",
+        "cancellation_tree_killed": cancellation_tree_killed,
+        "mtls_registration": service.mtls_registration,
+        "heartbeat_received": service.heartbeat_received,
+        "drain_blocks_new_jobs": service.drain_blocks_new_jobs,
+        "restart_state_recovered": service.restart_state_recovered,
+        "systemd_unit_valid": service.systemd_unit_valid,
+        "encrypted_round_trip": identity.encrypted_round_trip,
+        "node_identity_verified": identity.node_identity_verified
+    });
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if report.as_object().is_none()
+        || !cancellation_tree_killed
+        || !service.mtls_registration
+        || !service.heartbeat_received
+        || !service.drain_blocks_new_jobs
+        || !service.restart_state_recovered
+        || !service.systemd_unit_valid
+        || !identity.encrypted_round_trip
+        || !identity.node_identity_verified
+    {
+        return Err("one or more Phase 19 Linux fixtures failed".into());
+    }
+    println!("status=linux_fixture_passed");
+    Ok(())
 }
 
 fn github_doctor() -> Result<(), Box<dyn std::error::Error>> {
@@ -2215,6 +2299,8 @@ fn print_help() {
     println!("  dragonforge-test-lab dashboard-doctor [--bind 127.0.0.1:8788] [--state-db <path>]");
     println!("  dragonforge-test-lab dashboard-fixture");
     println!("  dragonforge-test-lab dashboard-serve [--bind 127.0.0.1:8788] [--state-db <path>]");
+    println!("  dragonforge-test-lab linux-doctor");
+    println!("  dragonforge-test-lab linux-fixture");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");
