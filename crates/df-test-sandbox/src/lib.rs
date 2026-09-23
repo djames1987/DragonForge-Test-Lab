@@ -440,23 +440,16 @@ mod linux {
                     "child process id did not fit in i32",
                 ))
             })?;
-            *self
-                .process_group
-                .lock()
-                .map_err(|_| {
-                    SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned"))
-                })? =
-                Some(pid);
+            *self.process_group.lock().map_err(|_| {
+                SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned"))
+            })? = Some(pid);
             Ok(())
         }
 
         pub fn terminate(&self) -> Result<bool, SandboxError> {
-            let Some(group) = *self
-                .process_group
-                .lock()
-                .map_err(|_| {
-                    SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned"))
-                })?
+            let Some(group) = *self.process_group.lock().map_err(|_| {
+                SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned"))
+            })?
             else {
                 return Ok(false);
             };
@@ -481,7 +474,6 @@ mod linux {
             }
         }
     }
-
 }
 
 #[cfg(windows)]
