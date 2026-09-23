@@ -1,4 +1,4 @@
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(target_os = "linux")))]
 use std::env;
 use std::{
     io,
@@ -176,7 +176,12 @@ pub fn current_worker_identity() -> Result<String, SandboxError> {
         windows::current_username()
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::current_username()
+    }
+
+    #[cfg(all(not(windows), not(target_os = "linux")))]
     {
         env::var("USER").map_err(|_| SandboxError::WorkerIdentityUnavailable)
     }
@@ -375,6 +380,40 @@ mod linux {
         process::{Child, Command},
         sync::Mutex,
     };
+
+    pub fn current_username() -> Result<String, SandboxError> {
+        let uid = unsafe { libc::geteuid() };
+        let mut pwd = std::mem::MaybeUninit::<libc::passwd>::uninit();
+        let mut result = std::ptr::null_mut();
+        let mut buffer = vec![0_u8; 16 * 1024];
+
+        let status = unsafe {
+            libc::getpwuid_r(
+                uid,
+                pwd.as_mut_ptr(),
+                buffer.as_mut_ptr().cast::<libc::c_char>(),
+                buffer.len(),
+                &mut result,
+            )
+        };
+        if status != 0 || result.is_null() {
+            return Err(SandboxError::WorkerIdentityUnavailable);
+        }
+
+        let pwd = unsafe { pwd.assume_init() };
+        if pwd.pw_name.is_null() {
+            return Err(SandboxError::WorkerIdentityUnavailable);
+        }
+
+        let username = unsafe { std::ffi::CStr::from_ptr(pwd.pw_name) }
+            .to_str()
+            .map_err(|_| SandboxError::WorkerIdentityUnavailable)?
+            .to_owned();
+        if username.is_empty() {
+            return Err(SandboxError::WorkerIdentityUnavailable);
+        }
+        Ok(username)
+    }
 
     pub struct LinuxGuard {
         limits: Option<SandboxLimits>,
@@ -773,6 +812,18 @@ mod tests {
         guard.attach(&mut child).unwrap();
         let status = child.wait().unwrap();
         assert!(status.success());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_worker_identity_does_not_depend_on_user_environment() {
+        let original = std::env::var_os("USER");
+        std::env::remove_var("USER");
+        let identity = current_worker_identity().unwrap();
+        if let Some(value) = original {
+            std::env::set_var("USER", value);
+        }
+        assert!(!identity.is_empty());
     }
 
     #[cfg(target_os = "linux")]
