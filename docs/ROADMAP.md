@@ -66,7 +66,7 @@ ARM32/AArch64 and Raspberry Pi discovery, typed GPIO/I²C/SPI/UART/thermal capab
 ## Phase 21 — Installer / Upgrades — Complete
 Managed Windows/Linux packaging and installation, stable configuration/state/log/backup layouts, SHA-256 release manifests, installer configuration migration, existing controller database migration compatibility, strictly newer-version upgrades, immediate binary rollback metadata, native worker service installation hooks, and state-preserving uninstall with explicit purge.
 
-## Phase 22 — Release Engineering — Windows & Linux Qualified / Linux Signing Qualified / Windows Authenticode Pending
+## Phase 22 — Release Engineering — Complete / Signing Mechanics Qualified
 Versioned dev/beta/stable release channels, release bundle schema and verification, SHA-256 checksum indexes, deterministic CycloneDX 1.6 SBOM generation, cargo-audit and cargo-deny dependency/license gates, Windows Authenticode signing, detached minisign package signatures, generated release notes, GitHub release automation, and Windows/Linux qualification tooling. Production signing and end-to-end platform qualification remain pending until Phase 22 validation is run with the required release tools/signing identities.
 
 ## Phase 23 — Security Review
