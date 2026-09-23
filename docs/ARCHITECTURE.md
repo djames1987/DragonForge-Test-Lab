@@ -427,3 +427,10 @@ Worker service operation continues to use the Phase 13 outbound-only systemd run
 `df-test-arm` is the hardware discovery boundary for native ARM Linux workers. It reads only fixed, bounded Linux metadata locations for board identity, thermal state, GPIO controller presence, I²C buses, SPI devices, and serial devices. The CLI maps this inventory into typed distributed node features; callers never supply device paths or executable text.
 
 Hardware-in-the-loop operations in Phase 20 are read-only probes represented by the `HardwareProbe` enum. Mutating GPIO/I²C/SPI/UART operations are intentionally outside this phase. Existing outbound-only registration, mTLS identity, scheduling, Agent/Policy, and Linux containment boundaries remain unchanged.
+
+
+## Phase 21 installer and upgrade boundary
+
+`df-test-install` owns the managed installation model: fixed platform layouts, bounded release manifests, installer configuration, install-state metadata, upgrade planning, and immediate rollback metadata. The installer never changes the execution trust model; installed worker services continue to use the existing outbound-only mTLS service runtime.
+
+Controller SQLite schema migration remains owned by `DurableController`. Phase 21 introduces no new controller schema, so 0.21.0 ↔ 0.22.0 binary rollback remains database-compatible. Future irreversible schema changes must add an explicit rollback compatibility gate.

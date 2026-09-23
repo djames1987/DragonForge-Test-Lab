@@ -6,7 +6,7 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 20 — ARM / Raspberry Pi — Implementation Complete
+Phase 21 — Installer / Upgrades — Implementation Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
@@ -18,6 +18,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       dragonforge-test-lab/   operator CLI
     crates/
       df-test-arm/            ARM/Raspberry Pi inventory and typed read-only HIL probes
+      df-test-install/        installer layouts, manifests, upgrades, and rollback metadata
       df-test-protocol/       shared versioned contracts
       df-test-policy/         worker authorization policy
       df-test-agent/          worker-side trust boundary
@@ -63,6 +64,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-18.md
       PHASE-19.md
       PHASE-20.md
+      PHASE-21.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -93,6 +95,16 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       build-sandbox-image.sh
       test-phase19-linux.sh
       test-phase20-arm.sh
+      test-phase21.ps1
+      test-phase21-linux.sh
+      package-release-windows.ps1
+      package-release-linux.sh
+      install-windows.ps1
+      install-linux.sh
+      rollback-windows.ps1
+      rollback-linux.sh
+      uninstall-windows.ps1
+      uninstall-linux.sh
 
 ## Hyper-V host setup
 
@@ -489,9 +501,31 @@ Optional Docker/Podman qualification on ARM:
 
     bash ./scripts/test-phase20-arm.sh --revision main --container-runtime docker
 
-Phase 20 exposes only allowlisted read-only board/thermal/GPIO-controller/I²C/SPI/UART discovery. It does not expose arbitrary filesystem paths, generic shell commands, or raw hardware writes. Final Raspberry Pi/physical ARM qualification remains pending until the Phase 20 script runs on real ARM hardware.
+Phase 20 exposes only allowlisted read-only board/thermal/GPIO-controller/I²C/SPI/UART discovery. It does not expose arbitrary filesystem paths, generic shell commands, or raw hardware writes. Phase 20 remains **Needs Testing** until the Phase 20 script is run on a real Raspberry Pi/physical ARM host.
 
 See docs/PHASE-20.md for the capability model, HIL boundary, and qualification procedure.
+
+## Phase 21 Installer / Upgrades
+
+Installer readiness:
+
+    cargo run -p dragonforge-test-lab -- install-doctor
+
+Deterministic install/upgrade/rollback fixture:
+
+    cargo run -p dragonforge-test-lab -- install-fixture
+
+Windows validation:
+
+    .\scripts\test-phase21.ps1
+
+Linux validation:
+
+    bash ./scripts/test-phase21-linux.sh
+
+Phase 21 adds fixed Windows/Linux install layouts, SHA-256 verified release manifests, stable upgrade ordering, immediate rollback metadata, installer configuration migration, platform packaging/install/rollback/uninstall scripts, and state-preserving uninstall by default.
+
+See docs/PHASE-21.md for package format, upgrade guarantees, rollback limits, filesystem layout, and validation.
 
 ## Security principle
 
@@ -499,4 +533,4 @@ DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, docs/PHASE-18.md, docs/PHASE-19.md, docs/PHASE-20.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, docs/PHASE-18.md, docs/PHASE-19.md, docs/PHASE-20.md, docs/PHASE-21.md, and docs/ROADMAP.md.

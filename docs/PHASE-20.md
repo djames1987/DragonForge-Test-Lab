@@ -82,4 +82,4 @@ Phase 20 does not add arbitrary commands, arbitrary filesystem reads, raw device
 
 ## Validation status
 
-Implementation is complete in the repository. Deterministic fixture coverage is included, but final Raspberry Pi/physical ARM platform qualification requires running `scripts/test-phase20-arm.sh` on real ARM hardware and reviewing the generated log.
+**Status: Needs Testing.** Implementation is complete in the repository and deterministic fixture coverage is included, but Phase 20 will remain marked Needs Testing until `scripts/test-phase20-arm.sh` is run on a real Raspberry Pi/physical ARM host and the generated log is reviewed.

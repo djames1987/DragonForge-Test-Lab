@@ -305,3 +305,10 @@ The Linux qualification fixture uses only fixed test programs and existing typed
 Physical ARM nodes do not receive a generic hardware or shell escape hatch. Phase 20 exposes only typed read-only probes over fixed Linux metadata locations. Metadata reads are size-bounded, device enumeration is count-bounded, probe names are allowlisted, and callers cannot provide arbitrary paths, bus addresses, GPIO values, UART payloads, SPI transfers, or I²C writes.
 
 ARM/Raspberry Pi capabilities are scheduling metadata, not authorization to execute arbitrary hardware actions. Distributed workers remain outbound-only and authenticated under the existing transport/identity model. Any future mutating HIL capability must introduce its own typed operation, explicit bounds, privilege model, policy authorization, and destructive confirmation where appropriate.
+
+
+## Phase 21 installer / upgrade controls
+
+Release manifests bind version, target OS, target architecture, binary filename, and SHA-256 digest. Binary names are restricted to safe leaf names; manifest/config/state inputs are size-bounded; upgrades must move to a strictly newer stable semantic version; and production install roots are fixed per platform.
+
+Installers stop the worker service before replacing an existing binary and retain only the immediate prior binary/install-state as the authoritative rollback generation. Uninstall preserves configuration, state, logs, and backups unless purge is explicitly requested. Phase 21 adds no inbound management listener, arbitrary command execution, or remote-shell behavior.
