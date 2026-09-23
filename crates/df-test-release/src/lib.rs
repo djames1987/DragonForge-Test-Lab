@@ -178,8 +178,13 @@ pub fn sha256_file(path: &Path) -> Result<String, ReleaseError> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-fn parse_qualified<'a>(value: &'a str, marker: &str) -> Result<(&'a str, Option<u32>), ReleaseError> {
-    let (base, number) = value.split_once(marker).ok_or(ReleaseError::InvalidVersion)?;
+fn parse_qualified<'a>(
+    value: &'a str,
+    marker: &str,
+) -> Result<(&'a str, Option<u32>), ReleaseError> {
+    let (base, number) = value
+        .split_once(marker)
+        .ok_or(ReleaseError::InvalidVersion)?;
     if base.contains('-') || number.is_empty() || !number.bytes().all(|b| b.is_ascii_digit()) {
         return Err(ReleaseError::InvalidVersion);
     }
