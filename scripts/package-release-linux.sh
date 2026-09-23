@@ -4,7 +4,7 @@ set -euo pipefail
 version="${1:-}"
 output_root="${2:-./dist}"
 
-if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9._-]+)?$ ]]; then
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "usage: $0 <version> [output-root]" >&2
   exit 2
 fi
