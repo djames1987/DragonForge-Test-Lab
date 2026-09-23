@@ -6,7 +6,7 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 21 — Installer / Upgrades — Implementation Complete
+Phase 22 — Release Engineering — Implementation Complete / Qualification Pending
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
@@ -39,6 +39,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-observability/  audit/log/metrics/artifact observability and retention
       df-test-lifecycle/      failure classification and bounded retry policy
       df-test-plans/          versioned declarative plan validation and compilation
+      df-test-release/        release channels, bundle manifests, signatures, and verification
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -65,6 +66,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-19.md
       PHASE-20.md
       PHASE-21.md
+      PHASE-22.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -105,6 +107,17 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       rollback-linux.sh
       uninstall-windows.ps1
       uninstall-linux.sh
+      build-release-windows.ps1
+      build-release-linux.sh
+      release-audit-windows.ps1
+      release-audit-linux.sh
+      sign-release-windows.ps1
+      sign-release-linux.sh
+      generate-sbom.py
+      generate-release-notes.py
+      assemble-release.py
+      test-phase22.ps1
+      test-phase22-linux.sh
 
 ## Hyper-V host setup
 
@@ -527,10 +540,36 @@ Phase 21 adds fixed Windows/Linux install layouts, SHA-256 verified release mani
 
 See docs/PHASE-21.md for package format, upgrade guarantees, rollback limits, filesystem layout, and validation.
 
+## Phase 22 Release Engineering
+
+Release readiness:
+
+    cargo run -p dragonforge-test-lab -- release-doctor
+
+Deterministic release-policy fixture:
+
+    cargo run -p dragonforge-test-lab -- release-fixture
+
+Generate and validate channel tags:
+
+    cargo run -p dragonforge-test-lab -- release-tag --channel beta --version 0.23.0-beta.1
+
+Windows qualification:
+
+    .\scripts\test-phase22.ps1 -InstallTools
+
+Linux qualification:
+
+    bash ./scripts/test-phase22-linux.sh --install-tools
+
+Phase 22 adds dev/beta/stable channel policy, versioned release bundles, SHA-256 checksum indexes, CycloneDX 1.6 SBOM generation, cargo-audit/cargo-deny gates, Authenticode and minisign signing paths, deterministic release notes, bundle verification, and a GitHub release workflow. Stable bundles fail closed when package signatures are absent. Signing material is supplied externally and is never stored in the repository.
+
+See docs/PHASE-22.md for release channels, promotion gates, signing, SBOM/audit policy, GitHub publication, and qualification.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, docs/PHASE-18.md, docs/PHASE-19.md, docs/PHASE-20.md, docs/PHASE-21.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, docs/PHASE-18.md, docs/PHASE-19.md, docs/PHASE-20.md, docs/PHASE-21.md, docs/PHASE-22.md, and docs/ROADMAP.md.
