@@ -2,12 +2,14 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
     fs,
+    io::Read,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
 
 const MAX_TEXT_BYTES: u64 = 4096;
 const MAX_DEVICE_ENTRIES: usize = 64;
+const MAX_DIRECTORY_SCAN_ENTRIES: usize = 512;
 const MAX_PLAN_PROBES: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -154,7 +156,11 @@ impl ArmInspector {
 
     pub fn run_plan(&self, plan: &HardwarePlan) -> Result<Vec<ProbeResult>, ArmError> {
         plan.validate()?;
-        plan.probes.iter().copied().map(|probe| self.run_probe(probe)).collect()
+        plan.probes
+            .iter()
+            .copied()
+            .map(|probe| self.run_probe(probe))
+            .collect()
     }
 
     pub fn run_probe(&self, probe: HardwareProbe) -> Result<ProbeResult, ArmError> {
@@ -280,11 +286,12 @@ fn read_optional_text(path: &Path) -> Result<Option<String>, ArmError> {
     if !path.is_file() {
         return Ok(None);
     }
-    let metadata = fs::metadata(path)?;
-    if metadata.len() > MAX_TEXT_BYTES {
+    let mut reader = fs::File::open(path)?.take(MAX_TEXT_BYTES + 1);
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_TEXT_BYTES {
         return Err(ArmError::InputTooLarge);
     }
-    let bytes = fs::read(path)?;
     let value = String::from_utf8(bytes).map_err(|_| ArmError::InvalidUtf8)?;
     let value = value.trim_matches(char::from(0)).trim().to_owned();
     if value.is_empty() {
@@ -333,7 +340,7 @@ fn list_entries(path: &Path, prefix: Option<&str>) -> Result<Vec<String>, ArmErr
         return Ok(Vec::new());
     }
     let mut values = Vec::new();
-    for entry in fs::read_dir(path)? {
+    for entry in fs::read_dir(path)?.take(MAX_DIRECTORY_SCAN_ENTRIES) {
         let entry = entry?;
         let name = entry.file_name();
         let name = name.to_string_lossy();
@@ -353,7 +360,7 @@ fn list_entries_any_prefix(path: &Path, prefixes: &[&str]) -> Result<Vec<String>
         return Ok(Vec::new());
     }
     let mut values = Vec::new();
-    for entry in fs::read_dir(path)? {
+    for entry in fs::read_dir(path)?.take(MAX_DIRECTORY_SCAN_ENTRIES) {
         let entry = entry?;
         let name = entry.file_name();
         let name = name.to_string_lossy();
