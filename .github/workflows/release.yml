@@ -1,0 +1,189 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        required: true
+        type: choice
+        options: [dev, beta, stable]
+      version:
+        description: Release version (0.23.0, 0.23.0-beta.1, or 0.23.0-dev.1)
+        required: true
+        type: string
+      publish:
+        description: Publish a GitHub Release after all gates pass
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release_tag.outputs.tag }}
+      commit: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --workspace --all-features
+      - id: release_tag
+        shell: bash
+        run: |
+          tag="$(cargo run -q -p dragonforge-test-lab -- release-tag --channel "${{ inputs.channel }}" --version "${{ inputs.version }}")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - id: commit
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  audit:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install audit tools
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-deny --locked
+      - name: Dependency and license audit
+        run: bash ./scripts/release-audit-linux.sh ./audit-report.txt
+      - name: Generate CycloneDX SBOM
+        run: python3 ./scripts/generate-sbom.py --version "${{ inputs.version }}" --commit "${{ needs.validate.outputs.commit }}" --output ./dragonforge-test-lab-${{ inputs.version }}.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-metadata
+          path: |
+            audit-report.txt
+            dragonforge-test-lab-${{ inputs.version }}.cdx.json
+
+  linux:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Linux release archive
+        run: bash ./scripts/build-release-linux.sh "${{ inputs.channel }}" "${{ inputs.version }}" ./dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: dist/dragonforge-test-lab-${{ inputs.version }}-linux-*.tar.gz
+
+  windows:
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Configure stable Authenticode material
+        if: inputs.channel == 'stable'
+        shell: pwsh
+        env:
+          SIGN_PFX_B64: ${{ secrets.DRAGONFORGE_WINDOWS_SIGN_PFX_B64 }}
+          SIGN_PFX_PASSWORD: ${{ secrets.DRAGONFORGE_WINDOWS_SIGN_PFX_PASSWORD }}
+        run: |
+          if (-not $env:SIGN_PFX_B64 -or -not $env:SIGN_PFX_PASSWORD) {
+            throw "Stable Windows release requires signing secrets."
+          }
+          $path = Join-Path $env:RUNNER_TEMP "dragonforge-signing.pfx"
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:SIGN_PFX_B64))
+          "DRAGONFORGE_WINDOWS_SIGN_CERT_PATH=$path" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "DRAGONFORGE_WINDOWS_SIGN_CERT_PASSWORD=$env:SIGN_PFX_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build Windows release archive
+        shell: pwsh
+        run: .\scripts\build-release-windows.ps1 -Channel "${{ inputs.channel }}" -ReleaseVersion "${{ inputs.version }}" -OutputRoot .\dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: dist/dragonforge-test-lab-${{ inputs.version }}-windows-*.zip
+
+  bundle:
+    needs: [validate, audit, linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: downloaded
+      - name: Collect release inputs
+        shell: bash
+        run: |
+          mkdir -p stage
+          find downloaded -type f -maxdepth 3 -exec cp {} stage/ \;
+          python3 ./scripts/generate-release-notes.py --version "${{ inputs.version }}" --channel "${{ inputs.channel }}" --commit "${{ needs.validate.outputs.commit }}" --output stage/RELEASE-NOTES.md
+      - name: Configure stable detached signing
+        if: inputs.channel == 'stable'
+        shell: bash
+        env:
+          MINISIGN_SECRET_B64: ${{ secrets.DRAGONFORGE_MINISIGN_SECRET_KEY_B64 }}
+        run: |
+          if [[ -z "$MINISIGN_SECRET_B64" ]]; then
+            echo "Stable release requires DRAGONFORGE_MINISIGN_SECRET_KEY_B64" >&2
+            exit 1
+          fi
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          key="$RUNNER_TEMP/dragonforge-minisign.key"
+          printf '%s' "$MINISIGN_SECRET_B64" | base64 -d > "$key"
+          chmod 600 "$key"
+          echo "DRAGONFORGE_MINISIGN_SECRET_KEY=$key" >> "$GITHUB_ENV"
+      - name: Sign stable package archives
+        if: inputs.channel == 'stable'
+        shell: bash
+        run: |
+          for artifact in stage/dragonforge-test-lab-${{ inputs.version }}-linux-*.tar.gz stage/dragonforge-test-lab-${{ inputs.version }}-windows-*.zip; do
+            bash ./scripts/sign-release-linux.sh "$artifact"
+          done
+      - name: Assemble bundle
+        shell: bash
+        run: |
+          linux="$(find stage -maxdepth 1 -name 'dragonforge-test-lab-${{ inputs.version }}-linux-*.tar.gz' -print -quit)"
+          windows="$(find stage -maxdepth 1 -name 'dragonforge-test-lab-${{ inputs.version }}-windows-*.zip' -print -quit)"
+          sbom="stage/dragonforge-test-lab-${{ inputs.version }}.cdx.json"
+          audit="stage/audit-report.txt"
+          notes="stage/RELEASE-NOTES.md"
+          args=(
+            --channel "${{ inputs.channel }}"
+            --version "${{ inputs.version }}"
+            --git-commit "${{ needs.validate.outputs.commit }}"
+            --output-dir bundle
+          )
+          if [[ "${{ inputs.channel }}" == stable ]]; then
+            args+=(--artifact "linux_package::$linux::$linux.sig")
+            args+=(--artifact "windows_package::$windows::$windows.sig")
+          else
+            args+=(--artifact "linux_package::$linux")
+            args+=(--artifact "windows_package::$windows")
+          fi
+          args+=(--artifact "sbom::$sbom")
+          args+=(--artifact "audit_report::$audit")
+          args+=(--artifact "release_notes::$notes")
+          python3 ./scripts/assemble-release.py "${args[@]}"
+          cargo run -q -p dragonforge-test-lab -- release-bundle-verify --manifest bundle/release-bundle.json --root bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle-${{ inputs.version }}
+          path: bundle/
+      - name: Publish GitHub Release
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="${{ needs.validate.outputs.tag }}"
+          git tag "$tag" "${{ needs.validate.outputs.commit }}"
+          git push origin "$tag"
+          gh release create "$tag" bundle/* --title "DragonForge Test Lab ${{ inputs.version }}" --notes-file bundle/RELEASE-NOTES.md
