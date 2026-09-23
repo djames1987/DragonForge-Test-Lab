@@ -195,8 +195,7 @@ impl ArmInspector {
                 })
             }
             HardwareProbe::GpioControllers => {
-                let mut values =
-                    list_entries(&self.root.join("sys/class/gpio"), Some("gpiochip"))?;
+                let mut values = list_entries(&self.root.join("sys/class/gpio"), Some("gpiochip"))?;
                 for value in list_entries(&self.root.join("dev"), Some("gpiochip"))? {
                     if !values.contains(&value) && values.len() < MAX_DEVICE_ENTRIES {
                         values.push(value);
@@ -209,9 +208,7 @@ impl ArmInspector {
                     values,
                 })
             }
-            HardwareProbe::I2cBuses => {
-                device_probe(probe, &self.root.join("dev"), Some("i2c-"))
-            }
+            HardwareProbe::I2cBuses => device_probe(probe, &self.root.join("dev"), Some("i2c-")),
             HardwareProbe::SpiDevices => {
                 device_probe(probe, &self.root.join("dev"), Some("spidev"))
             }
@@ -235,8 +232,14 @@ pub fn run_phase20_fixture() -> Result<Phase20FixtureReport, ArmError> {
     fs::create_dir_all(root.join("sys/class/gpio/gpiochip0"))?;
     fs::create_dir_all(root.join("sys/class/thermal/thermal_zone0"))?;
     fs::create_dir_all(root.join("dev"))?;
-    fs::write(root.join("proc/device-tree/model"), b"Raspberry Pi 5 Model B Rev 1.0\0")?;
-    fs::write(root.join("sys/class/thermal/thermal_zone0/temp"), b"42500\n")?;
+    fs::write(
+        root.join("proc/device-tree/model"),
+        b"Raspberry Pi 5 Model B Rev 1.0\0",
+    )?;
+    fs::write(
+        root.join("sys/class/thermal/thermal_zone0/temp"),
+        b"42500\n",
+    )?;
     fs::write(root.join("dev/i2c-1"), b"")?;
     fs::write(root.join("dev/spidev0.0"), b"")?;
     fs::write(root.join("dev/serial0"), b"")?;
@@ -261,9 +264,13 @@ pub fn run_phase20_fixture() -> Result<Phase20FixtureReport, ArmError> {
         i2c_detected: inventory.capabilities.contains(&ArmCapability::I2c),
         spi_detected: inventory.capabilities.contains(&ArmCapability::Spi),
         uart_detected: inventory.capabilities.contains(&ArmCapability::Uart),
-        thermal_detected: inventory.capabilities.contains(&ArmCapability::ThermalSensor),
+        thermal_detected: inventory
+            .capabilities
+            .contains(&ArmCapability::ThermalSensor),
         all_probes_bounded: results.len() == 6
-            && results.iter().all(|result| result.values.len() <= MAX_DEVICE_ENTRIES),
+            && results
+                .iter()
+                .all(|result| result.values.len() <= MAX_DEVICE_ENTRIES),
     };
 
     let _ = fs::remove_dir_all(&root);
@@ -418,10 +425,8 @@ mod tests {
 
     #[test]
     fn non_arm_architecture_does_not_claim_arm_capability() {
-        let root = std::env::temp_dir().join(format!(
-            "dragonforge-phase20-nonarm-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("dragonforge-phase20-nonarm-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let inventory = ArmInspector::with_root(&root, "linux", "x86_64")
