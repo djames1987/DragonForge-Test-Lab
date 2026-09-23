@@ -6,7 +6,7 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 22 — Release Engineering — Windows Qualified / Linux & Production Signing Pending
+Phase 22 — Release Engineering — Windows & Linux Qualified / Production Signing Pending
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
