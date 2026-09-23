@@ -11,9 +11,17 @@ function Invoke-Native {
         [string[]]$Arguments = @()
     )
 
-    & $FilePath @Arguments 2>&1 | ForEach-Object { Write-Host $_ }
-    if ($LASTEXITCODE -ne 0) {
-        throw "$FilePath failed with exit code $LASTEXITCODE"
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $FilePath @Arguments
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($exitCode -ne 0) {
+        throw "$FilePath failed with exit code $exitCode"
     }
 }
 
@@ -23,8 +31,15 @@ function Invoke-NativeCapture {
         [string[]]$Arguments = @()
     )
 
-    $output = @(& $FilePath @Arguments 2>&1)
-    $exitCode = $LASTEXITCODE
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = @(& $FilePath @Arguments)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
     $output | ForEach-Object { Write-Host $_ }
     if ($exitCode -ne 0) {
         throw "$FilePath failed with exit code $exitCode"
