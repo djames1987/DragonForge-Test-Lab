@@ -410,16 +410,16 @@ mod linux {
                     }
 
                     let memory = libc::rlimit {
-                        rlim_cur: address_space as libc::rlim_t,
-                        rlim_max: address_space as libc::rlim_t,
+                        rlim_cur: address_space,
+                        rlim_max: address_space,
                     };
                     if libc::setrlimit(libc::RLIMIT_AS, &memory) != 0 {
                         return Err(io::Error::last_os_error());
                     }
 
                     let processes = libc::rlimit {
-                        rlim_cur: process_limit as libc::rlim_t,
-                        rlim_max: process_limit as libc::rlim_t,
+                        rlim_cur: process_limit,
+                        rlim_max: process_limit,
                     };
                     if libc::setrlimit(libc::RLIMIT_NPROC, &processes) != 0 {
                         return Err(io::Error::last_os_error());
