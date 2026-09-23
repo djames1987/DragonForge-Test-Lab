@@ -90,7 +90,11 @@ impl ArmInspector {
         }
     }
 
-    pub fn with_root(root: impl Into<PathBuf>, os: impl Into<String>, arch: impl Into<String>) -> Self {
+    pub fn with_root(
+        root: impl Into<PathBuf>,
+        os: impl Into<String>,
+        arch: impl Into<String>,
+    ) -> Self {
         Self {
             root: root.into(),
             os: os.into(),
@@ -119,7 +123,7 @@ impl ArmInspector {
             capabilities.insert(ArmCapability::RaspberryPi);
         }
 
-        if directory_has_entries(&self.root.join("sys/class/gpio"), None)? {
+        if directory_has_entries(&self.root.join("sys/class/gpio"), Some("gpiochip"))? {
             capabilities.insert(ArmCapability::Gpio);
         }
         if directory_has_entries(&self.root.join("dev"), Some("i2c-"))? {
@@ -186,7 +190,7 @@ impl ArmInspector {
             HardwareProbe::GpioControllers => Ok(device_probe(
                 probe,
                 &self.root.join("sys/class/gpio"),
-                None,
+                Some("gpiochip"),
             )?),
             HardwareProbe::I2cBuses => Ok(device_probe(
                 probe,
