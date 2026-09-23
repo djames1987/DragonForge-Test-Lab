@@ -148,4 +148,4 @@ Uninstall preserves configuration, durable state, logs, and backups unless purge
 
 ## Validation status
 
-Implementation is complete. Deterministic installer/upgrade/rollback fixtures are included. Platform installer scripts still require host-level validation on Windows and Linux before Phase 21 should be treated as fully platform-qualified.
+Implementation is complete. Windows host validation passed on 2026-09-23 using `scripts/test-phase21.ps1`, covering rustfmt, strict Clippy, full workspace tests, installer doctor/fixture, Windows release packaging, release verification, and the Phase 21 doctor marker. Linux host validation and the disposable Windows VM install/upgrade/rollback/uninstall lifecycle remain to be qualified before Phase 21 is fully platform-qualified.

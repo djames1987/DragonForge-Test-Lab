@@ -523,7 +523,7 @@ Linux validation:
 
     bash ./scripts/test-phase21-linux.sh
 
-Phase 21 adds fixed Windows/Linux install layouts, SHA-256 verified release manifests, stable upgrade ordering, immediate rollback metadata, installer configuration migration, platform packaging/install/rollback/uninstall scripts, and state-preserving uninstall by default.
+Phase 21 adds fixed Windows/Linux install layouts, SHA-256 verified release manifests, stable upgrade ordering, immediate rollback metadata, installer configuration migration, platform packaging/install/rollback/uninstall scripts, and state-preserving uninstall by default. Windows host validation passed on 2026-09-23; Linux host validation and the disposable Windows VM installation lifecycle remain pending.
 
 See docs/PHASE-21.md for package format, upgrade guarantees, rollback limits, filesystem layout, and validation.
 
