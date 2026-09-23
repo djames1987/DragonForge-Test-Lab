@@ -1555,13 +1555,21 @@ fn distributed_node_connect(args: &[String]) -> Result<(), Box<dyn std::error::E
         features.extend(arm_node_features(&inventory));
     }
 
+    let mut labels: BTreeSet<String> = ["phase8-probe".to_string()].into_iter().collect();
+    if features.contains(&NodeFeature::ArmWorker) {
+        labels.insert("arm".into());
+    }
+    if features.contains(&NodeFeature::RaspberryPi) {
+        labels.insert("raspberry-pi".into());
+    }
+
     let registration = NodeRegistration {
         protocol_version: PROTOCOL_VERSION,
         profile: NodeProfile {
             node_id,
             os: std::env::consts::OS.into(),
             arch: std::env::consts::ARCH.into(),
-            labels: ["phase8-probe".to_string()].into_iter().collect(),
+            labels,
             features,
             max_parallel_jobs: 2,
         },
