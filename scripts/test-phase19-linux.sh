@@ -64,6 +64,7 @@ cargo --version
 rustc --version
 rustup show active-toolchain
 gh --version
+gh auth status -h github.com
 "$container_runtime" --version
 
 echo "[1/15] cargo fmt"
