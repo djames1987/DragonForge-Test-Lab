@@ -312,3 +312,14 @@ ARM/Raspberry Pi capabilities are scheduling metadata, not authorization to exec
 Release manifests bind version, target OS, target architecture, binary filename, and SHA-256 digest. Binary names are restricted to safe leaf names; manifest/config/state inputs are size-bounded; upgrades must move to a strictly newer stable semantic version; and production install roots are fixed per platform.
 
 Installers stop the worker service before replacing an existing binary and retain only the immediate prior binary/install-state as the authoritative rollback generation. Uninstall preserves configuration, state, logs, and backups unless purge is explicitly requested. Phase 21 adds no inbound management listener, arbitrary command execution, or remote-shell behavior.
+
+
+## Phase 22 release engineering controls
+
+Release engineering does not grant new runtime execution authority. Channel and artifact metadata are validated separately from the Agent/Policy/Executor path.
+
+Stable release bundles fail closed if Windows/Linux package signature metadata is missing. Windows stable binaries use Authenticode through an externally supplied PFX and password; release archives use detached minisign signatures supplied from an external secret key. Repository source, release manifests, logs, and generated artifacts must never contain private signing keys or signing passwords.
+
+SBOM generation is deterministic from `Cargo.lock` and emits CycloneDX 1.6 JSON. Release audit gates use `cargo audit` plus `cargo deny` license/advisory/source checks. SHA-256 indexes protect artifact integrity but are not substitutes for signatures.
+
+The release workflow accepts only the explicit dev/beta/stable channel enum and validated version forms. Publication occurs only after formatting, strict Clippy, workspace tests, audit/SBOM generation, platform builds, bundle assembly, and release-bundle verification. Stable publication additionally requires signing material; missing secrets cause the workflow to fail rather than silently publish unsigned artifacts.

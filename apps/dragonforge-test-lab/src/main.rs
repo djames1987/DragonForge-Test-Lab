@@ -30,6 +30,7 @@ use df_test_plans::{
     TEST_PLAN_VERSION,
 };
 use df_test_policy::ExecutionPolicy;
+use df_test_release::{ReleaseArtifact, ReleaseArtifactKind, ReleaseBundleManifest, ReleaseChannel, ReleaseVersion, RELEASE_BUNDLE_SCHEMA_VERSION};
 use df_test_protocol::{
     Capability, JobRequest, JobStatus, RepositorySpec, ResourceLimits, TestAction,
     WorkerRegistration, PROTOCOL_VERSION,
@@ -79,6 +80,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "install-layout" => install_layout(),
         "release-verify" => release_verify(&args[2..]),
         "upgrade-plan" => upgrade_plan(&args[2..]),
+        "release-doctor" => release_doctor(),
+        "release-fixture" => release_fixture(),
+        "release-tag" => release_tag(&args[2..]),
+        "release-bundle-verify" => release_bundle_verify(&args[2..]),
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
         "identity-fixture" => identity_fixture(),
@@ -150,7 +155,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=21");
+    println!("phase=22");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -669,6 +674,120 @@ fn install_fixture() -> Result<(), Box<dyn std::error::Error>> {
         return Err("one or more Phase 21 installer fixtures failed".into());
     }
     println!("status=installer_fixture_passed");
+    Ok(())
+}
+
+fn release_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    println!("DragonForge Test Lab release engineering doctor");
+    println!("bundle_schema={RELEASE_BUNDLE_SCHEMA_VERSION}");
+    println!("channels=dev,beta,stable");
+    println!("stable_signatures_required=true");
+    println!("checksum=sha256");
+    println!("sbom=cyclonedx_json");
+    println!("dependency_audit=cargo_audit");
+    println!("license_audit=cargo_deny");
+    println!("signing_keys_in_repository=false");
+    println!("status=release_engineering_ready");
+    Ok(())
+}
+
+fn release_tag(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let channel = ReleaseChannel::parse(
+        &value_after(args, "--channel").ok_or("missing --channel dev|beta|stable")?,
+    )?;
+    let version = value_after(args, "--version").ok_or("missing --version <version>")?;
+    let parsed = ReleaseVersion::parse(&version, channel)?;
+    println!("{}", parsed.tag());
+    Ok(())
+}
+
+fn release_bundle_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let manifest_path =
+        value_after(args, "--manifest").ok_or("missing --manifest <release-bundle.json>")?;
+    let root = value_after(args, "--root").ok_or("missing --root <release-directory>")?;
+    let bytes = std::fs::read(manifest_path)?;
+    if bytes.len() > 1024 * 1024 {
+        return Err("release bundle manifest exceeds 1 MiB".into());
+    }
+    let manifest: ReleaseBundleManifest = serde_json::from_slice(
+        bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes),
+    )?;
+    manifest.verify_root(root)?;
+    println!("version={}", manifest.version);
+    println!("channel={}", manifest.channel.as_str());
+    println!("artifacts={}", manifest.artifacts.len());
+    println!("status=release_bundle_verified");
+    Ok(())
+}
+
+fn release_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let root = std::env::temp_dir().join(format!(
+        "dragonforge-phase22-release-fixture-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root)?;
+
+    let package = root.join("dragonforge-test-lab-0.23.0-linux-x86_64.tar.gz");
+    let signature = root.join("dragonforge-test-lab-0.23.0-linux-x86_64.tar.gz.sig");
+    let sbom = root.join("dragonforge-test-lab-0.23.0.cdx.json");
+    let checksums = root.join("SHA256SUMS");
+    let audit = root.join("audit-report.txt");
+    let notes = root.join("RELEASE-NOTES.md");
+
+    std::fs::write(&package, b"phase22-package")?;
+    std::fs::write(&signature, b"phase22-signature")?;
+    std::fs::write(&sbom, b"{\"bomFormat\":\"CycloneDX\",\"specVersion\":\"1.6\"}")?;
+    std::fs::write(&checksums, b"fixture checksum index")?;
+    std::fs::write(&audit, b"audit fixture passed")?;
+    std::fs::write(&notes, b"# Phase 22 fixture")?;
+
+    let manifest = ReleaseBundleManifest {
+        schema_version: RELEASE_BUNDLE_SCHEMA_VERSION,
+        version: "0.23.0".into(),
+        channel: ReleaseChannel::Stable,
+        git_commit: "d".repeat(40),
+        artifacts: vec![
+            ReleaseArtifact {
+                kind: ReleaseArtifactKind::LinuxPackage,
+                file: package.file_name().unwrap().to_string_lossy().into_owned(),
+                sha256: df_test_release::sha256_file(&package)?,
+                signature_file: Some(signature.file_name().unwrap().to_string_lossy().into_owned()),
+            },
+            ReleaseArtifact {
+                kind: ReleaseArtifactKind::Sbom,
+                file: sbom.file_name().unwrap().to_string_lossy().into_owned(),
+                sha256: df_test_release::sha256_file(&sbom)?,
+                signature_file: None,
+            },
+            ReleaseArtifact {
+                kind: ReleaseArtifactKind::Checksums,
+                file: checksums.file_name().unwrap().to_string_lossy().into_owned(),
+                sha256: df_test_release::sha256_file(&checksums)?,
+                signature_file: None,
+            },
+            ReleaseArtifact {
+                kind: ReleaseArtifactKind::AuditReport,
+                file: audit.file_name().unwrap().to_string_lossy().into_owned(),
+                sha256: df_test_release::sha256_file(&audit)?,
+                signature_file: None,
+            },
+            ReleaseArtifact {
+                kind: ReleaseArtifactKind::ReleaseNotes,
+                file: notes.file_name().unwrap().to_string_lossy().into_owned(),
+                sha256: df_test_release::sha256_file(&notes)?,
+                signature_file: None,
+            },
+        ],
+    };
+    manifest.verify_root(&root)?;
+    let beta = ReleaseVersion::parse("0.23.0-beta.1", ReleaseChannel::Beta)?;
+    if beta.tag() != "v0.23.0-beta.1" {
+        return Err("beta release tag fixture failed".into());
+    }
+    println!("{}", serde_json::to_string_pretty(&manifest)?);
+    println!("status=release_fixture_passed");
+    let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
 
@@ -2580,6 +2699,10 @@ fn print_help() {
     println!("  dragonforge-test-lab install-layout");
     println!("  dragonforge-test-lab release-verify --manifest <release-manifest.json> --package-root <directory>");
     println!("  dragonforge-test-lab upgrade-plan --state <install-state.json> --manifest <release-manifest.json>");
+    println!("  dragonforge-test-lab release-doctor");
+    println!("  dragonforge-test-lab release-fixture");
+    println!("  dragonforge-test-lab release-tag --channel dev|beta|stable --version <version>");
+    println!("  dragonforge-test-lab release-bundle-verify --manifest <release-bundle.json> --root <release-directory>");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");

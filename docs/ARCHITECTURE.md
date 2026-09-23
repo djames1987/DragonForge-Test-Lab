@@ -434,3 +434,12 @@ Hardware-in-the-loop operations in Phase 20 are read-only probes represented by 
 `df-test-install` owns the managed installation model: fixed platform layouts, bounded release manifests, installer configuration, install-state metadata, upgrade planning, and immediate rollback metadata. The installer never changes the execution trust model; installed worker services continue to use the existing outbound-only mTLS service runtime.
 
 Controller SQLite schema migration remains owned by `DurableController`. Phase 21 introduces no new controller schema, so 0.21.0 ↔ 0.22.0 binary rollback remains database-compatible. Future irreversible schema changes must add an explicit rollback compatibility gate.
+
+
+## Phase 22 release engineering
+
+`df-test-release` defines the outer release contract above Phase 21 installer packages. It validates release channels, release-version/tag shape, bounded artifact manifests, SHA-256 digests, and stable-channel signature requirements. Phase 21 installer manifests remain stable `major.minor.patch` contracts; dev/beta qualification labels live in the Phase 22 bundle and do not alter installer rollback ordering.
+
+Release bundles contain platform archives plus metadata artifacts such as CycloneDX SBOM, dependency/license audit report, release notes, checksum index, and `release-bundle.json`. The bundle verifier reads files only by validated leaf names under an operator-selected release root.
+
+The GitHub release workflow separates validation, auditing, platform builds, and final bundle assembly. Stable Windows builds require Authenticode signing before archive creation. Stable package archives require detached minisign signatures before bundle verification/publication. Signing keys remain external secrets and are not persisted by DragonForge.
