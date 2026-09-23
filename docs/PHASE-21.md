@@ -148,4 +148,4 @@ Uninstall preserves configuration, durable state, logs, and backups unless purge
 
 ## Validation status
 
-Implementation is complete. Windows host validation passed on 2026-09-23 using `scripts/test-phase21.ps1`, covering rustfmt, strict Clippy, full workspace tests, installer doctor/fixture, Windows release packaging, release verification, and the Phase 21 doctor marker. Linux host validation and the disposable Windows VM install/upgrade/rollback/uninstall lifecycle remain to be qualified before Phase 21 is fully platform-qualified.
+Implementation is complete. Windows host validation passed on 2026-09-23 using `scripts/test-phase21.ps1`, covering rustfmt, strict Clippy, full workspace tests, installer doctor/fixture, Windows release packaging, release verification, and the Phase 21 doctor marker. Windows VM lifecycle qualification also passed on 2026-09-23: fresh managed 0.21.0 install, 0.21.0 → 0.22.0 upgrade, verified rollback metadata/backups, rollback to 0.21.0, repeat upgrade to 0.22.0, state-preserving uninstall, and explicit purge. Linux host validation remains pending before Phase 21 is fully platform-qualified.
