@@ -12,11 +12,13 @@ use std::{
     process::{Child, Command, ExitStatus, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, OnceLock,
+        Arc,
     },
     thread,
     time::{Duration, Instant},
 };
+#[cfg(windows)]
+use std::sync::OnceLock;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -352,8 +354,9 @@ impl LocalExecutor {
             effective.container_cleanup.as_ref(),
         )?;
 
-        // Closing the per-command Job Object kills any descendants that outlived
-        // the command leader and releases inherited output-pipe handles.
+        // On Windows, closing the per-command Job Object kills any descendants that
+        // outlived the command leader and releases inherited output-pipe handles.
+        #[cfg(windows)]
         drop(guard);
 
         let (stdout_bytes, stdout_truncated) = stdout_reader
