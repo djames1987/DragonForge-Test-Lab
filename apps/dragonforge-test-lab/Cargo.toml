@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+df-test-install = { path = "../../crates/df-test-install" }
 df-test-arm = { path = "../../crates/df-test-arm" }
 df-test-agent = { path = "../../crates/df-test-agent" }
 df-test-executor = { path = "../../crates/df-test-executor" }
