@@ -287,3 +287,14 @@ Security properties:
 - there is no terminal, executable/argument field, raw command path, raw SQL path, filesystem browser, generic proxy, or state-mutating HTTP action.
 
 Phase 18 does not add a database migration. Opening the controller uses the existing schema-v5 migration logic; normal Phase 18 operation reads existing durable state through typed controller methods.
+
+
+## Phase 19 — Linux qualification boundary
+
+Linux native execution now has an explicit containment implementation rather than failing over to an uncontained process.
+
+For native Linux actions, Test Lab creates a new session/process group before exec, applies typed address-space and process-count rlimits, records the spawned process-group leader, and targets that group for cancellation. Container execution remains restricted to the existing fixed Cargo wrapper with capability dropping, no-new-privileges, memory ceilings, PID ceilings, and a controlled workspace mount.
+
+These mechanisms are defense-in-depth. They do not turn arbitrary executables or shell text into allowed inputs. Repository allowlisting, typed TestAction authorization, worker capability checks, sanitized execution, outbound-only service operation, private/local controller targeting, and mTLS identity remain unchanged.
+
+The Linux qualification fixture uses only fixed test programs and existing typed service/identity fixtures. No remote terminal, generic process endpoint, arbitrary systemd command, or caller-supplied shell operation is introduced.
