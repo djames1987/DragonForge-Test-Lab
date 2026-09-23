@@ -12,6 +12,7 @@ use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, Local
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
 use df_test_gui::{GuiAutomationClient, GuiPlan};
 use df_test_identity::{run_mtls_fixture, validate_private_controller_address};
+use df_test_install::{InstallLayout, InstallPlatform, InstallState, ManagedInstallConfig, ReleaseManifest};
 use df_test_intelligence::{analyze, IntelligenceInput, TestProfile, WorkerCapacity};
 use df_test_intelligence_integration::{
     integrate, IntegrationRequest, IntelligenceMode, DEFAULT_MIN_AUTOMATIC_SCORE,
@@ -71,6 +72,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "arm-doctor" => arm_doctor(),
         "arm-fixture" => arm_fixture(),
         "arm-probe" => arm_probe(&args[2..]),
+        "install-doctor" => install_doctor(),
+        "install-fixture" => install_fixture(),
+        "install-layout" => install_layout(),
+        "release-verify" => release_verify(&args[2..]),
+        "upgrade-plan" => upgrade_plan(&args[2..]),
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
         "identity-fixture" => identity_fixture(),
@@ -142,7 +148,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=20");
+    println!("phase=21");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -530,6 +536,133 @@ fn arm_node_features(inventory: &df_test_arm::ArmInventory) -> BTreeSet<NodeFeat
         features.insert(NodeFeature::Uart);
     }
     features
+}
+
+fn install_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let platform = InstallPlatform::current()?;
+    let layout = InstallLayout::production(platform);
+    let config = ManagedInstallConfig::for_layout(&layout);
+    config.validate()?;
+
+    println!("DragonForge Test Lab installer doctor");
+    println!("platform={}", platform.as_str());
+    println!("binary_path={}", layout.binary_path.display());
+    println!("config_root={}", layout.config_root.display());
+    println!("state_root={}", layout.state_root.display());
+    println!("log_root={}", layout.log_root.display());
+    println!("backup_root={}", layout.backup_root.display());
+    println!("service_name={}", layout.service_name);
+    println!("manifest_schema={}", df_test_install::INSTALL_MANIFEST_VERSION);
+    println!("install_state_schema={}", df_test_install::INSTALL_STATE_VERSION);
+    println!("install_config_schema={}", df_test_install::INSTALL_CONFIG_VERSION);
+    println!("rollback=previous_version_only");
+    println!("uninstall_preserves_state_by_default=true");
+    println!("status=installer_ready");
+    Ok(())
+}
+
+fn install_layout() -> Result<(), Box<dyn std::error::Error>> {
+    let layout = InstallLayout::production(InstallPlatform::current()?);
+    println!("{}", serde_json::to_string_pretty(&layout)?);
+    Ok(())
+}
+
+fn release_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let manifest_path =
+        value_after(args, "--manifest").ok_or("missing --manifest <release-manifest.json>")?;
+    let package_root =
+        value_after(args, "--package-root").ok_or("missing --package-root <directory>")?;
+    let manifest = ReleaseManifest::load(manifest_path)?;
+    let binary = manifest.verify_package(
+        package_root,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    )?;
+    println!("version={}", manifest.version);
+    println!("target={}/{}", manifest.target_os, manifest.target_arch);
+    println!("binary={}", binary.display());
+    println!("checksum=verified");
+    println!("status=release_verified");
+    Ok(())
+}
+
+fn upgrade_plan(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let state_path =
+        value_after(args, "--state").ok_or("missing --state <install-state.json>")?;
+    let manifest_path =
+        value_after(args, "--manifest").ok_or("missing --manifest <release-manifest.json>")?;
+    let state = InstallState::load(state_path)?;
+    let manifest = ReleaseManifest::load(manifest_path)?;
+    let layout = InstallLayout::production(InstallPlatform::current()?);
+    let plan = state.plan_upgrade(&manifest, &layout)?;
+    println!("{}", serde_json::to_string_pretty(&plan)?);
+    println!("status=upgrade_plan_ready");
+    Ok(())
+}
+
+fn install_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let root = std::env::temp_dir().join(format!(
+        "dragonforge-phase21-install-fixture-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let layout = InstallLayout::fixture(&root, InstallPlatform::Linux);
+    layout.create_data_directories()?;
+
+    let binary = root.join("dragonforge-test-lab");
+    std::fs::write(&binary, b"phase21-current-binary")?;
+    let current_hash = df_test_install::sha256_file(&binary, 1024 * 1024)?;
+    let state = InstallState::fresh("0.21.0", current_hash)?;
+    state.save(&layout.install_state_path)?;
+
+    let config_path = layout.config_root.join("install-config.json");
+    ManagedInstallConfig::for_layout(&layout).save(&config_path)?;
+
+    let package = root.join("package");
+    std::fs::create_dir_all(&package)?;
+    let target_binary = package.join("dragonforge-test-lab");
+    std::fs::write(&target_binary, b"phase21-target-binary")?;
+    let target_hash = df_test_install::sha256_file(&target_binary, 1024 * 1024)?;
+    let manifest = ReleaseManifest {
+        schema_version: df_test_install::INSTALL_MANIFEST_VERSION,
+        version: "0.22.0".into(),
+        target_os: "linux".into(),
+        target_arch: std::env::consts::ARCH.into(),
+        binary_file: "dragonforge-test-lab".into(),
+        binary_sha256: target_hash,
+    };
+    let verified = manifest.verify_package(&package, "linux", std::env::consts::ARCH)?;
+    let plan = state.plan_upgrade(&manifest, &layout)?;
+    let upgraded = state.upgraded(&manifest)?;
+    let rollback = upgraded.rollback_target()?;
+
+    let report = serde_json::json!({
+        "layout_created": layout.config_root.is_dir()
+            && layout.state_root.is_dir()
+            && layout.log_root.is_dir()
+            && layout.backup_root.is_dir(),
+        "manifest_verified": verified == target_binary,
+        "upgrade_from": plan.from_version,
+        "upgrade_to": plan.to_version,
+        "rollback_version": rollback.version,
+        "config_schema": ManagedInstallConfig::load(&config_path)?.schema_version,
+        "state_round_trip": InstallState::load(&layout.install_state_path)? == state
+    });
+    println!("{}", serde_json::to_string_pretty(&report)?);
+
+    let passed = report["layout_created"] == true
+        && report["manifest_verified"] == true
+        && report["upgrade_from"] == "0.21.0"
+        && report["upgrade_to"] == "0.22.0"
+        && report["rollback_version"] == "0.21.0"
+        && report["config_schema"] == df_test_install::INSTALL_CONFIG_VERSION
+        && report["state_round_trip"] == true;
+    let _ = std::fs::remove_dir_all(root);
+    if !passed {
+        return Err("one or more Phase 21 installer fixtures failed".into());
+    }
+    println!("status=installer_fixture_passed");
+    Ok(())
 }
 
 fn github_doctor() -> Result<(), Box<dyn std::error::Error>> {
@@ -2435,6 +2568,11 @@ fn print_help() {
     println!("  dragonforge-test-lab arm-doctor");
     println!("  dragonforge-test-lab arm-fixture");
     println!("  dragonforge-test-lab arm-probe --probe board-model|cpu-temperature|gpio-controllers|i2c-buses|spi-devices|serial-devices");
+    println!("  dragonforge-test-lab install-doctor");
+    println!("  dragonforge-test-lab install-fixture");
+    println!("  dragonforge-test-lab install-layout");
+    println!("  dragonforge-test-lab release-verify --manifest <release-manifest.json> --package-root <directory>");
+    println!("  dragonforge-test-lab upgrade-plan --state <install-state.json> --manifest <release-manifest.json>");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");
