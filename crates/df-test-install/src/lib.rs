@@ -69,8 +69,7 @@ impl InstallLayout {
                 }
             }
             InstallPlatform::Windows => {
-                let program_data =
-                    PathBuf::from(r"C:\ProgramData\DragonForge\Test Lab");
+                let program_data = PathBuf::from(r"C:\ProgramData\DragonForge\Test Lab");
                 let state_root = program_data.join("state");
                 Self {
                     platform,
@@ -208,9 +207,7 @@ impl ManagedInstallConfig {
 
     pub fn validate(&self) -> Result<(), InstallError> {
         if self.schema_version != INSTALL_CONFIG_VERSION {
-            return Err(InstallError::UnsupportedConfigVersion(
-                self.schema_version,
-            ));
+            return Err(InstallError::UnsupportedConfigVersion(self.schema_version));
         }
         for path in [&self.config_root, &self.state_root, &self.log_root] {
             validate_managed_path(path)?;
@@ -320,10 +317,7 @@ impl InstallState {
         })
     }
 
-    pub fn upgraded(
-        &self,
-        manifest: &ReleaseManifest,
-    ) -> Result<InstallState, InstallError> {
+    pub fn upgraded(&self, manifest: &ReleaseManifest) -> Result<InstallState, InstallError> {
         self.plan_upgrade(
             manifest,
             &InstallLayout::fixture(".", InstallPlatform::Linux),
@@ -555,10 +549,7 @@ mod tests {
     use super::*;
 
     fn fixture_root(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "dragonforge-phase21-{name}-{}",
-            std::process::id()
-        ))
+        std::env::temp_dir().join(format!("dragonforge-phase21-{name}-{}", std::process::id()))
     }
 
     #[test]
@@ -598,24 +589,16 @@ mod tests {
             binary_sha256: checksum,
         };
         assert_eq!(
-            manifest
-                .verify_package(&root, "linux", "x86_64")
-                .unwrap(),
+            manifest.verify_package(&root, "linux", "x86_64").unwrap(),
             binary
         );
-        assert!(manifest
-            .verify_package(&root, "windows", "x86_64")
-            .is_err());
+        assert!(manifest.verify_package(&root, "windows", "x86_64").is_err());
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn upgrade_and_rollback_metadata_are_bounded_to_previous_version() {
-        let current = InstallState::fresh(
-            "0.21.0",
-            "11".repeat(32),
-        )
-        .unwrap();
+        let current = InstallState::fresh("0.21.0", "11".repeat(32)).unwrap();
         let manifest = ReleaseManifest {
             schema_version: INSTALL_MANIFEST_VERSION,
             version: "0.22.0".into(),
