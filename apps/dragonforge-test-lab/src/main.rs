@@ -12,7 +12,9 @@ use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, Local
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
 use df_test_gui::{GuiAutomationClient, GuiPlan};
 use df_test_identity::{run_mtls_fixture, validate_private_controller_address};
-use df_test_install::{InstallLayout, InstallPlatform, InstallState, ManagedInstallConfig, ReleaseManifest};
+use df_test_install::{
+    InstallLayout, InstallPlatform, InstallState, ManagedInstallConfig, ReleaseManifest,
+};
 use df_test_intelligence::{analyze, IntelligenceInput, TestProfile, WorkerCapacity};
 use df_test_intelligence_integration::{
     integrate, IntegrationRequest, IntelligenceMode, DEFAULT_MIN_AUTOMATIC_SCORE,
@@ -552,9 +554,18 @@ fn install_doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("log_root={}", layout.log_root.display());
     println!("backup_root={}", layout.backup_root.display());
     println!("service_name={}", layout.service_name);
-    println!("manifest_schema={}", df_test_install::INSTALL_MANIFEST_VERSION);
-    println!("install_state_schema={}", df_test_install::INSTALL_STATE_VERSION);
-    println!("install_config_schema={}", df_test_install::INSTALL_CONFIG_VERSION);
+    println!(
+        "manifest_schema={}",
+        df_test_install::INSTALL_MANIFEST_VERSION
+    );
+    println!(
+        "install_state_schema={}",
+        df_test_install::INSTALL_STATE_VERSION
+    );
+    println!(
+        "install_config_schema={}",
+        df_test_install::INSTALL_CONFIG_VERSION
+    );
     println!("rollback=previous_version_only");
     println!("uninstall_preserves_state_by_default=true");
     println!("status=installer_ready");
@@ -573,11 +584,8 @@ fn release_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let package_root =
         value_after(args, "--package-root").ok_or("missing --package-root <directory>")?;
     let manifest = ReleaseManifest::load(manifest_path)?;
-    let binary = manifest.verify_package(
-        package_root,
-        std::env::consts::OS,
-        std::env::consts::ARCH,
-    )?;
+    let binary =
+        manifest.verify_package(package_root, std::env::consts::OS, std::env::consts::ARCH)?;
     println!("version={}", manifest.version);
     println!("target={}/{}", manifest.target_os, manifest.target_arch);
     println!("binary={}", binary.display());
@@ -587,8 +595,7 @@ fn release_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn upgrade_plan(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let state_path =
-        value_after(args, "--state").ok_or("missing --state <install-state.json>")?;
+    let state_path = value_after(args, "--state").ok_or("missing --state <install-state.json>")?;
     let manifest_path =
         value_after(args, "--manifest").ok_or("missing --manifest <release-manifest.json>")?;
     let state = InstallState::load(state_path)?;
