@@ -57,7 +57,7 @@ Real GitHub compare input, controller schema v5 intelligence job context, durabl
 ## Phase 18 — Dashboard — Complete
 Authenticated loopback-only, read-only operator web dashboard for bounded views of jobs, workers, test plans, artifacts, persisted intelligence/failure clusters, hash-chained audit history, audit-chain verification, and safe dashboard settings. Static assets use restrictive browser security headers; API access requires a bearer token; mutating methods, arbitrary terminal access, raw commands, raw SQL, filesystem browsing, and artifact-content browsing are not exposed.
 
-## Phase 19 — Linux Qualification — Implementation Complete
+## Phase 19 — Linux Qualification — Complete
 First-class Linux native process containment with dedicated process groups, RLIMIT_AS/RLIMIT_NPROC ceilings, whole-tree cancellation, Linux worker doctor/fixture, Docker/Podman image tooling, systemd/mTLS/service/recovery qualification, advanced Rust lanes, and native/container GitHub-aware validation. Final platform qualification is performed by scripts/test-phase19-linux.sh on an actual Linux host or VM.
 
 ## Phase 20 — ARM / Raspberry Pi
