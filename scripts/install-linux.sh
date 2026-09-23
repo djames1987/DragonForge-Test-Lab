@@ -19,7 +19,7 @@ done
 [[ -n "$manifest" ]] || manifest="$package_root/release-manifest.json"
 [[ -f "$manifest" ]] || { echo "manifest not found: $manifest" >&2; exit 1; }
 
-python3 - "$manifest" "$package_root" <<'PY'
+mapfile -t verified < <(python3 - "$manifest" "$package_root" <<'PY'
 import hashlib, json, pathlib, platform, re, sys
 manifest_path = pathlib.Path(sys.argv[1])
 root = pathlib.Path(sys.argv[2]).resolve()
@@ -29,6 +29,8 @@ if len(raw) > 1024 * 1024:
 m = json.loads(raw)
 if m.get("schema_version") != 1:
     raise SystemExit("unsupported manifest schema")
+if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", str(m.get("version",""))):
+    raise SystemExit("manifest version must be stable x.y.z")
 if m.get("target_os") != "linux":
     raise SystemExit("manifest is not for Linux")
 arch = platform.machine().lower()
@@ -43,28 +45,21 @@ if binary.parent != root or not binary.is_file():
     raise SystemExit("release binary missing or escaped package root")
 h = hashlib.sha256()
 total = 0
-with binary.open("rb") as f:
+with binary.open("rb") as stream:
     while True:
-        chunk = f.read(65536)
-        if not chunk: break
+        chunk = stream.read(65536)
+        if not chunk:
+            break
         total += len(chunk)
         if total > 512 * 1024 * 1024:
             raise SystemExit("binary exceeds 512 MiB")
         h.update(chunk)
-if h.hexdigest().lower() != str(m.get("binary_sha256","")).lower():
+checksum = h.hexdigest()
+if checksum.lower() != str(m.get("binary_sha256","")).lower():
     raise SystemExit("binary checksum mismatch")
 print(m["version"])
 print(binary)
-print(h.hexdigest())
-PY
-
-mapfile -t verified < <(python3 - "$manifest" "$package_root" <<'PY'
-import hashlib, json, pathlib, platform, re, sys
-m=json.loads(pathlib.Path(sys.argv[1]).read_text())
-root=pathlib.Path(sys.argv[2]).resolve()
-name=m["binary_file"]; binary=(root/name).resolve()
-h=hashlib.sha256(binary.read_bytes()).hexdigest()
-print(m["version"]); print(binary); print(h)
+print(checksum)
 PY
 )
 version="${verified[0]}"
@@ -90,7 +85,22 @@ if [[ -f "$state_file" ]]; then
   previous_hash="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("current_binary_sha256",""))' "$state_file")"
 fi
 
+if [[ -n "$previous_version" && "$previous_version" != "unknown" ]]; then
+  python3 - "$previous_version" "$version" <<'PY'
+import sys
+def parse(value):
+    parts=value.split(".")
+    if len(parts)!=3 or any(not p.isdigit() for p in parts):
+        raise SystemExit(f"invalid installed version: {value}")
+    return tuple(map(int, parts))
+current,target=sys.argv[1:]
+if parse(target) <= parse(current):
+    raise SystemExit(f"upgrade target {target} must be newer than installed version {current}")
+PY
+fi
+
 if [[ -x "$binary_path" ]]; then
+  systemctl stop dragonforge-test-worker.service 2>/dev/null || true
   if [[ -z "$previous_version" ]]; then
     previous_version="unknown"
     previous_hash="$(sha256sum "$binary_path" | awk '{print $1}')"
