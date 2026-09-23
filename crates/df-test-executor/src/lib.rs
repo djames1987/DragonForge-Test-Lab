@@ -4,6 +4,8 @@ use df_test_sandbox::{
     SandboxError, SandboxLimits, SandboxMode,
 };
 use serde::{Deserialize, Serialize};
+#[cfg(windows)]
+use std::sync::OnceLock;
 use std::{
     collections::BTreeMap,
     fs,
@@ -17,8 +19,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-#[cfg(windows)]
-use std::sync::OnceLock;
 use thiserror::Error;
 use uuid::Uuid;
 
