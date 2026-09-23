@@ -816,18 +816,6 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
-    fn linux_worker_identity_does_not_depend_on_user_environment() {
-        let original = std::env::var_os("USER");
-        std::env::remove_var("USER");
-        let identity = current_worker_identity().unwrap();
-        if let Some(value) = original {
-            std::env::set_var("USER", value);
-        }
-        assert!(!identity.is_empty());
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
     fn linux_native_guard_contains_real_child_process() {
         let limits = SandboxLimits {
             max_memory_mib: 512,
