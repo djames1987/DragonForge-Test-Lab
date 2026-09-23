@@ -117,8 +117,7 @@ impl ArmInspector {
         let board_model = read_optional_text(&self.root.join("proc/device-tree/model"))?;
         if board_model
             .as_deref()
-            .map(|value| value.to_ascii_lowercase().contains("raspberry pi"))
-            .unwrap_or(false)
+            .is_some_and(|value| value.to_ascii_lowercase().contains("raspberry pi"))
         {
             capabilities.insert(ArmCapability::RaspberryPi);
         }
@@ -204,21 +203,17 @@ impl ArmInspector {
                     values,
                 })
             }
-            HardwareProbe::I2cBuses => Ok(device_probe(
-                probe,
-                &self.root.join("dev"),
-                Some("i2c-"),
-            )?),
-            HardwareProbe::SpiDevices => Ok(device_probe(
-                probe,
-                &self.root.join("dev"),
-                Some("spidev"),
-            )?),
-            HardwareProbe::SerialDevices => Ok(device_probe_any_prefix(
+            HardwareProbe::I2cBuses => {
+                device_probe(probe, &self.root.join("dev"), Some("i2c-"))
+            }
+            HardwareProbe::SpiDevices => {
+                device_probe(probe, &self.root.join("dev"), Some("spidev"))
+            }
+            HardwareProbe::SerialDevices => device_probe_any_prefix(
                 probe,
                 &self.root.join("dev"),
                 &["serial", "ttyAMA", "ttyS"],
-            )?),
+            ),
         }
     }
 }
@@ -375,7 +370,7 @@ fn list_entries_any_prefix(path: &Path, prefixes: &[&str]) -> Result<Vec<String>
 
 #[derive(Debug, Error)]
 pub enum ArmError {
-    #[error("hardware probe plan must contain between 1 and {MAX_PLAN_PROBES} probes")]
+    #[error("hardware probe plan must contain between 1 and 16 probes")]
     InvalidPlan,
     #[error("hardware metadata exceeds the bounded input limit")]
     InputTooLarge,
