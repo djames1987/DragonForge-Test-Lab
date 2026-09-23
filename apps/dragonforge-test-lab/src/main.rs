@@ -30,7 +30,10 @@ use df_test_plans::{
     TEST_PLAN_VERSION,
 };
 use df_test_policy::ExecutionPolicy;
-use df_test_release::{ReleaseArtifact, ReleaseArtifactKind, ReleaseBundleManifest, ReleaseChannel, ReleaseVersion, RELEASE_BUNDLE_SCHEMA_VERSION};
+use df_test_release::{
+    ReleaseArtifact, ReleaseArtifactKind, ReleaseBundleManifest, ReleaseChannel, ReleaseVersion,
+    RELEASE_BUNDLE_SCHEMA_VERSION,
+};
 use df_test_protocol::{
     Capability, JobRequest, JobStatus, RepositorySpec, ResourceLimits, TestAction,
     WorkerRegistration, PROTOCOL_VERSION,
@@ -709,9 +712,8 @@ fn release_bundle_verify(args: &[String]) -> Result<(), Box<dyn std::error::Erro
     if bytes.len() > 1024 * 1024 {
         return Err("release bundle manifest exceeds 1 MiB".into());
     }
-    let manifest: ReleaseBundleManifest = serde_json::from_slice(
-        bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes),
-    )?;
+    let manifest: ReleaseBundleManifest =
+        serde_json::from_slice(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes))?;
     manifest.verify_root(root)?;
     println!("version={}", manifest.version);
     println!("channel={}", manifest.channel.as_str());
@@ -752,7 +754,13 @@ fn release_fixture() -> Result<(), Box<dyn std::error::Error>> {
                 kind: ReleaseArtifactKind::LinuxPackage,
                 file: package.file_name().unwrap().to_string_lossy().into_owned(),
                 sha256: df_test_release::sha256_file(&package)?,
-                signature_file: Some(signature.file_name().unwrap().to_string_lossy().into_owned()),
+                signature_file: Some(
+                    signature
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
             },
             ReleaseArtifact {
                 kind: ReleaseArtifactKind::Sbom,

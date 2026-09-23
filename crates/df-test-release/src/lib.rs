@@ -183,7 +183,9 @@ fn parse_qualified<'a>(value: &'a str, marker: &str) -> Result<(&'a str, Option<
     if base.contains('-') || number.is_empty() || !number.bytes().all(|b| b.is_ascii_digit()) {
         return Err(ReleaseError::InvalidVersion);
     }
-    let iteration = number.parse::<u32>().map_err(|_| ReleaseError::InvalidVersion)?;
+    let iteration = number
+        .parse::<u32>()
+        .map_err(|_| ReleaseError::InvalidVersion)?;
     if iteration == 0 {
         return Err(ReleaseError::InvalidVersion);
     }
