@@ -375,8 +375,10 @@ impl Version {
         if value.is_empty() || value.len() > 64 {
             return Err(InstallError::InvalidVersion(value.to_owned()));
         }
-        let core = value.split_once('-').map(|(core, _)| core).unwrap_or(value);
-        let mut parts = core.split('.');
+        if value.contains('-') || value.contains('+') {
+            return Err(InstallError::InvalidVersion(value.to_owned()));
+        }
+        let mut parts = value.split('.');
         let major = parse_version_part(parts.next(), value)?;
         let minor = parse_version_part(parts.next(), value)?;
         let patch = parse_version_part(parts.next(), value)?;
@@ -487,6 +489,9 @@ fn atomic_write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), Install
         let mut file = File::create(&temporary)?;
         file.write_all(&bytes)?;
         file.sync_all()?;
+    }
+    if path.exists() {
+        fs::remove_file(path)?;
     }
     fs::rename(&temporary, path)?;
     Ok(())
