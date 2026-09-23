@@ -101,12 +101,12 @@ fi
 
 if [[ -x "$binary_path" ]]; then
   systemctl stop dragonforge-test-worker.service 2>/dev/null || true
-  if [[ -z "$previous_version" ]]; then
-    previous_version="unknown"
-    previous_hash="$(sha256sum "$binary_path" | awk '{print $1}')"
+  if [[ -n "$previous_version" ]]; then
+    cp -a "$binary_path" "$backup_root/dragonforge-test-lab-$previous_version"
+    [[ -f "$state_file" ]] && cp -a "$state_file" "$backup_root/install-state-$previous_version.json"
+  else
+    cp -a "$binary_path" "$backup_root/dragonforge-test-lab-pre-managed"
   fi
-  cp -a "$binary_path" "$backup_root/dragonforge-test-lab-$previous_version"
-  [[ -f "$state_file" ]] && cp -a "$state_file" "$backup_root/install-state-$previous_version.json"
 fi
 
 install -m 0755 "$source_binary" "$binary_path.new"
