@@ -1,4 +1,5 @@
 use df_test_agent::Agent;
+use df_test_arm::{run_phase20_fixture, ArmCapability, ArmInspector, HardwarePlan, HardwareProbe};
 use df_test_controller::{DurableController, DurableJobState, SCHEMA_VERSION};
 use df_test_dashboard::{
     run_dashboard_fixture, Dashboard, DashboardConfig, DEFAULT_DASHBOARD_BIND,
@@ -67,6 +68,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "dashboard-serve" => dashboard_serve(&args[2..]),
         "linux-doctor" => linux_doctor(),
         "linux-fixture" => linux_fixture(),
+        "arm-doctor" => arm_doctor(),
+        "arm-fixture" => arm_fixture(),
+        "arm-probe" => arm_probe(&args[2..]),
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
         "identity-fixture" => identity_fixture(),
@@ -138,7 +142,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=19");
+    println!("phase=20");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -417,6 +421,115 @@ fn linux_fixture() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("status=linux_fixture_passed");
     Ok(())
+}
+
+fn arm_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    let inspector = arm_host_inspector()?;
+    let inventory = inspector.inventory()?;
+    let node_features = arm_node_features(&inventory);
+
+    println!("DragonForge Test Lab ARM/Raspberry Pi doctor");
+    println!("os={}", inventory.os);
+    println!("arch={}", inventory.arch);
+    println!(
+        "board_model={}",
+        inventory.board_model.as_deref().unwrap_or("unknown")
+    );
+    println!("arm_worker={}", inventory.is_arm());
+    println!("raspberry_pi={}", inventory.is_raspberry_pi());
+    println!(
+        "hardware_capabilities={}",
+        serde_json::to_string(&inventory.capabilities)?
+    );
+    println!(
+        "distributed_node_features={}",
+        serde_json::to_string(&node_features)?
+    );
+    println!("hardware_operations=read_only_typed_probes");
+    println!("generic_shell=false");
+    println!("raw_device_write=false");
+    println!("status=arm_worker_ready");
+    Ok(())
+}
+
+fn arm_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let report = run_phase20_fixture()?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !report.arm64_detected
+        || !report.raspberry_pi_detected
+        || !report.gpio_detected
+        || !report.i2c_detected
+        || !report.spi_detected
+        || !report.uart_detected
+        || !report.thermal_detected
+        || !report.all_probes_bounded
+    {
+        return Err("one or more Phase 20 ARM/Raspberry Pi fixtures failed".into());
+    }
+    println!("status=arm_fixture_passed");
+    Ok(())
+}
+
+fn arm_probe(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let probe_name = value_after(args, "--probe").ok_or(
+        "missing --probe board-model|cpu-temperature|gpio-controllers|i2c-buses|spi-devices|serial-devices",
+    )?;
+    let probe = match probe_name.as_str() {
+        "board-model" => HardwareProbe::BoardModel,
+        "cpu-temperature" => HardwareProbe::CpuTemperature,
+        "gpio-controllers" => HardwareProbe::GpioControllers,
+        "i2c-buses" => HardwareProbe::I2cBuses,
+        "spi-devices" => HardwareProbe::SpiDevices,
+        "serial-devices" => HardwareProbe::SerialDevices,
+        _ => return Err("unsupported ARM hardware probe".into()),
+    };
+    let inspector = arm_host_inspector()?;
+    let results = inspector.run_plan(&HardwarePlan {
+        probes: vec![probe],
+    })?;
+    println!("{}", serde_json::to_string_pretty(&results[0])?);
+    println!("status=arm_probe_passed");
+    Ok(())
+}
+
+fn arm_host_inspector() -> Result<ArmInspector, Box<dyn std::error::Error>> {
+    if std::env::consts::OS != "linux" {
+        return Err("Phase 20 ARM hardware inspection requires Linux".into());
+    }
+    let inspector = ArmInspector::host();
+    let inventory = inspector.inventory()?;
+    if !inventory.is_arm() {
+        return Err("Phase 20 ARM hardware inspection requires an ARM/AArch64 host".into());
+    }
+    Ok(inspector)
+}
+
+fn arm_node_features(inventory: &df_test_arm::ArmInventory) -> BTreeSet<NodeFeature> {
+    let mut features = BTreeSet::new();
+    if !inventory.is_arm() {
+        return features;
+    }
+    features.insert(NodeFeature::ArmWorker);
+    if inventory.is_raspberry_pi() {
+        features.insert(NodeFeature::RaspberryPi);
+    }
+    if inventory.capabilities.contains(&ArmCapability::Gpio) {
+        features.insert(NodeFeature::HardwareIo);
+        features.insert(NodeFeature::Gpio);
+    }
+    if inventory.capabilities.contains(&ArmCapability::I2c) {
+        features.insert(NodeFeature::HardwareIo);
+        features.insert(NodeFeature::I2c);
+    }
+    if inventory.capabilities.contains(&ArmCapability::Spi) {
+        features.insert(NodeFeature::HardwareIo);
+        features.insert(NodeFeature::Spi);
+    }
+    if inventory.capabilities.contains(&ArmCapability::Uart) {
+        features.insert(NodeFeature::HardwareIo);
+        features.insert(NodeFeature::Uart);
+    }
+    features
 }
 
 fn github_doctor() -> Result<(), Box<dyn std::error::Error>> {
@@ -1437,6 +1550,18 @@ fn distributed_node_connect(args: &[String]) -> Result<(), Box<dyn std::error::E
         features.insert(NodeFeature::WindowsIntegration);
         features.insert(NodeFeature::GuiAutomation);
     }
+    if std::env::consts::OS == "linux" {
+        let inventory = ArmInspector::host().inventory()?;
+        features.extend(arm_node_features(&inventory));
+    }
+
+    let mut labels: BTreeSet<String> = ["phase8-probe".to_string()].into_iter().collect();
+    if features.contains(&NodeFeature::ArmWorker) {
+        labels.insert("arm".into());
+    }
+    if features.contains(&NodeFeature::RaspberryPi) {
+        labels.insert("raspberry-pi".into());
+    }
 
     let registration = NodeRegistration {
         protocol_version: PROTOCOL_VERSION,
@@ -1444,7 +1569,7 @@ fn distributed_node_connect(args: &[String]) -> Result<(), Box<dyn std::error::E
             node_id,
             os: std::env::consts::OS.into(),
             arch: std::env::consts::ARCH.into(),
-            labels: ["phase8-probe".to_string()].into_iter().collect(),
+            labels,
             features,
             max_parallel_jobs: 2,
         },
@@ -2307,6 +2432,9 @@ fn print_help() {
     println!("  dragonforge-test-lab dashboard-serve [--bind 127.0.0.1:8788] [--state-db <path>]");
     println!("  dragonforge-test-lab linux-doctor");
     println!("  dragonforge-test-lab linux-fixture");
+    println!("  dragonforge-test-lab arm-doctor");
+    println!("  dragonforge-test-lab arm-fixture");
+    println!("  dragonforge-test-lab arm-probe --probe board-model|cpu-temperature|gpio-controllers|i2c-buses|spi-devices|serial-devices");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");

@@ -32,6 +32,12 @@ pub enum NodeFeature {
     DnsFixture,
     FaultInjection,
     HardwareIo,
+    ArmWorker,
+    RaspberryPi,
+    Gpio,
+    I2c,
+    Spi,
+    Uart,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

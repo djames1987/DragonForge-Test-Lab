@@ -6,17 +6,18 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 19 — Linux Qualification — Complete
+Phase 20 — ARM / Raspberry Pi — Implementation Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
-Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, Phase 14 added validated audit/artifact/observability infrastructure, and Phase 15 added validated recovery/retry lifecycle control. Phase 16 added validated versioned declarative plans, controller schema v4 plan persistence, DAG dependencies/conditions, typed profile compilation, capability enforcement, typed artifacts, retry policy integration, target predicates, and plan operator tooling. Phase 17 connects Test Intelligence to real GitHub changes, durable historical failures, online worker capacity, stored plans, advisory/automatic modes, immutable head-SHA jobs, and hash-chained decision audits. Phase 18 adds an authenticated loopback-only, read-only web dashboard over bounded durable controller projections for jobs, workers, plans, artifact metadata, intelligence/failure clusters, audit history, chain verification, and safe settings. Phase 19 adds first-class Linux native process containment with process groups and rlimits, Linux worker/service/mTLS qualification, Docker/Podman validation, advanced Rust lanes, and native/container GitHub-aware qualification tooling. Full Ubuntu Server x86_64 platform qualification passed on 2026-09-23.
+Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle validation on 2026-09-22. Phase 5 added deep Rust testing, Phase 6 added validated Windows OS integration fixtures, Phase 7 added validated GUI automation, Phase 8 added validated authenticated distributed execution, Phase 9 added the validated authenticated MCP gateway, Phase 10 added validated deterministic Test Intelligence, Phase 11 added validated SQLite-backed durable controller state, Phase 12 added validated rustls mTLS/X.509 node identity, Phase 13 added validated long-running worker services, Phase 14 added validated audit/artifact/observability infrastructure, and Phase 15 added validated recovery/retry lifecycle control. Phase 16 added validated versioned declarative plans, controller schema v4 plan persistence, DAG dependencies/conditions, typed profile compilation, capability enforcement, typed artifacts, retry policy integration, target predicates, and plan operator tooling. Phase 17 connects Test Intelligence to real GitHub changes, durable historical failures, online worker capacity, stored plans, advisory/automatic modes, immutable head-SHA jobs, and hash-chained decision audits. Phase 18 adds an authenticated loopback-only, read-only web dashboard over bounded durable controller projections for jobs, workers, plans, artifact metadata, intelligence/failure clusters, audit history, chain verification, and safe settings. Phase 19 adds first-class Linux native process containment with process groups and rlimits, Linux worker/service/mTLS qualification, Docker/Podman validation, advanced Rust lanes, and native/container GitHub-aware qualification tooling. Full Ubuntu Server x86_64 platform qualification passed on 2026-09-23. Phase 20 adds typed ARM/Raspberry Pi hardware inventory, bounded read-only HIL probes, distributed ARM/device capabilities, and a physical ARM qualification path.
 
 ## Workspace
 
     apps/
       dragonforge-test-lab/   operator CLI
     crates/
+      df-test-arm/            ARM/Raspberry Pi inventory and typed read-only HIL probes
       df-test-protocol/       shared versioned contracts
       df-test-policy/         worker authorization policy
       df-test-agent/          worker-side trust boundary
@@ -61,6 +62,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-17.md
       PHASE-18.md
       PHASE-19.md
+      PHASE-20.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -90,6 +92,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase18.ps1
       build-sandbox-image.sh
       test-phase19-linux.sh
+      test-phase20-arm.sh
 
 ## Hyper-V host setup
 
@@ -463,10 +466,37 @@ Phase 19 adds native Linux process-group containment with address-space/process 
 
 See docs/PHASE-19.md for the Linux trust boundary, required tools, validation matrix, and platform qualification procedure.
 
+
+## Phase 20 ARM / Raspberry Pi
+
+ARM readiness on a native Linux ARM worker:
+
+    cargo run -p dragonforge-test-lab -- arm-doctor
+
+Deterministic typed hardware fixture:
+
+    cargo run -p dragonforge-test-lab -- arm-fixture
+
+Bounded read-only hardware probe:
+
+    cargo run -p dragonforge-test-lab -- arm-probe --probe board-model
+
+Physical ARM qualification:
+
+    bash ./scripts/test-phase20-arm.sh --revision main --install-tools
+
+Optional Docker/Podman qualification on ARM:
+
+    bash ./scripts/test-phase20-arm.sh --revision main --container-runtime docker
+
+Phase 20 exposes only allowlisted read-only board/thermal/GPIO-controller/I²C/SPI/UART discovery. It does not expose arbitrary filesystem paths, generic shell commands, or raw hardware writes. Final Raspberry Pi/physical ARM qualification remains pending until the Phase 20 script runs on real ARM hardware.
+
+See docs/PHASE-20.md for the capability model, HIL boundary, and qualification procedure.
+
 ## Security principle
 
 DragonForge Test Lab is not a remote shell.
 
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
-See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, docs/PHASE-18.md, docs/PHASE-19.md, and docs/ROADMAP.md.
+See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, docs/PHASE-18.md, docs/PHASE-19.md, docs/PHASE-20.md, and docs/ROADMAP.md.
