@@ -298,3 +298,10 @@ For native Linux actions, Test Lab creates a new session/process group before ex
 These mechanisms are defense-in-depth. They do not turn arbitrary executables or shell text into allowed inputs. Repository allowlisting, typed TestAction authorization, worker capability checks, sanitized execution, outbound-only service operation, private/local controller targeting, and mTLS identity remain unchanged.
 
 The Linux qualification fixture uses only fixed test programs and existing typed service/identity fixtures. No remote terminal, generic process endpoint, arbitrary systemd command, or caller-supplied shell operation is introduced.
+
+
+## Phase 20 ARM / Raspberry Pi controls
+
+Physical ARM nodes do not receive a generic hardware or shell escape hatch. Phase 20 exposes only typed read-only probes over fixed Linux metadata locations. Metadata reads are size-bounded, device enumeration is count-bounded, probe names are allowlisted, and callers cannot provide arbitrary paths, bus addresses, GPIO values, UART payloads, SPI transfers, or I²C writes.
+
+ARM/Raspberry Pi capabilities are scheduling metadata, not authorization to execute arbitrary hardware actions. Distributed workers remain outbound-only and authenticated under the existing transport/identity model. Any future mutating HIL capability must introduce its own typed operation, explicit bounds, privilege model, policy authorization, and destructive confirmation where appropriate.
