@@ -352,8 +352,14 @@ fn linux_doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("arch={}", std::env::consts::ARCH);
     println!("native_containment={}", guard.mechanism());
     println!("systemd_unit={}", systemd.unit_name);
-    println!("systemd_no_new_privileges={}", unit.contains("NoNewPrivileges=true"));
-    println!("systemd_protect_system={}", unit.contains("ProtectSystem=strict"));
+    println!(
+        "systemd_no_new_privileges={}",
+        unit.contains("NoNewPrivileges=true")
+    );
+    println!(
+        "systemd_protect_system={}",
+        unit.contains("ProtectSystem=strict")
+    );
     println!("outbound_mtls=true");
     println!("container_modes=docker,podman");
     println!("status=linux_worker_ready");
