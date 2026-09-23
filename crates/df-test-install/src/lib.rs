@@ -175,6 +175,9 @@ impl ReleaseManifest {
         if !binary.is_file() {
             return Err(InstallError::BinaryMissing(binary));
         }
+        if fs::symlink_metadata(&binary)?.file_type().is_symlink() {
+            return Err(InstallError::SymlinkedBinaryForbidden);
+        }
         let actual = sha256_file(&binary, MAX_BINARY_BYTES)?;
         if actual != self.binary_sha256 {
             return Err(InstallError::ChecksumMismatch);
@@ -476,6 +479,9 @@ fn read_bounded(path: &Path, max_bytes: u64) -> Result<Vec<u8>, InstallError> {
     if bytes.len() as u64 > max_bytes {
         return Err(InstallError::InputTooLarge);
     }
+    if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
+        bytes.drain(..3);
+    }
     Ok(bytes)
 }
 
@@ -530,6 +536,8 @@ pub enum InstallError {
     BinaryMissing(PathBuf),
     #[error("release binary SHA-256 checksum does not match the manifest")]
     ChecksumMismatch,
+    #[error("release binary must not be a symbolic link")]
+    SymlinkedBinaryForbidden,
     #[error("upgrade target {target} must be newer than installed version {current}")]
     UpgradeNotNewer { current: String, target: String },
     #[error("install state contains incomplete rollback metadata")]
