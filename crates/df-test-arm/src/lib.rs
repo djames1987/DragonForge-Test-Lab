@@ -123,7 +123,9 @@ impl ArmInspector {
             capabilities.insert(ArmCapability::RaspberryPi);
         }
 
-        if directory_has_entries(&self.root.join("sys/class/gpio"), Some("gpiochip"))? {
+        if directory_has_entries(&self.root.join("sys/class/gpio"), Some("gpiochip"))?
+            || directory_has_entries(&self.root.join("dev"), Some("gpiochip"))?
+        {
             capabilities.insert(ArmCapability::Gpio);
         }
         if directory_has_entries(&self.root.join("dev"), Some("i2c-"))? {
@@ -187,11 +189,21 @@ impl ArmInspector {
                     values,
                 })
             }
-            HardwareProbe::GpioControllers => Ok(device_probe(
-                probe,
-                &self.root.join("sys/class/gpio"),
-                Some("gpiochip"),
-            )?),
+            HardwareProbe::GpioControllers => {
+                let mut values =
+                    list_entries(&self.root.join("sys/class/gpio"), Some("gpiochip"))?;
+                for value in list_entries(&self.root.join("dev"), Some("gpiochip"))? {
+                    if !values.contains(&value) && values.len() < MAX_DEVICE_ENTRIES {
+                        values.push(value);
+                    }
+                }
+                values.sort();
+                Ok(ProbeResult {
+                    probe,
+                    available: !values.is_empty(),
+                    values,
+                })
+            }
             HardwareProbe::I2cBuses => Ok(device_probe(
                 probe,
                 &self.root.join("dev"),
