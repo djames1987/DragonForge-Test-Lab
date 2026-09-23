@@ -107,7 +107,11 @@ fi
 echo "[12/13] General doctor reports Phase 20"
 general="$(cargo run -q -p dragonforge-test-lab -- doctor)"
 echo "$general"
-grep -q "phase=20" <<<"$general"
+reported_phase="$(sed -n 's/^phase=//p' <<<"$general")"
+if [[ -z "$reported_phase" || "$reported_phase" -lt 20 ]]; then
+  echo "general doctor reported phase '$reported_phase'; expected Phase 20 or later" >&2
+  exit 1
+fi
 
 echo "[13/13] ARM doctor still reports ready"
 arm="$(cargo run -q -p dragonforge-test-lab -- arm-doctor)"
