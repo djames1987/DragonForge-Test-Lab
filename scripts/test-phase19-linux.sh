@@ -76,7 +76,7 @@ echo "[6/15] Native sandbox doctor"
 cargo run -p dragonforge-test-lab -- sandbox-doctor --sandbox native
 
 echo "[7/15] Build container sandbox image"
-./scripts/build-sandbox-image.sh "$container_runtime"
+bash ./scripts/build-sandbox-image.sh "$container_runtime"
 
 echo "[8/15] Container sandbox doctor"
 cargo run -p dragonforge-test-lab -- sandbox-doctor --sandbox "$container_runtime"
