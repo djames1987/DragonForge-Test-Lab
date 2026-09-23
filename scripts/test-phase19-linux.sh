@@ -128,7 +128,11 @@ fi
 echo "[15/15] General doctor reports Phase 19"
 general="$(cargo run -q -p dragonforge-test-lab -- doctor)"
 echo "$general"
-grep -q "phase=19" <<<"$general"
+reported_phase="$(sed -n 's/^phase=//p' <<<"$general")"
+if [[ -z "$reported_phase" || "$reported_phase" -lt 19 ]]; then
+  echo "general doctor reported phase '$reported_phase'; expected Phase 19 or later" >&2
+  exit 1
+fi
 
 echo
 echo "Phase 19 Linux Qualification validation passed."
