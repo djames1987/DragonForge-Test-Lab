@@ -420,3 +420,10 @@ The Phase 18 HTTP API is deliberately read-only. There is no generic action endp
 Native Linux project processes run in a dedicated session/process group. The worker applies address-space and process-count rlimits before exec and cancels the whole group rather than only the direct child.
 
 Worker service operation continues to use the Phase 13 outbound-only systemd runtime and Phase 12 mTLS identity. Phase 19 qualification exercises those paths together with native/container GitHub-aware execution, lifecycle recovery, observability, and advanced Rust testing.
+
+
+## Phase 20 ARM / Raspberry Pi hardware boundary
+
+`df-test-arm` is the hardware discovery boundary for native ARM Linux workers. It reads only fixed, bounded Linux metadata locations for board identity, thermal state, GPIO controller presence, I²C buses, SPI devices, and serial devices. The CLI maps this inventory into typed distributed node features; callers never supply device paths or executable text.
+
+Hardware-in-the-loop operations in Phase 20 are read-only probes represented by the `HardwareProbe` enum. Mutating GPIO/I²C/SPI/UART operations are intentionally outside this phase. Existing outbound-only registration, mTLS identity, scheduling, Agent/Policy, and Linux containment boundaries remain unchanged.
