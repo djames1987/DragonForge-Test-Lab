@@ -482,11 +482,6 @@ mod linux {
         }
     }
 
-    impl Drop for LinuxGuard {
-        fn drop(&mut self) {
-            let _ = self.terminate();
-        }
-    }
 }
 
 #[cfg(windows)]
