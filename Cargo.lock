@@ -631,10 +631,8 @@ dependencies = [
 name = "dragonforge-test-lab"
 version = "0.23.0"
 dependencies = [
- "df-test-release",
  "df-test-agent",
  "df-test-arm",
- "df-test-install",
  "df-test-controller",
  "df-test-dashboard",
  "df-test-distributed",
@@ -642,6 +640,7 @@ dependencies = [
  "df-test-github",
  "df-test-gui",
  "df-test-identity",
+ "df-test-install",
  "df-test-intelligence",
  "df-test-intelligence-integration",
  "df-test-lifecycle",
@@ -650,6 +649,7 @@ dependencies = [
  "df-test-plans",
  "df-test-policy",
  "df-test-protocol",
+ "df-test-release",
  "df-test-sandbox",
  "df-test-vm",
  "df-test-windows",
