@@ -45,6 +45,10 @@ Install/update mandatory advanced Rust tools automatically:
 
     bash ./scripts/test-phase19-linux.sh --revision main --install-tools
 
+Add Linux nightly Miri, AddressSanitizer, and bounded fuzzing:
+
+    bash ./scripts/test-phase19-linux.sh --revision main --install-tools --include-nightly --fuzz-seconds 30
+
 The script requires Docker or Podman. It validates:
 
 1. environment/toolchain;
@@ -74,7 +78,7 @@ Phase 13 already generated hardened systemd units. Phase 19 qualifies that Linux
 
 ## Advanced Rust lanes
 
-The mandatory Phase 19 Linux qualification includes nextest, llvm-cov, protocol property tests, and Criterion benchmark compilation. Phase 5's nightly Miri, sanitizer, and fuzz lanes remain available for deeper opt-in qualification and can be layered onto the same Linux worker.
+The mandatory Phase 19 Linux qualification includes nextest, llvm-cov, protocol property tests, and Criterion benchmark compilation. `--include-nightly` additionally runs Miri, Linux AddressSanitizer, and bounded cargo-fuzz directly on the qualified Linux worker.
 
 ## Security boundary
 
