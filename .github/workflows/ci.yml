@@ -22,3 +22,11 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --workspace --all-features
+      - name: Linux worker doctor
+        run: cargo run -p dragonforge-test-lab -- linux-doctor
+      - name: Linux containment service and mTLS fixture
+        run: cargo run -p dragonforge-test-lab -- linux-fixture
+      - name: Build Linux sandbox image
+        run: bash ./scripts/build-sandbox-image.sh docker
+      - name: Docker sandbox doctor
+        run: cargo run -p dragonforge-test-lab -- sandbox-doctor --sandbox docker
