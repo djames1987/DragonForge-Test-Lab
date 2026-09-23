@@ -248,7 +248,9 @@ pub fn verify_container_image(mode: SandboxMode) -> Result<(), SandboxError> {
 pub struct ProcessTreeGuard {
     #[cfg(windows)]
     inner: windows::JobGuard,
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    inner: linux::LinuxGuard,
+    #[cfg(all(not(windows), not(target_os = "linux")))]
     _mode: SandboxMode,
 }
 
@@ -264,7 +266,19 @@ impl ProcessTreeGuard {
             })
         }
 
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            match mode {
+                SandboxMode::Native => Ok(Self {
+                    inner: linux::LinuxGuard::new(limits)?,
+                }),
+                SandboxMode::Docker | SandboxMode::Podman => Ok(Self {
+                    inner: linux::LinuxGuard::container_mode(),
+                }),
+            }
+        }
+
+        #[cfg(all(not(windows), not(target_os = "linux")))]
         {
             if mode == SandboxMode::Native {
                 return Err(SandboxError::NativeContainmentUnsupported);
@@ -280,7 +294,12 @@ impl ProcessTreeGuard {
             self.inner.prepare(command);
         }
 
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            self.inner.prepare(command)?;
+        }
+
+        #[cfg(all(not(windows), not(target_os = "linux")))]
         {
             let _ = command;
         }
@@ -298,7 +317,12 @@ impl ProcessTreeGuard {
             }
         }
 
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            self.inner.attach(child)?;
+        }
+
+        #[cfg(all(not(windows), not(target_os = "linux")))]
         {
             let _ = child;
         }
@@ -313,7 +337,12 @@ impl ProcessTreeGuard {
             Ok(true)
         }
 
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            self.inner.terminate()
+        }
+
+        #[cfg(all(not(windows), not(target_os = "linux")))]
         {
             Ok(false)
         }
@@ -325,9 +354,133 @@ impl ProcessTreeGuard {
             "windows_job_object"
         }
 
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            self.inner.mechanism()
+        }
+
+        #[cfg(all(not(windows), not(target_os = "linux")))]
         {
             "container_runtime"
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux {
+    use super::{SandboxError, SandboxLimits};
+    use std::{
+        io,
+        os::unix::process::CommandExt,
+        process::{Child, Command},
+        sync::Mutex,
+    };
+
+    pub struct LinuxGuard {
+        limits: Option<SandboxLimits>,
+        process_group: Mutex<Option<i32>>,
+    }
+
+    impl LinuxGuard {
+        pub fn new(limits: SandboxLimits) -> Result<Self, SandboxError> {
+            limits.validate()?;
+            Ok(Self {
+                limits: Some(limits),
+                process_group: Mutex::new(None),
+            })
+        }
+
+        pub fn container_mode() -> Self {
+            Self {
+                limits: None,
+                process_group: Mutex::new(None),
+            }
+        }
+
+        pub fn prepare(&self, command: &mut Command) -> Result<(), SandboxError> {
+            let Some(limits) = self.limits else {
+                return Ok(());
+            };
+            let address_space = limits.max_memory_mib.saturating_mul(1024 * 1024);
+            let process_limit = u64::from(limits.max_processes);
+            unsafe {
+                command.pre_exec(move || {
+                    if libc::setsid() == -1 {
+                        return Err(io::Error::last_os_error());
+                    }
+
+                    let memory = libc::rlimit {
+                        rlim_cur: address_space as libc::rlim_t,
+                        rlim_max: address_space as libc::rlim_t,
+                    };
+                    if libc::setrlimit(libc::RLIMIT_AS, &memory) != 0 {
+                        return Err(io::Error::last_os_error());
+                    }
+
+                    let processes = libc::rlimit {
+                        rlim_cur: process_limit as libc::rlim_t,
+                        rlim_max: process_limit as libc::rlim_t,
+                    };
+                    if libc::setrlimit(libc::RLIMIT_NPROC, &processes) != 0 {
+                        return Err(io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+            Ok(())
+        }
+
+        pub fn attach(&self, child: &Child) -> Result<(), SandboxError> {
+            if self.limits.is_none() {
+                return Ok(());
+            }
+            let pid = i32::try_from(child.id()).map_err(|_| {
+                SandboxError::LinuxContainment(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "child process id did not fit in i32",
+                ))
+            })?;
+            *self
+                .process_group
+                .lock()
+                .map_err(|_| SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned")))? =
+                Some(pid);
+            Ok(())
+        }
+
+        pub fn terminate(&self) -> Result<bool, SandboxError> {
+            let Some(group) = *self
+                .process_group
+                .lock()
+                .map_err(|_| SandboxError::LinuxContainment(io::Error::other("linux guard mutex poisoned")))?
+            else {
+                return Ok(false);
+            };
+
+            let result = unsafe { libc::kill(-group, libc::SIGKILL) };
+            if result == 0 {
+                return Ok(true);
+            }
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::ESRCH) {
+                Ok(false)
+            } else {
+                Err(SandboxError::LinuxContainment(error))
+            }
+        }
+
+        pub fn mechanism(&self) -> &'static str {
+            if self.limits.is_some() {
+                "linux_process_group_rlimit"
+            } else {
+                "container_runtime"
+            }
+        }
+    }
+
+    impl Drop for LinuxGuard {
+        fn drop(&mut self) {
+            let _ = self.terminate();
         }
     }
 }
@@ -535,6 +688,9 @@ pub enum SandboxError {
     #[cfg(windows)]
     #[error("Windows Job Object operation failed: {0}")]
     WindowsJob(io::Error),
+    #[cfg(target_os = "linux")]
+    #[error("Linux process containment operation failed: {0}")]
+    LinuxContainment(io::Error),
 }
 
 #[cfg(test)]
@@ -615,6 +771,29 @@ mod tests {
             max_processes: 8,
         };
         let guard = ProcessTreeGuard::new(SandboxMode::Native, limits).unwrap();
+        let mut command = Command::new("rustc");
+        command.arg("--version");
+        command.stdin(std::process::Stdio::null());
+        command.stdout(std::process::Stdio::null());
+        command.stderr(std::process::Stdio::null());
+        guard.prepare_command(&mut command).unwrap();
+
+        let mut child = command.spawn().unwrap();
+        guard.attach(&mut child).unwrap();
+        let status = child.wait().unwrap();
+        assert!(status.success());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_native_guard_contains_real_child_process() {
+        let limits = SandboxLimits {
+            max_memory_mib: 512,
+            max_processes: 8,
+        };
+        let guard = ProcessTreeGuard::new(SandboxMode::Native, limits).unwrap();
+        assert_eq!(guard.mechanism(), "linux_process_group_rlimit");
+
         let mut command = Command::new("rustc");
         command.arg("--version");
         command.stdin(std::process::Stdio::null());
