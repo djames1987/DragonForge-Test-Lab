@@ -6,7 +6,7 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 19 — Linux Qualification — Implementation Complete
+Phase 19 — Linux Qualification — Complete
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
@@ -454,6 +454,10 @@ Full Linux qualification:
 Install/update the mandatory advanced Rust tools first:
 
     bash ./scripts/test-phase19-linux.sh --revision main --install-tools
+
+Optional Linux nightly Miri/ASan/fuzz qualification:
+
+    bash ./scripts/test-phase19-linux.sh --revision main --install-tools --include-nightly --fuzz-seconds 30
 
 Phase 19 adds native Linux process-group containment with address-space/process rlimits and whole-tree cancellation. The qualification script also validates Docker/Podman execution, worker-service mTLS/heartbeat/drain/restart behavior, lifecycle recovery, observability, nextest, llvm-cov, property tests, benchmark compilation, and GitHub-aware native/container workers.
 
