@@ -785,15 +785,16 @@ mod tests {
         let guard = ProcessTreeGuard::new(SandboxMode::Native, limits).unwrap();
         assert_eq!(guard.mechanism(), "linux_process_group_rlimit");
 
-        let mut command = Command::new("rustc");
-        command.arg("--version");
+        let mut command = Command::new("true");
         command.stdin(std::process::Stdio::null());
         command.stdout(std::process::Stdio::null());
         command.stderr(std::process::Stdio::null());
         guard.prepare_command(&mut command).unwrap();
 
         let mut child = command.spawn().unwrap();
+        let pid = i32::try_from(child.id()).unwrap();
         guard.attach(&mut child).unwrap();
+        assert_eq!(unsafe { libc::getpgid(pid) }, pid);
         let status = child.wait().unwrap();
         assert!(status.success());
     }
