@@ -5,6 +5,8 @@ repository_url="https://github.com/djames1987/DragonForge-Test-Lab.git"
 revision="main"
 log_directory="./test-logs"
 install_tools=0
+include_nightly=0
+fuzz_seconds=30
 container_runtime=""
 
 while [[ $# -gt 0 ]]; do
@@ -13,6 +15,8 @@ while [[ $# -gt 0 ]]; do
     --revision) revision="$2"; shift 2 ;;
     --log-directory) log_directory="$2"; shift 2 ;;
     --install-tools) install_tools=1; shift ;;
+    --include-nightly) include_nightly=1; shift ;;
+    --fuzz-seconds) fuzz_seconds="$2"; shift 2 ;;
     --container-runtime) container_runtime="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -36,6 +40,11 @@ echo "Kernel: $(uname -a)"
 if [[ $install_tools -eq 1 ]]; then
   cargo install --locked cargo-nextest
   cargo install --locked cargo-llvm-cov
+  if [[ $include_nightly -eq 1 ]]; then
+    cargo install --locked cargo-fuzz
+    rustup toolchain install nightly
+    rustup component add --toolchain nightly rust-src miri
+  fi
 fi
 
 if [[ -z "$container_runtime" ]]; then
@@ -101,6 +110,19 @@ cargo run -p dragonforge-test-lab -- run-github --repo "$repository_url" --revis
 
 echo "[14/15] GitHub-aware container worker"
 cargo run -p dragonforge-test-lab -- run-github --repo "$repository_url" --revision "$revision" --sandbox "$container_runtime" --no-status
+
+if [[ $include_nightly -eq 1 ]]; then
+  echo "[optional] Miri - protocol crate"
+  cargo +nightly miri setup
+  cargo +nightly miri test -p df-test-protocol
+
+  echo "[optional] AddressSanitizer - protocol crate"
+  RUSTFLAGS="-Zsanitizer=address" RUSTDOCFLAGS="-Zsanitizer=address" \
+    cargo +nightly test -p df-test-protocol -Zbuild-std --target x86_64-unknown-linux-gnu
+
+  echo "[optional] Bounded protocol fuzzing"
+  cargo fuzz run job_request_json -- -max_total_time="$fuzz_seconds"
+fi
 
 echo "[15/15] General doctor reports Phase 19"
 general="$(cargo run -q -p dragonforge-test-lab -- doctor)"
