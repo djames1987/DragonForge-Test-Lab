@@ -1,12 +1,12 @@
 use rustls::{
-    pki_types::{CertificateDer, PrivateKeyDer, ServerName},
+    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer, ServerName},
     ClientConfig, RootCertStore, ServerConfig,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    io::{Cursor, Read, Write},
+    io::{Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
     sync::Arc,
     time::Duration,
@@ -287,10 +287,9 @@ pub struct CertificateMaterial {
 
 impl CertificateMaterial {
     pub fn from_pem(certificate_pem: &[u8], private_key_pem: &[u8]) -> Result<Self, IdentityError> {
-        let mut certificate_reader = Cursor::new(certificate_pem);
-        let certificate_chain = rustls_pemfile::certs(&mut certificate_reader)
+        let certificate_chain = CertificateDer::pem_slice_iter(certificate_pem)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(IdentityError::Io)?;
+            .map_err(|error| IdentityError::Pem(error.to_string()))?;
         if certificate_chain.is_empty() || certificate_chain.len() > MAX_CERTIFICATE_CHAIN {
             return Err(IdentityError::InvalidCertificateChain);
         }
@@ -302,10 +301,8 @@ impl CertificateMaterial {
             return Err(IdentityError::InvalidCertificateChain);
         }
 
-        let mut key_reader = Cursor::new(private_key_pem);
-        let private_key =
-            rustls_pemfile::private_key(&mut key_reader).map_err(IdentityError::Io)?;
-        let private_key = private_key.ok_or(IdentityError::MissingPrivateKey)?;
+        let private_key = PrivateKeyDer::from_pem_slice(private_key_pem)
+            .map_err(|error| IdentityError::Pem(error.to_string()))?;
 
         Ok(Self {
             certificate_chain,
@@ -315,10 +312,9 @@ impl CertificateMaterial {
 }
 
 pub fn root_store_from_pem(ca_pem: &[u8]) -> Result<RootCertStore, IdentityError> {
-    let mut reader = Cursor::new(ca_pem);
-    let certificates = rustls_pemfile::certs(&mut reader)
+    let certificates = CertificateDer::pem_slice_iter(ca_pem)
         .collect::<Result<Vec<_>, _>>()
-        .map_err(IdentityError::Io)?;
+        .map_err(|error| IdentityError::Pem(error.to_string()))?;
     if certificates.is_empty() || certificates.len() > MAX_CERTIFICATE_CHAIN {
         return Err(IdentityError::InvalidCertificateChain);
     }
@@ -596,6 +592,8 @@ pub enum IdentityError {
     Tls(String),
     #[error("certificate generation error: {0}")]
     CertificateGeneration(String),
+    #[error("PEM parsing error: {0}")]
+    Pem(String),
     #[error("fixture error: {0}")]
     Fixture(String),
     #[error("fixture thread panicked")]
