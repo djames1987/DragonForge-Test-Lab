@@ -506,9 +506,10 @@ fn arm_host_inspector() -> Result<ArmInspector, Box<dyn std::error::Error>> {
 
 fn arm_node_features(inventory: &df_test_arm::ArmInventory) -> BTreeSet<NodeFeature> {
     let mut features = BTreeSet::new();
-    if inventory.is_arm() {
-        features.insert(NodeFeature::ArmWorker);
+    if !inventory.is_arm() {
+        return features;
     }
+    features.insert(NodeFeature::ArmWorker);
     if inventory.is_raspberry_pi() {
         features.insert(NodeFeature::RaspberryPi);
     }
