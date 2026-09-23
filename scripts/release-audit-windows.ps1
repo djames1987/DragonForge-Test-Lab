@@ -52,12 +52,12 @@ $lines.Add("DragonForge Test Lab release audit")
 $lines.Add("commit=$((& git rev-parse HEAD).Trim())")
 $lines.Add("")
 $lines.Add("== cargo audit ==")
-$audit = Invoke-NativeCapture cargo-audit @()
+$audit = Invoke-NativeCapture cargo @("audit")
 $audit | ForEach-Object { $lines.Add([string]$_) }
 
 $lines.Add("")
 $lines.Add("== cargo deny licenses advisories sources ==")
-$deny = Invoke-NativeCapture cargo-deny @("check","licenses","advisories","sources")
+$deny = Invoke-NativeCapture cargo @("deny","check","licenses","advisories","sources")
 $deny | ForEach-Object { $lines.Add([string]$_) }
 
 $lines | Set-Content -LiteralPath $Output -Encoding UTF8
