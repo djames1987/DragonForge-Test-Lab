@@ -122,7 +122,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p stage
-          find downloaded -type f -maxdepth 3 -exec cp {} stage/ \;
+          find downloaded -maxdepth 3 -type f -exec cp {} stage/ \;
           python3 ./scripts/generate-release-notes.py --version "${{ inputs.version }}" --channel "${{ inputs.channel }}" --commit "${{ needs.validate.outputs.commit }}" --output stage/RELEASE-NOTES.md
       - name: Configure stable detached signing
         if: inputs.channel == 'stable'
