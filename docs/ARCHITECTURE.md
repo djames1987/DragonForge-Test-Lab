@@ -394,3 +394,29 @@ Phase 18 adds `df-test-dashboard` as a local operator visibility layer over the 
 The dashboard opens the existing durable controller database and uses typed controller query methods. It does not bypass the controller, Agent, Policy, Executor, lifecycle, or worker-service boundaries.
 
 The Phase 18 HTTP API is deliberately read-only. There is no generic action endpoint, terminal, command field, raw SQL endpoint, filesystem browser, artifact-content endpoint, or arbitrary URL proxy. Future operator mutations must be introduced as separately designed typed/audited operations rather than extending the dashboard into a general control channel.
+
+
+## Phase 19 Linux worker flow
+
+    typed authorized job
+          |
+      Linux worker
+          |
+    native mode ---------------- container mode
+       |                             |
+    setsid()                     Docker/Podman
+    RLIMIT_AS                    fixed Cargo wrapper
+    RLIMIT_NPROC                 memory/PID limits
+       |                             |
+    process group                    |
+       +-------------+---------------+
+                     |
+              bounded execution
+                     |
+              artifacts/results
+                     |
+             cancellation/recovery
+
+Native Linux project processes run in a dedicated session/process group. The worker applies address-space and process-count rlimits before exec and cancels the whole group rather than only the direct child.
+
+Worker service operation continues to use the Phase 13 outbound-only systemd runtime and Phase 12 mTLS identity. Phase 19 qualification exercises those paths together with native/container GitHub-aware execution, lifecycle recovery, observability, and advanced Rust testing.
