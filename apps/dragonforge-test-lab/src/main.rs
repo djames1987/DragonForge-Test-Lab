@@ -30,13 +30,13 @@ use df_test_plans::{
     TEST_PLAN_VERSION,
 };
 use df_test_policy::ExecutionPolicy;
-use df_test_release::{
-    ReleaseArtifact, ReleaseArtifactKind, ReleaseBundleManifest, ReleaseChannel, ReleaseVersion,
-    RELEASE_BUNDLE_SCHEMA_VERSION,
-};
 use df_test_protocol::{
     Capability, JobRequest, JobStatus, RepositorySpec, ResourceLimits, TestAction,
     WorkerRegistration, PROTOCOL_VERSION,
+};
+use df_test_release::{
+    ReleaseArtifact, ReleaseArtifactKind, ReleaseBundleManifest, ReleaseChannel, ReleaseVersion,
+    RELEASE_BUNDLE_SCHEMA_VERSION,
 };
 use df_test_sandbox::{
     current_worker_identity, runtime_version, verify_container_image, verify_worker_identity,
@@ -739,7 +739,10 @@ fn release_fixture() -> Result<(), Box<dyn std::error::Error>> {
 
     std::fs::write(&package, b"phase22-package")?;
     std::fs::write(&signature, b"phase22-signature")?;
-    std::fs::write(&sbom, b"{\"bomFormat\":\"CycloneDX\",\"specVersion\":\"1.6\"}")?;
+    std::fs::write(
+        &sbom,
+        b"{\"bomFormat\":\"CycloneDX\",\"specVersion\":\"1.6\"}",
+    )?;
     std::fs::write(&checksums, b"fixture checksum index")?;
     std::fs::write(&audit, b"audit fixture passed")?;
     std::fs::write(&notes, b"# Phase 22 fixture")?;
@@ -770,7 +773,11 @@ fn release_fixture() -> Result<(), Box<dyn std::error::Error>> {
             },
             ReleaseArtifact {
                 kind: ReleaseArtifactKind::Checksums,
-                file: checksums.file_name().unwrap().to_string_lossy().into_owned(),
+                file: checksums
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
                 sha256: df_test_release::sha256_file(&checksums)?,
                 signature_file: None,
             },
