@@ -64,13 +64,13 @@ if ($previousVersion -and $previousVersion -ne "unknown") {
 
 if (Test-Path -LiteralPath $binaryPath) {
     Stop-Service -Name "DragonForgeTestWorker" -Force -ErrorAction SilentlyContinue
-    if (-not $previousVersion) {
-        $previousVersion = "unknown"
-        $previousHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $binaryPath).Hash.ToLowerInvariant()
-    }
-    Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $backupRoot "dragonforge-test-lab-$previousVersion.exe") -Force
-    if (Test-Path -LiteralPath $stateFile) {
-        Copy-Item -LiteralPath $stateFile -Destination (Join-Path $backupRoot "install-state-$previousVersion.json") -Force
+    if ($previousVersion) {
+        Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $backupRoot "dragonforge-test-lab-$previousVersion.exe") -Force
+        if (Test-Path -LiteralPath $stateFile) {
+            Copy-Item -LiteralPath $stateFile -Destination (Join-Path $backupRoot "install-state-$previousVersion.json") -Force
+        }
+    } else {
+        Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $backupRoot "dragonforge-test-lab-pre-managed.exe") -Force
     }
 }
 
