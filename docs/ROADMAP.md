@@ -63,7 +63,7 @@ First-class Linux native process containment with dedicated process groups, RLIM
 ## Phase 20 — ARM / Raspberry Pi — Needs Testing
 ARM32/AArch64 and Raspberry Pi discovery, typed GPIO/I²C/SPI/UART/thermal capability inventory, bounded read-only hardware-in-the-loop probes, automatic distributed-node feature advertisement, ARM doctor/fixture tooling, and a physical ARM validation script. Implementation is complete, but real Raspberry Pi/physical ARM qualification remains pending until scripts/test-phase20-arm.sh is run on native hardware.
 
-## Phase 21 — Installer / Upgrades — Implementation Complete
+## Phase 21 — Installer / Upgrades — Windows Qualified / Linux Pending
 Managed Windows/Linux packaging and installation, stable configuration/state/log/backup layouts, SHA-256 release manifests, installer configuration migration, existing controller database migration compatibility, strictly newer-version upgrades, immediate binary rollback metadata, native worker service installation hooks, and state-preserving uninstall with explicit purge.
 
 ## Phase 22 — Release Engineering
