@@ -60,8 +60,8 @@ Authenticated loopback-only, read-only operator web dashboard for bounded views 
 ## Phase 19 — Linux Qualification — Complete
 First-class Linux native process containment with dedicated process groups, RLIMIT_AS/RLIMIT_NPROC ceilings, whole-tree cancellation, Linux worker doctor/fixture, Docker/Podman image tooling, systemd/mTLS/service/recovery qualification, advanced Rust lanes, and native/container GitHub-aware validation. Full Ubuntu Server x86_64 platform qualification passed on 2026-09-23.
 
-## Phase 20 — ARM / Raspberry Pi
-Qualified ARM/Raspberry Pi worker support with typed hardware capabilities and safe hardware-in-the-loop operations.
+## Phase 20 — ARM / Raspberry Pi — Implementation Complete
+ARM32/AArch64 and Raspberry Pi discovery, typed GPIO/I²C/SPI/UART/thermal capability inventory, bounded read-only hardware-in-the-loop probes, automatic distributed-node feature advertisement, ARM doctor/fixture tooling, and a physical ARM validation script. Real Raspberry Pi/physical ARM qualification remains pending until scripts/test-phase20-arm.sh is run on native hardware.
 
 ## Phase 21 — Installer / Upgrades
 Installable controller/worker packages, documented configuration/state/log layout, database/config migrations, upgrades, rollback, and uninstall support.
