@@ -152,6 +152,8 @@ pub fn sandbox_project_command(
                 mount,
                 "-w".into(),
                 "/workspace".into(),
+                "--env".into(),
+                "CARGO_TARGET_DIR=/tmp/dragonforge-target".into(),
                 DEFAULT_CONTAINER_IMAGE.into(),
                 "cargo".into(),
             ];
