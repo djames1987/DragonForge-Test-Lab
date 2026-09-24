@@ -274,8 +274,7 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
             let bytes = fs::read(&path)?;
             let text = String::from_utf8_lossy(&bytes);
             if path.extension().and_then(|v| v.to_str()) != Some("md")
-                && (text.contains("-----BEGIN PRIVATE KEY-----")
-                    || text.contains("-----BEGIN OPENSSH PRIVATE KEY-----"))
+                && contains_complete_private_key_block(&text)
             {
                 findings.push(SecurityFinding {
                     id: "SR-SECRET-001".into(),
@@ -288,6 +287,28 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
         }
     }
     Ok((files, total, findings))
+}
+
+fn contains_complete_private_key_block(text: &str) -> bool {
+    const PRIVATE_KEY_MARKERS: &[(&str, &str)] = &[
+        ("-----BEGIN PRIVATE KEY-----", "-----END PRIVATE KEY-----"),
+        (
+            "-----BEGIN OPENSSH PRIVATE KEY-----",
+            "-----END OPENSSH PRIVATE KEY-----",
+        ),
+        (
+            "-----BEGIN RSA PRIVATE KEY-----",
+            "-----END RSA PRIVATE KEY-----",
+        ),
+        (
+            "-----BEGIN EC PRIVATE KEY-----",
+            "-----END EC PRIVATE KEY-----",
+        ),
+    ];
+
+    PRIVATE_KEY_MARKERS
+        .iter()
+        .any(|(begin, end)| text.contains(begin) && text.contains(end))
 }
 
 fn is_review_text_file(path: &Path) -> bool {
@@ -363,6 +384,21 @@ mod tests {
         let report = run_fixture().unwrap();
         assert!(report.passed(), "{report:#?}");
         assert_eq!(report.checks_run, RULES.len());
+    }
+
+    #[test]
+    fn detector_source_markers_do_not_self_match() {
+        let source_like = r#"
+            text.contains("-----BEGIN PRIVATE KEY-----");
+            text.contains("-----BEGIN OPENSSH PRIVATE KEY-----");
+        "#;
+        assert!(!contains_complete_private_key_block(source_like));
+    }
+
+    #[test]
+    fn complete_private_key_block_is_detected() {
+        let pem = "-----BEGIN PRIVATE KEY-----\nZmFrZQ==\n-----END PRIVATE KEY-----";
+        assert!(contains_complete_private_key_block(pem));
     }
 
     #[test]
