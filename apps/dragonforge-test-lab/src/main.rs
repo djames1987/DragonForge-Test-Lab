@@ -1,6 +1,10 @@
 use df_test_agent::Agent;
 use df_test_arm::{run_phase20_fixture, ArmCapability, ArmInspector, HardwarePlan, HardwareProbe};
 use df_test_chaos::{run_chaos_fixture, DEFAULT_STRESS_JOBS, MAX_STRESS_JOBS};
+use df_test_dogfood::{
+    load_campaign, load_profile, DogfoodCampaignReport, DogfoodProfile, DogfoodRunRecord,
+    DOGFOOD_SCHEMA_VERSION, MAX_PROFILE_BYTES,
+};
 use df_test_controller::{DurableController, DurableJobState, SCHEMA_VERSION};
 use df_test_dashboard::{
     run_dashboard_fixture, Dashboard, DashboardConfig, DEFAULT_DASHBOARD_BIND,
@@ -94,6 +98,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "security-review" => security_review(&args[2..]),
         "chaos-doctor" => chaos_doctor(),
         "chaos-fixture" => chaos_fixture(&args[2..]),
+        "dogfood-doctor" => dogfood_doctor(),
+        "dogfood-fixture" => dogfood_fixture(),
+        "dogfood-profile-validate" => dogfood_profile_validate(&args[2..]),
+        "dogfood-profile-compile" => dogfood_profile_compile(&args[2..]),
+        "dogfood-campaign-validate" => dogfood_campaign_validate(&args[2..]),
+        "dogfood-campaign-run" => dogfood_campaign_run(&args[2..]),
+        "dogfood-run" => dogfood_run(&args[2..]),
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
         "identity-fixture" => identity_fixture(),
@@ -165,7 +176,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=24");
+    println!("phase=25");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -893,6 +904,201 @@ fn chaos_fixture(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         return Err("one or more Phase 24 reliability / chaos scenarios failed".into());
     }
     println!("status=chaos_fixture_passed");
+    Ok(())
+}
+
+fn dogfood_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    println!("DragonForge Test Lab dogfooding doctor");
+    println!("dogfood_schema={DOGFOOD_SCHEMA_VERSION}");
+    println!("immutable_revisions=true");
+    println!("typed_actions_only=true");
+    println!("self_host_depth=1");
+    println!("auto_merge=false");
+    println!("generic_shell=false");
+    println!("status=dogfood_ready");
+    Ok(())
+}
+
+fn read_dogfood_bytes(path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let metadata = std::fs::metadata(path)?;
+    if metadata.len() == 0 || metadata.len() > MAX_PROFILE_BYTES as u64 {
+        return Err("dogfood input must be between 1 byte and 1 MiB".into());
+    }
+    Ok(std::fs::read(path)?)
+}
+
+fn read_dogfood_profile(path: &str) -> Result<DogfoodProfile, Box<dyn std::error::Error>> {
+    Ok(load_profile(&read_dogfood_bytes(path)?)?)
+}
+
+fn dogfood_profile_validate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--profile").ok_or("missing --profile <dogfood-profile.json>")?;
+    let profile = read_dogfood_profile(&path)?;
+    println!("{}", serde_json::to_string_pretty(&profile)?);
+    println!("status=dogfood_profile_valid");
+    Ok(())
+}
+
+fn dogfood_profile_compile(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--profile").ok_or("missing --profile <dogfood-profile.json>")?;
+    let sha = value_after(args, "--sha").ok_or("missing --sha <immutable-commit>")?;
+    let depth = value_after(args, "--depth")
+        .unwrap_or_else(|| "0".into())
+        .parse::<u8>()?;
+    let profile = read_dogfood_profile(&path)?;
+    let job = profile.compile_job(&sha, depth)?;
+    println!("{}", serde_json::to_string_pretty(&job)?);
+    println!("status=dogfood_profile_compiled");
+    Ok(())
+}
+
+fn dogfood_campaign_validate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--campaign").ok_or("missing --campaign <campaign.json>")?;
+    let bytes = read_dogfood_bytes(&path)?;
+    let campaign = load_campaign(&bytes)?;
+    println!("{}", serde_json::to_string_pretty(&campaign)?);
+    println!("enabled_profiles={}", campaign.enabled_profiles().count());
+    println!("status=dogfood_campaign_valid");
+    Ok(())
+}
+
+fn dogfood_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let self_hosted: DogfoodProfile = serde_json::from_value(serde_json::json!({
+        "schema_version": 1,
+        "name": "dragonforge-test-lab",
+        "repository": "https://github.com/djames1987/DragonForge-Test-Lab.git",
+        "default_revision": "main",
+        "validation_profile": "rust_standard",
+        "enabled": true,
+        "self_hosted": true,
+        "max_depth": 1,
+        "manual_validation": ["physical ARM qualification remains manual"],
+        "limits": {
+            "timeout_seconds": 1800,
+            "max_memory_mib": 8192,
+            "max_disk_mib": 16384,
+            "max_processes": 128
+        }
+    }))?;
+    self_hosted.validate()?;
+    let sha = "a".repeat(40);
+    let job = self_hosted.compile_job(&sha, 1)?;
+    if job.repository.revision != sha
+        || !matches!(job.actions.first(), Some(TestAction::Checkout))
+        || self_hosted.compile_job(&"b".repeat(40), 0).is_ok()
+        || self_hosted.compile_job(&"c".repeat(40), 2).is_ok()
+    {
+        return Err("Phase 25 dogfood recursion/immutable-SHA fixture failed".into());
+    }
+    println!("immutable_sha_compilation=passed");
+    println!("self_host_recursion_guard=passed");
+    println!("typed_action_surface=passed");
+    println!("status=dogfood_fixture_passed");
+    Ok(())
+}
+
+fn dogfood_campaign_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--campaign").ok_or("missing --campaign <campaign.json>")?;
+    let bytes = read_dogfood_bytes(&path)?;
+    let campaign = load_campaign(&bytes)?;
+    let github = GhGitHubClient::default();
+    github.doctor()?;
+    let mut runs = Vec::new();
+
+    for profile in campaign.enabled_profiles() {
+        let repository = GitHubRepository::parse_https(&profile.repository)?;
+        let immutable_sha = github.resolve_commit(&repository, &profile.default_revision)?;
+        let depth = if profile.self_hosted { 1 } else { 0 };
+        let job = profile.compile_job(&immutable_sha, depth)?;
+        println!(
+            "dogfood_campaign_profile={} repository={} resolved_commit={}",
+            profile.name,
+            repository.slug(),
+            immutable_sha
+        );
+
+        let report = execute_typed_job(
+            job,
+            lab_root(args).join(&profile.name),
+            args.iter().any(|arg| arg == "--retain-workspace"),
+            sandbox_mode(args)?,
+            value_after(args, "--worker-user"),
+        )?;
+        let status = job_status_name(report.status).to_owned();
+        runs.push(DogfoodRunRecord {
+            profile: profile.name.clone(),
+            repository: profile.repository.clone(),
+            immutable_sha,
+            status,
+            summary: report.summary.clone(),
+            artifact_directory: report.artifact_directory.clone(),
+        });
+        if report.status != JobStatus::Passed {
+            break;
+        }
+    }
+
+    let report = DogfoodCampaignReport {
+        schema_version: DOGFOOD_SCHEMA_VERSION,
+        campaign: campaign.name,
+        runs,
+    };
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !report.passed() {
+        std::process::exit(2);
+    }
+    println!("status=dogfood_campaign_passed");
+    Ok(())
+}
+
+fn job_status_name(status: JobStatus) -> &'static str {
+    match status {
+        JobStatus::Queued => "queued",
+        JobStatus::Assigned => "assigned",
+        JobStatus::Running => "running",
+        JobStatus::Passed => "passed",
+        JobStatus::Failed => "failed",
+        JobStatus::Rejected => "rejected",
+        JobStatus::Cancelled => "cancelled",
+    }
+}
+
+fn dogfood_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--profile").ok_or("missing --profile <dogfood-profile.json>")?;
+    let profile = read_dogfood_profile(&path)?;
+    if !profile.enabled {
+        return Err("dogfood profile is disabled".into());
+    }
+    let requested_revision =
+        value_after(args, "--revision").unwrap_or_else(|| profile.default_revision.clone());
+    let depth = value_after(args, "--depth")
+        .unwrap_or_else(|| if profile.self_hosted { "1".into() } else { "0".into() })
+        .parse::<u8>()?;
+
+    let repository = GitHubRepository::parse_https(&profile.repository)?;
+    let github = GhGitHubClient::default();
+    github.doctor()?;
+    let immutable_sha = github.resolve_commit(&repository, &requested_revision)?;
+    let job = profile.compile_job(&immutable_sha, depth)?;
+
+    println!("dogfood_profile={}", profile.name);
+    println!("github_repository={}", repository.slug());
+    println!("requested_revision={requested_revision}");
+    println!("resolved_commit={immutable_sha}");
+    println!("dogfood_depth={depth}");
+
+    let report = execute_typed_job(
+        job,
+        lab_root(args),
+        args.iter().any(|arg| arg == "--retain-workspace"),
+        sandbox_mode(args)?,
+        value_after(args, "--worker-user"),
+    )?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if report.status != JobStatus::Passed {
+        std::process::exit(2);
+    }
+    println!("status=dogfood_run_passed");
     Ok(())
 }
 
@@ -2506,30 +2712,6 @@ fn execute_local_job(
     if !repo.starts_with("https://") {
         return Err("--repo must be an HTTPS repository URL".into());
     }
-
-    verify_container_image(sandbox_mode)?;
-
-    let capabilities: BTreeSet<Capability> = [
-        Capability::CheckoutRepository,
-        Capability::CargoBuild,
-        Capability::CargoTest,
-        Capability::CargoClippy,
-        Capability::CargoFmtCheck,
-        Capability::ReadArtifacts,
-    ]
-    .into_iter()
-    .collect();
-
-    let policy = ExecutionPolicy::new(vec![repo.clone()], capabilities.clone());
-    let registration = WorkerRegistration {
-        worker_id: format!("local-{}-{}", std::env::consts::OS, std::env::consts::ARCH),
-        protocol_version: PROTOCOL_VERSION,
-        os: std::env::consts::OS.into(),
-        arch: std::env::consts::ARCH.into(),
-        capabilities,
-    };
-
-    let agent = Agent::new(registration, policy)?;
     let job = JobRequest::new(
         RepositorySpec {
             url: repo,
@@ -2544,7 +2726,49 @@ fn execute_local_job(
             TestAction::CargoTest { all_features: true },
         ],
     );
+    execute_typed_job(
+        job,
+        lab_root,
+        retain_workspace,
+        sandbox_mode,
+        expected_worker_user,
+    )
+}
 
+fn execute_typed_job(
+    job: JobRequest,
+    lab_root: PathBuf,
+    retain_workspace: bool,
+    sandbox_mode: SandboxMode,
+    expected_worker_user: Option<String>,
+) -> Result<ExecutionReport, Box<dyn std::error::Error>> {
+    if !job.repository.url.starts_with("https://") {
+        return Err("job repository must be an HTTPS URL".into());
+    }
+
+    verify_container_image(sandbox_mode)?;
+
+    let capabilities: BTreeSet<Capability> = [
+        Capability::CheckoutRepository,
+        Capability::CargoBuild,
+        Capability::CargoTest,
+        Capability::CargoClippy,
+        Capability::CargoFmtCheck,
+        Capability::ReadArtifacts,
+    ]
+    .into_iter()
+    .collect();
+
+    let policy = ExecutionPolicy::new(vec![job.repository.url.clone()], capabilities.clone());
+    let registration = WorkerRegistration {
+        worker_id: format!("local-{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+        protocol_version: PROTOCOL_VERSION,
+        os: std::env::consts::OS.into(),
+        arch: std::env::consts::ARCH.into(),
+        capabilities,
+    };
+
+    let agent = Agent::new(registration, policy)?;
     agent.validate_job(&job)?;
 
     let mut config = ExecutorConfig::under(lab_root);
@@ -2810,6 +3034,13 @@ fn print_help() {
     println!("  dragonforge-test-lab release-bundle-verify --manifest <release-bundle.json> --root <release-directory>");
     println!("  dragonforge-test-lab security-doctor");
     println!("  dragonforge-test-lab security-fixture");
+    println!("  dragonforge-test-lab dogfood-doctor");
+    println!("  dragonforge-test-lab dogfood-fixture");
+    println!("  dragonforge-test-lab dogfood-profile-validate --profile <profile.json>");
+    println!("  dragonforge-test-lab dogfood-profile-compile --profile <profile.json> --sha <commit> [--depth 0|1]");
+    println!("  dragonforge-test-lab dogfood-campaign-validate --campaign <campaign.json>");
+    println!("  dragonforge-test-lab dogfood-campaign-run --campaign <campaign.json> [--lab-root <path>] [--retain-workspace] [--sandbox native|docker|podman] [--worker-user <name>]");
+    println!("  dragonforge-test-lab dogfood-run --profile <profile.json> [--revision <ref>] [--depth 0|1] [--lab-root <path>] [--retain-workspace] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!(
         "  dragonforge-test-lab security-review [--root <repository-root>] [--output <report.json>]"
     );

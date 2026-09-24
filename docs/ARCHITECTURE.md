@@ -21,6 +21,7 @@ DragonForge Test Lab is a local-first test orchestration platform designed to gr
 - df-test-observability: structured log validation/redaction and JSONL rotation, metrics registry/snapshots, SHA-256 artifact cataloging, retention pruning, and audit digest construction.
 - df-test-lifecycle: typed failure classes, bounded retry policy, exponential backoff calculation, and lifecycle decisions without process execution.
 - df-test-plans: versioned declarative plans, DAG validation, typed profiles/actions, readiness evaluation, target predicates, and compilation into typed jobs.
+- df-test-dogfood: bounded DragonForge repository profiles/campaigns, immutable-SHA compilation, recursion controls, and consolidated dogfood reporting.
 - dragonforge-test-lab: operator CLI, doctor checks, sandbox preflight, deep-Rust tool readiness, local execution, and GitHub-aware execution entry point.
 
 ## Trust model
@@ -445,3 +446,24 @@ Release bundles contain platform archives plus metadata artifacts such as Cyclon
 The GitHub release workflow separates validation, auditing, platform builds, and final bundle assembly. Stable Windows builds require Authenticode signing before archive creation. Stable package archives require detached minisign signatures before bundle verification/publication. Signing keys remain external secrets and are not persisted by DragonForge.
 
 - df-test-chaos: deterministic bounded controller/worker/distributed/storage/certificate fault scenarios and high-volume reliability stress verification.
+
+## Phase 25 dogfood flow
+
+    checked-in DogfoodProfile
+          |
+          +--> schema / GitHub URL / bounds validation
+          +--> requested revision
+          |
+          v
+    df-test-github resolves immutable SHA
+          |
+          v
+    typed JobRequest only
+          |
+          v
+    Agent -> ExecutionPolicy -> LocalExecutor -> sandbox
+          |
+          v
+    ExecutionReport / campaign report
+
+Self-hosted Test Lab validation uses exactly one dogfood orchestration layer. External profiles use depth zero. A dogfood run never introduces a second command execution mechanism and never automatically invokes another dogfood campaign from inside a checked-out job.

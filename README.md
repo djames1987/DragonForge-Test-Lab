@@ -6,7 +6,7 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 24 — Reliability / Chaos — Complete / Windows Qualified
+Phase 25 — Dogfooding — Implementation Complete / Qualification Pending
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
@@ -42,6 +42,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-release/        release channels, bundle manifests, signatures, and verification
       df-test-security-review/ bounded adversarial invariant and secret-material review
       df-test-chaos/           deterministic reliability and chaos scenarios
+      df-test-dogfood/         immutable-SHA dogfood profiles and campaigns
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -71,6 +72,8 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-22.md
       PHASE-23.md
       PHASE-24.md
+      PHASE-25.md
+      DOGFOOD-MANUAL-VALIDATION.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -122,6 +125,34 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       assemble-release.py
       test-phase22.ps1
       test-phase22-linux.sh
+      test-phase25.ps1
+      test-phase25-linux.sh
+
+## Phase 25 Dogfooding
+
+Validate the checked-in campaign:
+
+    cargo run -p dragonforge-test-lab -- dogfood-campaign-validate --campaign .\dogfood\phase25-campaign.json
+
+Dogfood Test Lab against an immutable revision:
+
+    cargo run -p dragonforge-test-lab -- dogfood-run --profile .\dogfood\dragonforge-test-lab.json --revision <revision>
+
+Run the full enrolled DragonForge campaign:
+
+    cargo run -p dragonforge-test-lab -- dogfood-campaign-run --campaign .\dogfood\phase25-campaign.json
+
+Windows qualification:
+
+    .\scripts\test-phase25.ps1
+
+Qualification with all enrolled external repositories:
+
+    .\scripts\test-phase25.ps1 -RunExternalCampaign
+
+Phase 25 resolves requested GitHub revisions to immutable commit SHAs before execution and compiles dogfood profiles only into existing typed TestAction values. Self-hosting is bounded to one orchestration layer; external profiles cannot recurse. Manual-only validation boundaries remain documented rather than being silently automated.
+
+See docs/PHASE-25.md and docs/DOGFOOD-MANUAL-VALIDATION.md.
 
 ## Future plans
 

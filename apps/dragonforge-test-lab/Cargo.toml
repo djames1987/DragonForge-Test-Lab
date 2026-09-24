@@ -9,6 +9,7 @@ rust-version.workspace = true
 df-test-release = { path = "../../crates/df-test-release" }
 df-test-security-review = { path = "../../crates/df-test-security-review" }
 df-test-chaos = { path = "../../crates/df-test-chaos" }
+df-test-dogfood = { path = "../../crates/df-test-dogfood" }
 df-test-install = { path = "../../crates/df-test-install" }
 df-test-arm = { path = "../../crates/df-test-arm" }
 df-test-agent = { path = "../../crates/df-test-agent" }
