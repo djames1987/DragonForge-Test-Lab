@@ -38,6 +38,7 @@ use df_test_release::{
     ReleaseArtifact, ReleaseArtifactKind, ReleaseBundleManifest, ReleaseChannel, ReleaseVersion,
     RELEASE_BUNDLE_SCHEMA_VERSION,
 };
+use df_test_security_review::{run_fixture as run_security_fixture, run_security_review};
 use df_test_sandbox::{
     current_worker_identity, runtime_version, verify_container_image, verify_worker_identity,
     ProcessTreeGuard, SandboxLimits, SandboxMode,
@@ -87,6 +88,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "release-fixture" => release_fixture(),
         "release-tag" => release_tag(&args[2..]),
         "release-bundle-verify" => release_bundle_verify(&args[2..]),
+        "security-doctor" => security_doctor(),
+        "security-fixture" => security_fixture(),
+        "security-review" => security_review(&args[2..]),
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
         "identity-fixture" => identity_fixture(),
@@ -158,7 +162,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=22");
+    println!("phase=23");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -803,6 +807,52 @@ fn release_fixture() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", serde_json::to_string_pretty(&manifest)?);
     println!("status=release_fixture_passed");
     let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+fn security_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    println!("DragonForge Test Lab security review doctor");
+    println!("review_schema=1");
+    println!("review_scope=protocol,policy,workers,paths,artifacts,mcp,certificates,transport,dos,secrets,logs,persistence,privileges,installers,releases");
+    println!("blocking_severity=high,critical");
+    println!("generic_shell=false");
+    println!("arbitrary_file_read=false");
+    println!("status=security_review_ready");
+    Ok(())
+}
+
+fn security_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let report = run_security_fixture()?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !report.passed() {
+        return Err("Phase 23 security fixture reported a blocking finding".into());
+    }
+    println!("status=security_fixture_passed");
+    Ok(())
+}
+
+fn security_review(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let root = value_after(args, "--root")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    let report = run_security_review(&root)?;
+    let json = serde_json::to_string_pretty(&report)?;
+    if let Some(output) = value_after(args, "--output") {
+        let output = PathBuf::from(output);
+        if let Some(parent) = output.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+        std::fs::write(&output, &json)?;
+        println!("report={}", output.display());
+    }
+    println!("{json}");
+    println!("blocking_findings={}", report.blocking_findings());
+    if !report.passed() {
+        return Err("security review failed closed because one or more required invariants were missing or blocking findings were detected".into());
+    }
+    println!("status=security_review_passed");
     Ok(())
 }
 
@@ -2718,6 +2768,9 @@ fn print_help() {
     println!("  dragonforge-test-lab release-fixture");
     println!("  dragonforge-test-lab release-tag --channel dev|beta|stable --version <version>");
     println!("  dragonforge-test-lab release-bundle-verify --manifest <release-bundle.json> --root <release-directory>");
+    println!("  dragonforge-test-lab security-doctor");
+    println!("  dragonforge-test-lab security-fixture");
+    println!("  dragonforge-test-lab security-review [--root <repository-root>] [--output <report.json>]");
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");
