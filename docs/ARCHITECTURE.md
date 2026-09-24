@@ -443,3 +443,5 @@ Controller SQLite schema migration remains owned by `DurableController`. Phase 2
 Release bundles contain platform archives plus metadata artifacts such as CycloneDX SBOM, dependency/license audit report, release notes, checksum index, and `release-bundle.json`. The bundle verifier reads files only by validated leaf names under an operator-selected release root.
 
 The GitHub release workflow separates validation, auditing, platform builds, and final bundle assembly. Stable Windows builds require Authenticode signing before archive creation. Stable package archives require detached minisign signatures before bundle verification/publication. Signing keys remain external secrets and are not persisted by DragonForge.
+
+- df-test-chaos: deterministic bounded controller/worker/distributed/storage/certificate fault scenarios and high-volume reliability stress verification.
