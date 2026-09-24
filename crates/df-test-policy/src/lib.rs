@@ -35,7 +35,7 @@ impl ExecutionPolicy {
         if !self
             .allowed_repository_prefixes
             .iter()
-            .any(|prefix| job.repository.url.starts_with(prefix))
+            .any(|prefix| repository_allowed(&job.repository.url, prefix))
         {
             return Err(PolicyError::RepositoryNotAllowed);
         }
@@ -55,6 +55,16 @@ impl ExecutionPolicy {
         }
 
         Ok(())
+    }
+}
+
+fn repository_allowed(repository: &str, allowed: &str) -> bool {
+    let repository = repository.strip_suffix(".git").unwrap_or(repository);
+    let allowed = allowed.strip_suffix(".git").unwrap_or(allowed);
+    if allowed.ends_with('/') {
+        repository.starts_with(allowed)
+    } else {
+        repository == allowed
     }
 }
 
@@ -99,6 +109,38 @@ mod tests {
             ],
         );
         assert_eq!(policy().authorize(&job), Ok(()));
+    }
+
+    #[test]
+    fn rejects_lookalike_repository_prefix() {
+        let policy = ExecutionPolicy::new(
+            vec!["https://github.com/djames1987".into()],
+            [Capability::CheckoutRepository].into_iter().collect(),
+        );
+        let job = JobRequest::new(
+            RepositorySpec {
+                url: "https://github.com/djames1987evil/project.git".into(),
+                revision: "main".into(),
+            },
+            vec![TestAction::Checkout],
+        );
+        assert_eq!(policy.authorize(&job), Err(PolicyError::RepositoryNotAllowed));
+    }
+
+    #[test]
+    fn exact_repository_allowlist_accepts_optional_git_suffix() {
+        let policy = ExecutionPolicy::new(
+            vec!["https://github.com/djames1987/project".into()],
+            [Capability::CheckoutRepository].into_iter().collect(),
+        );
+        let job = JobRequest::new(
+            RepositorySpec {
+                url: "https://github.com/djames1987/project.git".into(),
+                revision: "main".into(),
+            },
+            vec![TestAction::Checkout],
+        );
+        assert_eq!(policy.authorize(&job), Ok(()));
     }
 
     #[test]
