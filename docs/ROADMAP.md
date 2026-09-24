@@ -69,8 +69,8 @@ Managed Windows/Linux packaging and installation, stable configuration/state/log
 ## Phase 22 — Release Engineering — Complete / Signing Mechanics Qualified
 Versioned dev/beta/stable release channels, release bundle schema and verification, SHA-256 checksum indexes, deterministic CycloneDX 1.6 SBOM generation, cargo-audit and cargo-deny dependency/license gates, Windows Authenticode signing, detached minisign package signatures, generated release notes, GitHub release automation, and Windows/Linux qualification tooling. Production signing and end-to-end platform qualification remain pending until Phase 22 validation is run with the required release tools/signing identities.
 
-## Phase 23 — Security Review
-Dedicated adversarial review of protocol, workers, paths, artifacts, MCP, certificates, transport, DoS bounds, secrets, logs, persistence, privileges, and installers.
+## Phase 23 — Security Review — Implementation Complete / Qualification Pending
+Dedicated adversarial review of protocol, workers, paths, artifacts, MCP, certificates, transport, DoS bounds, secrets, logs, persistence, privileges, installers, and releases. Adds a bounded machine-readable review engine, secret/key-material detection, Windows/Linux qualification scripts, and fixes for repository allowlist identity ambiguity and unauthenticated MCP parser-detail disclosure.
 
 ## Phase 24 — Reliability / Chaos
 Automated controller/worker/network/disk/database/certificate fault scenarios, long-running stress tests, and verification against lost state or uncontrolled duplicate execution.

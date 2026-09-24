@@ -82,6 +82,11 @@ DragonForge Test Lab treats every remotely requested job as untrusted input.
 76. Plan artifact declarations are typed classes rather than caller-controlled filesystem paths/globs.
 77. Stored plans are validated before schema-v4 persistence, and create/update operations are hash-chain audited.
 78. Target OS/node-label predicates restrict scheduling candidates; they do not authorize a worker or bypass Agent/Policy/Executor checks.
+79. Phase 23 repository allowlists treat trailing-slash values as explicit path/owner prefixes and non-trailing-slash values as exact repository identities after optional terminal .git normalization; textual look-alike repositories are rejected.
+80. Phase 23 MCP low-level HTTP failures do not disclose internal parser/implementation detail before authentication.
+81. Phase 23 security review evidence reads are canonical-root-contained, per-file/aggregate bounded, and do not follow symlinks.
+82. Phase 23 repository scanning treats committed private-key PEM material and secret-like key files (.pfx, .p12, .key, id_rsa, id_ed25519) as blocking findings.
+83. The security-review engine is evidence and regression tooling only; it does not grant network, shell, filesystem-browsing, or other runtime authority.
 
 ## Local execution boundary
 
