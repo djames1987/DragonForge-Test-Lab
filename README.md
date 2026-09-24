@@ -6,7 +6,7 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 23 — Security Review — Complete / Windows Qualified
+Phase 24 — Reliability / Chaos — Implementation Complete / Qualification Pending
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
@@ -41,6 +41,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-plans/          versioned declarative plan validation and compilation
       df-test-release/        release channels, bundle manifests, signatures, and verification
       df-test-security-review/ bounded adversarial invariant and secret-material review
+      df-test-chaos/           deterministic reliability and chaos scenarios
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -69,6 +70,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-21.md
       PHASE-22.md
       PHASE-23.md
+      PHASE-24.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -601,6 +603,32 @@ Linux qualification:
 Phase 23 adds a bounded security review engine, committed-secret/key detection, a formal adversarial review matrix, dependency/advisory/license/source gates, and regressions for the trust boundaries most likely to be security-sensitive. The review also hardened core repository allowlist identity matching and removed unauthenticated MCP parser-detail disclosure.
 
 See docs/PHASE-23.md for the review scope, findings, fixes, limitations, and validation procedure.
+
+## Phase 24 Reliability / Chaos
+
+Readiness:
+
+    cargo run -p dragonforge-test-lab -- chaos-doctor
+
+Deterministic chaos fixture:
+
+    cargo run -p dragonforge-test-lab -- chaos-fixture
+
+Bounded stress example:
+
+    cargo run -p dragonforge-test-lab -- chaos-fixture --stress-jobs 1000
+
+Windows qualification:
+
+    .\scripts\test-phase24.ps1
+
+Linux qualification:
+
+    bash ./scripts/test-phase24-linux.sh
+
+Phase 24 validates controller restart recovery, duplicate-assignment prevention, stale distributed leases, replay rejection, worker restart/drain recovery, bounded reconnect backoff, corrupt-database fail-closed behavior, disk/write failure handling, certificate revocation, high-volume durable scheduling, and audit-chain integrity.
+
+See docs/PHASE-24.md for the scenarios, invariants, limits, and validation procedure.
 
 ## Security principle
 
