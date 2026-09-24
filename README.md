@@ -119,6 +119,10 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase22.ps1
       test-phase22-linux.sh
 
+## Future plans
+
+Long-term concepts that are intentionally **not part of the active numbered roadmap** are documented in [docs/FUTURE-PLANS.md](docs/FUTURE-PLANS.md). The current document covers the proposed AI-driven closed-loop validation and repair system, including automated VM provisioning, exact-SHA testing, structured result return, bounded artifact access, approval policies, and controlled agent retest loops.
+
 ## Complete setup guide
 
 For a start-from-scratch walkthrough covering the Windows host, Hyper-V, Windows and Ubuntu golden images, disposable VMs, guest tooling, Docker, validation, dashboard/MCP, installer/release workflows, backups, and troubleshooting, see [docs/SETUP-GUIDE.md](docs/SETUP-GUIDE.md).
