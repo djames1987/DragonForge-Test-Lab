@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "dragonforge-security-suite",
+  "repository": "https://github.com/djames1987/DragonForge-Security-Suite.git",
+  "default_revision": "main",
+  "validation_profile": "rust_standard",
+  "enabled": true,
+  "self_hosted": false,
+  "max_depth": 0,
+  "manual_validation": [
+    "privileged Windows security integration may still require explicit operator approval"
+  ],
+  "limits": {
+    "timeout_seconds": 1800,
+    "max_memory_mib": 8192,
+    "max_disk_mib": 16384,
+    "max_processes": 128
+  }
+}
