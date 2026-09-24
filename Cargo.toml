@@ -25,10 +25,11 @@ members = [
     "crates/df-test-arm",
     "crates/df-test-install",
     "crates/df-test-release",
+    "crates/df-test-security-review",
 ]
 
 [workspace.package]
-version = "0.23.0"
+version = "0.24.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.80"
