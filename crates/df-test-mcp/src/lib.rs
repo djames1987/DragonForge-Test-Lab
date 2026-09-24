@@ -227,7 +227,7 @@ impl McpGateway {
             let mut stream = incoming?;
             stream.set_read_timeout(Some(Duration::from_secs(15)))?;
             stream.set_write_timeout(Some(Duration::from_secs(15)))?;
-            if let Err(error) = self.handle_stream(&mut stream) {
+            if let Err(_error) = self.handle_stream(&mut stream) {
                 let _ = write_http_json(
                     &mut stream,
                     500,
