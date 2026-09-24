@@ -41,10 +41,32 @@ try {
     else { .\scripts\release-audit-windows.ps1 -Output (Join-Path $LogDirectory "phase23-dependency-audit-$stamp.txt") }
 
     Write-Host "[6/8] security-boundary regressions"
+
+    Write-Host "  [6.1] identity fixture"
     Invoke-Native cargo @("run","-p","dragonforge-test-lab","--","identity-fixture")
-    Invoke-Native cargo @("run","-p","dragonforge-test-lab","--","mcp-fixture")
+
+    Write-Host "  [6.2] MCP fixture"
+    $oldMcpToken = [Environment]::GetEnvironmentVariable("DRAGONFORGE_MCP_TOKEN", "Process")
+    $oldMcpAllowlist = [Environment]::GetEnvironmentVariable("DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES", "Process")
+    try {
+        $env:DRAGONFORGE_MCP_TOKEN = "phase23-fixture-token-0123456789abcdef"
+        $env:DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES = "https://github.com/djames1987/"
+        Invoke-Native cargo @("run","-p","dragonforge-test-lab","--","mcp-fixture")
+    }
+    finally {
+        if ($null -eq $oldMcpToken) { Remove-Item Env:\DRAGONFORGE_MCP_TOKEN -ErrorAction SilentlyContinue }
+        else { $env:DRAGONFORGE_MCP_TOKEN = $oldMcpToken }
+        if ($null -eq $oldMcpAllowlist) { Remove-Item Env:\DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES -ErrorAction SilentlyContinue }
+        else { $env:DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES = $oldMcpAllowlist }
+    }
+
+    Write-Host "  [6.3] observability fixture"
     Invoke-Native cargo @("run","-p","dragonforge-test-lab","--","observability-fixture")
+
+    Write-Host "  [6.4] installer fixture"
     Invoke-Native cargo @("run","-p","dragonforge-test-lab","--","install-fixture")
+
+    Write-Host "  [6.5] release fixture"
     Invoke-Native cargo @("run","-p","dragonforge-test-lab","--","release-fixture")
 
     Write-Host "[7/8] focused policy and security-review tests"

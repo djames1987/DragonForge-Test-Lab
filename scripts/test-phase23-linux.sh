@@ -41,10 +41,27 @@ else
 fi
 
 echo "[6/8] security-boundary regressions"
+echo "  [6.1] identity fixture"
 cargo run -p dragonforge-test-lab -- identity-fixture
+
+echo "  [6.2] MCP fixture"
+old_mcp_token="${DRAGONFORGE_MCP_TOKEN-}"
+old_mcp_allowlist="${DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES-}"
+had_mcp_token=0
+had_mcp_allowlist=0
+[[ -v DRAGONFORGE_MCP_TOKEN ]] && had_mcp_token=1
+[[ -v DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES ]] && had_mcp_allowlist=1
+export DRAGONFORGE_MCP_TOKEN="phase23-fixture-token-0123456789abcdef"
+export DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES="https://github.com/djames1987/"
 cargo run -p dragonforge-test-lab -- mcp-fixture
+if [[ $had_mcp_token -eq 1 ]]; then export DRAGONFORGE_MCP_TOKEN="$old_mcp_token"; else unset DRAGONFORGE_MCP_TOKEN; fi
+if [[ $had_mcp_allowlist -eq 1 ]]; then export DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES="$old_mcp_allowlist"; else unset DRAGONFORGE_MCP_ALLOWED_REPOSITORY_PREFIXES; fi
+
+echo "  [6.3] observability fixture"
 cargo run -p dragonforge-test-lab -- observability-fixture
+echo "  [6.4] installer fixture"
 cargo run -p dragonforge-test-lab -- install-fixture
+echo "  [6.5] release fixture"
 cargo run -p dragonforge-test-lab -- release-fixture
 
 echo "[7/8] focused policy and security-review tests"
