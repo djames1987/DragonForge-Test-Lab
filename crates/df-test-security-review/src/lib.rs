@@ -217,7 +217,26 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
                 stack.push(path);
                 continue;
             }
-            if !file_type.is_file() || !is_review_text_file(&path) {
+            if !file_type.is_file() {
+                continue;
+            }
+
+            let rel = path.strip_prefix(root).unwrap_or(&path).display().to_string();
+            let lower = rel.to_ascii_lowercase();
+            if [".pfx", ".p12", ".key", "id_rsa", "id_ed25519"]
+                .iter()
+                .any(|suffix| lower.ends_with(suffix))
+            {
+                findings.push(SecurityFinding {
+                    id: "SR-SECRET-002".into(),
+                    category: "secrets".into(),
+                    severity: FindingSeverity::Critical,
+                    summary: "secret-like key file appears to be committed".into(),
+                    evidence: rel.clone(),
+                });
+            }
+
+            if !is_review_text_file(&path) {
                 continue;
             }
 
@@ -236,8 +255,6 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
 
             let bytes = fs::read(&path)?;
             let text = String::from_utf8_lossy(&bytes);
-            let rel = path.strip_prefix(root).unwrap_or(&path).display().to_string();
-
             if path.extension().and_then(|v| v.to_str()) != Some("md")
                 && (text.contains("-----BEGIN PRIVATE KEY-----")
                     || text.contains("-----BEGIN OPENSSH PRIVATE KEY-----"))
@@ -251,19 +268,6 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
                 });
             }
 
-            let lower = rel.to_ascii_lowercase();
-            if [".pfx", ".p12", ".key", "id_rsa", "id_ed25519"]
-                .iter()
-                .any(|suffix| lower.ends_with(suffix))
-            {
-                findings.push(SecurityFinding {
-                    id: "SR-SECRET-002".into(),
-                    category: "secrets".into(),
-                    severity: FindingSeverity::Critical,
-                    summary: "secret-like key file appears to be committed".into(),
-                    evidence: rel,
-                });
-            }
         }
     }
     Ok((files, total, findings))
@@ -272,7 +276,7 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
 fn is_review_text_file(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|v| v.to_str()).unwrap_or_default(),
-        "rs" | "toml" | "ps1" | "sh" | "py" | "json" | "yml" | "yaml" | "md"
+        "rs" | "toml" | "ps1" | "sh" | "py" | "json" | "yml" | "yaml" | "md" | "pem"
     )
 }
 
