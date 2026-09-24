@@ -1,6 +1,6 @@
 # Phase 24 — Reliability / Chaos
 
-Status: implementation complete; local qualification pending.
+Status: complete; Windows host qualification passed on 2026-09-23.
 
 ## Goal
 
@@ -187,3 +187,30 @@ Phase 24 is implementation-complete when:
 - Phase 15/13/8/12/14 regressions remain part of qualification.
 
 Full qualification requires a successful platform validation log.
+
+## Qualification result
+
+Windows qualification completed successfully on 2026-09-23.
+
+The successful run passed:
+
+- environment checks;
+- cargo fmt;
+- strict workspace Clippy with `-D warnings`;
+- full workspace tests with all features;
+- chaos doctor;
+- the bounded full chaos fixture;
+- repeated recovery/stress cycles;
+- Phase 15 lifecycle regression;
+- Phase 13 worker-service regression;
+- Phase 8 distributed/network regression;
+- Phase 12 mTLS identity regression;
+- Phase 14 observability/audit regression;
+- focused `df-test-chaos` tests;
+- final general doctor reporting `phase=24`.
+
+Windows qualification log:
+
+    test-logs/phase24-reliability-chaos-20260923-224529.log
+
+Phase 24 is now complete on the Windows host. Linux qualification remains available as an additional cross-platform regression lane.

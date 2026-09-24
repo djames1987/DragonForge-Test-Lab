@@ -72,7 +72,7 @@ Versioned dev/beta/stable release channels, release bundle schema and verificati
 ## Phase 23 — Security Review — Complete / Windows Qualified
 Dedicated adversarial review of protocol, workers, paths, artifacts, MCP, certificates, transport, DoS bounds, secrets, logs, persistence, privileges, installers, and releases. Adds a bounded machine-readable review engine, secret/key-material detection, Windows/Linux qualification scripts, and fixes for repository allowlist identity ambiguity and unauthenticated MCP parser-detail disclosure.
 
-## Phase 24 — Reliability / Chaos — Implementation Complete / Qualification Pending
+## Phase 24 — Reliability / Chaos — Complete / Windows Qualified
 Deterministic controller restart, duplicate-assignment, stale-node/replay, worker restart/backoff, disk/database fail-closed, certificate revocation, and bounded high-volume stress scenarios with audit-chain verification. Windows/Linux qualification tooling is included.
 
 ## Phase 25 — Dogfooding
