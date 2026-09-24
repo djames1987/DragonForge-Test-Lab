@@ -325,9 +325,9 @@ fn contains_complete_private_key_block(text: &str) -> bool {
                     continue;
                 }
                 if candidate.len() > 4096
-                    || !candidate
-                        .bytes()
-                        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='))
+                    || !candidate.bytes().all(|byte| {
+                        byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'=')
+                    })
                 {
                     break;
                 }
