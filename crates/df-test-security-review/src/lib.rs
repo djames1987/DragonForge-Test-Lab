@@ -150,7 +150,9 @@ const RULES: &[EvidenceRule] = &[
     },
 ];
 
-pub fn run_security_review(root: impl AsRef<Path>) -> Result<SecurityReviewReport, SecurityReviewError> {
+pub fn run_security_review(
+    root: impl AsRef<Path>,
+) -> Result<SecurityReviewReport, SecurityReviewError> {
     let root = fs::canonicalize(root)?;
     if !root.is_dir() {
         return Err(SecurityReviewError::InvalidRoot);
@@ -211,7 +213,10 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
             if file_type.is_dir() {
                 let name = entry.file_name();
                 let name = name.to_string_lossy();
-                if matches!(name.as_ref(), ".git" | "target" | "test-logs" | "test-release") {
+                if matches!(
+                    name.as_ref(),
+                    ".git" | "target" | "test-logs" | "test-release"
+                ) {
                     continue;
                 }
                 stack.push(path);
@@ -221,7 +226,11 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
                 continue;
             }
 
-            let rel = path.strip_prefix(root).unwrap_or(&path).display().to_string();
+            let rel = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .display()
+                .to_string();
             let lower = rel.to_ascii_lowercase();
             if [".pfx", ".p12", ".key", "id_rsa", "id_ed25519"]
                 .iter()
@@ -267,7 +276,6 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
                     evidence: rel.clone(),
                 });
             }
-
         }
     }
     Ok((files, total, findings))
@@ -275,7 +283,9 @@ fn scan_repository(root: &Path) -> Result<(usize, u64, Vec<SecurityFinding>), Se
 
 fn is_review_text_file(path: &Path) -> bool {
     matches!(
-        path.extension().and_then(|v| v.to_str()).unwrap_or_default(),
+        path.extension()
+            .and_then(|v| v.to_str())
+            .unwrap_or_default(),
         "rs" | "toml" | "ps1" | "sh" | "py" | "json" | "yml" | "yaml" | "md" | "pem"
     )
 }
