@@ -24,12 +24,16 @@ impl DogfoodValidationProfile {
             Self::RustFast => vec![
                 TestAction::Checkout,
                 TestAction::CargoFmtCheck,
-                TestAction::CargoTest { all_features: false },
+                TestAction::CargoTest {
+                    all_features: false,
+                },
             ],
             Self::RustStandard => vec![
                 TestAction::Checkout,
                 TestAction::CargoFmtCheck,
-                TestAction::CargoClippy { deny_warnings: true },
+                TestAction::CargoClippy {
+                    deny_warnings: true,
+                },
                 TestAction::CargoTest { all_features: true },
             ],
             Self::RustRelease => vec![
@@ -132,7 +136,10 @@ impl DogfoodCampaign {
             if !names.insert(profile.name.clone()) {
                 return Err(DogfoodError::DuplicateProfileName);
             }
-            let normalized = profile.repository.trim_end_matches(".git").to_ascii_lowercase();
+            let normalized = profile
+                .repository
+                .trim_end_matches(".git")
+                .to_ascii_lowercase();
             if !repositories.insert(normalized) {
                 return Err(DogfoodError::DuplicateRepository);
             }
@@ -274,7 +281,11 @@ mod tests {
     fn profile(self_hosted: bool) -> DogfoodProfile {
         DogfoodProfile {
             schema_version: DOGFOOD_SCHEMA_VERSION,
-            name: if self_hosted { "test-lab".into() } else { "security-suite".into() },
+            name: if self_hosted {
+                "test-lab".into()
+            } else {
+                "security-suite".into()
+            },
             repository: if self_hosted {
                 "https://github.com/djames1987/DragonForge-Test-Lab.git".into()
             } else {
@@ -316,7 +327,9 @@ mod tests {
             vec![
                 TestAction::Checkout,
                 TestAction::CargoFmtCheck,
-                TestAction::CargoClippy { deny_warnings: true },
+                TestAction::CargoClippy {
+                    deny_warnings: true
+                },
                 TestAction::CargoTest { all_features: true }
             ]
         );
@@ -332,7 +345,10 @@ mod tests {
             name: "phase25".into(),
             profiles: vec![a, b],
         };
-        assert!(matches!(campaign.validate(), Err(DogfoodError::DuplicateRepository)));
+        assert!(matches!(
+            campaign.validate(),
+            Err(DogfoodError::DuplicateRepository)
+        ));
     }
 
     #[test]
