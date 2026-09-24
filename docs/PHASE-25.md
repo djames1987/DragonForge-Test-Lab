@@ -1,6 +1,6 @@
 # Phase 25 — Dogfooding
 
-Status: implementation complete; local qualification pending.
+Status: complete; Windows host qualification passed on 2026-09-24.
 
 ## Goal
 
@@ -199,3 +199,28 @@ Phase 25 is implementation-complete when:
 - Phase 24 reliability remains a qualification regression.
 
 Full Windows qualification requires a successful `test-phase25.ps1` log.
+
+
+## Qualification result
+
+Windows qualification completed successfully on 2026-09-24.
+
+The successful run passed:
+
+- environment and tool checks;
+- cargo fmt;
+- strict workspace Clippy with `-D warnings`;
+- complete workspace tests;
+- dogfood doctor and deterministic fixture;
+- validation of all checked-in dogfood profiles and the consolidated campaign;
+- immutable self-host profile compilation;
+- a real self-hosted DragonForge Test Lab dogfood run;
+- Phase 24 reliability / chaos regression;
+- focused `df-test-dogfood` tests;
+- final general doctor reporting `phase=25`.
+
+Qualification log:
+
+    test-logs/phase25-dogfooding-20260924-085253.log
+
+The external multi-repository campaign was intentionally skipped during the baseline Windows qualification. Its profiles and campaign definition were validated successfully, and full external execution remains available through `-RunExternalCampaign`.
