@@ -1024,7 +1024,7 @@ fn dogfood_campaign_run(args: &[String]) -> Result<(), Box<dyn std::error::Error
             immutable_sha,
             status,
             summary: report.summary.clone(),
-            artifacts: report.artifacts.len(),
+            artifact_directory: report.artifact_directory.clone(),
         });
         if report.status != JobStatus::Passed {
             break;
