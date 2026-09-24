@@ -75,7 +75,10 @@ impl DogfoodProfile {
             return Err(DogfoodError::TooManyManualItems);
         }
         for item in &self.manual_validation {
-            if item.is_empty() || item.len() > 256 || item.contains(['\r', '\n', '\0']) {
+            if item.is_empty()
+                || item.len() > 256
+                || item.chars().any(|ch| matches!(ch, '\r' | '\n' | '\0'))
+            {
                 return Err(DogfoodError::InvalidManualItem);
             }
         }
