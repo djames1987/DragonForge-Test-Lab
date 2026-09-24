@@ -999,7 +999,7 @@ fn dogfood_fixture() -> Result<(), Box<dyn std::error::Error>> {
 
 fn dogfood_campaign_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let path = value_after(args, "--campaign").ok_or("missing --campaign <campaign.json>")?;
-    let bytes = std::fs::read(path)?;
+    let bytes = read_dogfood_bytes(&path)?;
     let campaign = load_campaign(&bytes)?;
     let github = GhGitHubClient::default();
     github.doctor()?;
