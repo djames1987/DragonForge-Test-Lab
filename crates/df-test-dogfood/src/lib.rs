@@ -152,7 +152,7 @@ pub struct DogfoodRunRecord {
     pub immutable_sha: String,
     pub status: String,
     pub summary: String,
-    pub artifacts: usize,
+    pub artifact_directory: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
