@@ -42,7 +42,12 @@ impl SecurityReviewReport {
     pub fn blocking_findings(&self) -> usize {
         self.findings
             .iter()
-            .filter(|f| matches!(f.severity, FindingSeverity::High | FindingSeverity::Critical))
+            .filter(|f| {
+                matches!(
+                    f.severity,
+                    FindingSeverity::High | FindingSeverity::Critical
+                )
+            })
             .count()
     }
 
@@ -64,7 +69,11 @@ const RULES: &[EvidenceRule] = &[
         id: "SR-PROTOCOL-001",
         category: "protocol",
         path: "crates/df-test-protocol/src/lib.rs",
-        required: &["pub enum TestAction", "ResourceLimits", "required_capabilities"],
+        required: &[
+            "pub enum TestAction",
+            "ResourceLimits",
+            "required_capabilities",
+        ],
     },
     EvidenceRule {
         id: "SR-POLICY-001",
