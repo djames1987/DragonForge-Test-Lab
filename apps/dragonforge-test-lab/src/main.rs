@@ -3,7 +3,7 @@ use df_test_arm::{run_phase20_fixture, ArmCapability, ArmInspector, HardwarePlan
 use df_test_chaos::{run_chaos_fixture, DEFAULT_STRESS_JOBS, MAX_STRESS_JOBS};
 use df_test_dogfood::{
     load_campaign, load_profile, DogfoodCampaignReport, DogfoodProfile, DogfoodRunRecord,
-    DOGFOOD_SCHEMA_VERSION,
+    DOGFOOD_SCHEMA_VERSION, MAX_PROFILE_BYTES,
 };
 use df_test_controller::{DurableController, DurableJobState, SCHEMA_VERSION};
 use df_test_dashboard::{
@@ -919,9 +919,16 @@ fn dogfood_doctor() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn read_dogfood_bytes(path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let metadata = std::fs::metadata(path)?;
+    if metadata.len() == 0 || metadata.len() > MAX_PROFILE_BYTES as u64 {
+        return Err("dogfood input must be between 1 byte and 1 MiB".into());
+    }
+    Ok(std::fs::read(path)?)
+}
+
 fn read_dogfood_profile(path: &str) -> Result<DogfoodProfile, Box<dyn std::error::Error>> {
-    let bytes = std::fs::read(path)?;
-    Ok(load_profile(&bytes)?)
+    Ok(load_profile(&read_dogfood_bytes(path)?)?)
 }
 
 fn dogfood_profile_validate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -947,7 +954,7 @@ fn dogfood_profile_compile(args: &[String]) -> Result<(), Box<dyn std::error::Er
 
 fn dogfood_campaign_validate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let path = value_after(args, "--campaign").ok_or("missing --campaign <campaign.json>")?;
-    let bytes = std::fs::read(path)?;
+    let bytes = read_dogfood_bytes(&path)?;
     let campaign = load_campaign(&bytes)?;
     println!("{}", serde_json::to_string_pretty(&campaign)?);
     println!("enabled_profiles={}", campaign.enabled_profiles().count());
