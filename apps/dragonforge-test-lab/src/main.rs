@@ -38,11 +38,11 @@ use df_test_release::{
     ReleaseArtifact, ReleaseArtifactKind, ReleaseBundleManifest, ReleaseChannel, ReleaseVersion,
     RELEASE_BUNDLE_SCHEMA_VERSION,
 };
-use df_test_security_review::{run_fixture as run_security_fixture, run_security_review};
 use df_test_sandbox::{
     current_worker_identity, runtime_version, verify_container_image, verify_worker_identity,
     ProcessTreeGuard, SandboxLimits, SandboxMode,
 };
+use df_test_security_review::{run_fixture as run_security_fixture, run_security_review};
 use df_test_vm::{GuestOs, HyperVClient, VmCreateSpec, VmLabConfig, DEFAULT_BASELINE_CHECKPOINT};
 use df_test_windows::WindowsIntegrationClient;
 use df_test_worker_service::{
