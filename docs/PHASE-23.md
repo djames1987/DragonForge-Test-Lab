@@ -108,6 +108,30 @@ The security-review command is an operator-side local inspection tool. It does n
 
 A passing Phase 23 report means the encoded invariants and regression suites passed. It is evidence of review coverage, not a mathematical proof that the software contains no vulnerabilities.
 
+## Qualification result
+
+Windows qualification completed successfully on 2026-09-23 against commit `5c69472cd3c7d2684cf388360622c9226062f065`.
+
+Validated gates:
+
+- cargo fmt;
+- strict cargo clippy with `-D warnings`;
+- full workspace tests with all features;
+- Phase 23 security doctor, deterministic fixture, and repository review;
+- cargo-audit advisory scan;
+- cargo-deny license/advisory/source policy;
+- mTLS identity fixture;
+- MCP authentication/protocol fixture;
+- observability/redaction/audit-chain fixture;
+- installer fixture;
+- release fixture;
+- focused policy and security-review crate tests;
+- general doctor reporting `phase=23`.
+
+The machine-readable security report recorded 10/10 invariant checks passed, 173 files scanned, and zero findings. The dependency audit completed with no advisory, license, or source blockers; unmatched allowlisted licenses were informational warnings only.
+
 ## Status
 
-Implementation complete. Platform validation should be performed with the checked-in Phase 23 scripts and their generated logs retained for review.
+**Complete / Windows Qualified.**
+
+Linux-specific Phase 23 validation remains available through `scripts/test-phase23-linux.sh` as an additional cross-platform regression lane, but Phase 23's security-review implementation and Windows qualification are complete.
