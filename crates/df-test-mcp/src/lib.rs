@@ -231,7 +231,7 @@ impl McpGateway {
                 let _ = write_http_json(
                     &mut stream,
                     500,
-                    &json!({"error":"internal gateway error","detail":error.to_string()}),
+                    &json!({"error":"internal gateway error"}),
                     &[],
                 );
             }
