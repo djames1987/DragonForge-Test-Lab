@@ -813,7 +813,9 @@ fn release_fixture() -> Result<(), Box<dyn std::error::Error>> {
 fn security_doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("DragonForge Test Lab security review doctor");
     println!("review_schema=1");
-    println!("review_scope=protocol,policy,workers,paths,artifacts,mcp,certificates,transport,dos,secrets,logs,persistence,privileges,installers,releases");
+    println!(
+        "review_scope=protocol,policy,workers,paths,artifacts,mcp,certificates,transport,dos,secrets,logs,persistence,privileges,installers,releases"
+    );
     println!("blocking_severity=high,critical");
     println!("generic_shell=false");
     println!("arbitrary_file_read=false");
@@ -850,7 +852,10 @@ fn security_review(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     println!("{json}");
     println!("blocking_findings={}", report.blocking_findings());
     if !report.passed() {
-        return Err("security review failed closed because one or more required invariants were missing or blocking findings were detected".into());
+        return Err(
+            "security review failed closed because one or more required invariants were missing or blocking findings were detected"
+                .into(),
+        );
     }
     println!("status=security_review_passed");
     Ok(())
@@ -2770,7 +2775,9 @@ fn print_help() {
     println!("  dragonforge-test-lab release-bundle-verify --manifest <release-bundle.json> --root <release-directory>");
     println!("  dragonforge-test-lab security-doctor");
     println!("  dragonforge-test-lab security-fixture");
-    println!("  dragonforge-test-lab security-review [--root <repository-root>] [--output <report.json>]");
+    println!(
+        "  dragonforge-test-lab security-review [--root <repository-root>] [--output <report.json>]"
+    );
     println!("  dragonforge-test-lab mcp-doctor [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-serve [--bind 127.0.0.1:45890] [--lab-root <path>] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab mcp-fixture [--bind 127.0.0.1:45890]");
