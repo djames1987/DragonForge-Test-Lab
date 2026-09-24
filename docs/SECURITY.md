@@ -328,3 +328,10 @@ Stable release bundles fail closed if Windows/Linux package signature metadata i
 SBOM generation is deterministic from `Cargo.lock` and emits CycloneDX 1.6 JSON. Release audit gates use `cargo audit` plus `cargo deny` license/advisory/source checks. SHA-256 indexes protect artifact integrity but are not substitutes for signatures.
 
 The release workflow accepts only the explicit dev/beta/stable channel enum and validated version forms. Publication occurs only after formatting, strict Clippy, workspace tests, audit/SBOM generation, platform builds, bundle assembly, and release-bundle verification. Stable publication additionally requires signing material; missing secrets cause the workflow to fail rather than silently publish unsigned artifacts.
+
+84. Phase 24 chaos testing is deterministic and bounded; it does not expose arbitrary process-kill, file-corruption, packet-drop, shell, or remote fault-injection primitives.
+85. Controller restart chaos verifies in-flight work is interrupted and unassigned before any policy-authorized retry, preventing silent duplicate execution.
+86. Stale distributed-node leases are excluded from scheduling and authenticated envelope replay remains rejected.
+87. Database corruption and worker-state write failures fail closed against disposable test data; operator state is not destructively fault-injected.
+88. Certificate revocation remains fail-closed during chaos qualification.
+89. Phase 24 stress execution is bounded to 2000 jobs per fixture and verifies one durable attempt per successful job plus audit-chain integrity.

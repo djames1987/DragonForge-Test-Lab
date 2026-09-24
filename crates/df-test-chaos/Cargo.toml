@@ -1,0 +1,18 @@
+[package]
+name = "df-test-chaos"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+df-test-controller = { path = "../df-test-controller" }
+df-test-distributed = { path = "../df-test-distributed" }
+df-test-identity = { path = "../df-test-identity" }
+df-test-lifecycle = { path = "../df-test-lifecycle" }
+df-test-protocol = { path = "../df-test-protocol" }
+df-test-worker-service = { path = "../df-test-worker-service" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true

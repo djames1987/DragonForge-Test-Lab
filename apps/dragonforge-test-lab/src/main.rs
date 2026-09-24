@@ -1,5 +1,6 @@
 use df_test_agent::Agent;
 use df_test_arm::{run_phase20_fixture, ArmCapability, ArmInspector, HardwarePlan, HardwareProbe};
+use df_test_chaos::{run_chaos_fixture, DEFAULT_STRESS_JOBS, MAX_STRESS_JOBS};
 use df_test_controller::{DurableController, DurableJobState, SCHEMA_VERSION};
 use df_test_dashboard::{
     run_dashboard_fixture, Dashboard, DashboardConfig, DEFAULT_DASHBOARD_BIND,
@@ -91,6 +92,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "security-doctor" => security_doctor(),
         "security-fixture" => security_fixture(),
         "security-review" => security_review(&args[2..]),
+        "chaos-doctor" => chaos_doctor(),
+        "chaos-fixture" => chaos_fixture(&args[2..]),
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
         "identity-fixture" => identity_fixture(),
@@ -162,7 +165,7 @@ fn doctor() -> Result<(), Box<dyn std::error::Error>> {
     println!("protocol_version={PROTOCOL_VERSION}");
     println!("os={}", std::env::consts::OS);
     println!("arch={}", std::env::consts::ARCH);
-    println!("phase=23");
+    println!("phase=24");
 
     let git = tool_version("git", &["--version"]);
     let cargo = tool_version("cargo", &["--version"]);
@@ -858,6 +861,38 @@ fn security_review(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     println!("status=security_review_passed");
+    Ok(())
+}
+
+fn chaos_doctor() -> Result<(), Box<dyn std::error::Error>> {
+    println!("DragonForge Test Lab reliability / chaos doctor");
+    println!("chaos_schema=1");
+    println!("controller_restart=true");
+    println!("duplicate_assignment_guard=true");
+    println!("stale_node_lease=true");
+    println!("replay_rejection=true");
+    println!("worker_restart_recovery=true");
+    println!("bounded_reconnect_backoff=true");
+    println!("database_corruption_fail_closed=true");
+    println!("disk_write_failure_fail_closed=true");
+    println!("certificate_revocation_fail_closed=true");
+    println!("default_stress_jobs={DEFAULT_STRESS_JOBS}");
+    println!("max_stress_jobs={MAX_STRESS_JOBS}");
+    println!("status=chaos_ready");
+    Ok(())
+}
+
+fn chaos_fixture(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let stress_jobs = match value_after(args, "--stress-jobs") {
+        Some(value) => value.parse::<usize>()?,
+        None => DEFAULT_STRESS_JOBS,
+    };
+    let report = run_chaos_fixture(stress_jobs)?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !report.passed() {
+        return Err("one or more Phase 24 reliability / chaos scenarios failed".into());
+    }
+    println!("status=chaos_fixture_passed");
     Ok(())
 }
 
