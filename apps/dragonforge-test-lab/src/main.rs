@@ -1,10 +1,6 @@
 use df_test_agent::Agent;
 use df_test_arm::{run_phase20_fixture, ArmCapability, ArmInspector, HardwarePlan, HardwareProbe};
 use df_test_chaos::{run_chaos_fixture, DEFAULT_STRESS_JOBS, MAX_STRESS_JOBS};
-use df_test_dogfood::{
-    load_campaign, load_profile, DogfoodCampaignReport, DogfoodProfile, DogfoodRunRecord,
-    DOGFOOD_SCHEMA_VERSION, MAX_PROFILE_BYTES,
-};
 use df_test_controller::{DurableController, DurableJobState, SCHEMA_VERSION};
 use df_test_dashboard::{
     run_dashboard_fixture, Dashboard, DashboardConfig, DEFAULT_DASHBOARD_BIND,
@@ -12,6 +8,10 @@ use df_test_dashboard::{
 use df_test_distributed::{
     connect_registration_probe, run_distributed_fixtures, serve_registration_probe_once,
     validate_controller_addr, NodeFeature, NodeProfile, NodeRegistration,
+};
+use df_test_dogfood::{
+    load_campaign, load_profile, DogfoodCampaignReport, DogfoodProfile, DogfoodRunRecord,
+    DOGFOOD_SCHEMA_VERSION, MAX_PROFILE_BYTES,
 };
 use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor};
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
