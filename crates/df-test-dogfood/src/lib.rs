@@ -274,11 +274,7 @@ mod tests {
     fn profile(self_hosted: bool) -> DogfoodProfile {
         DogfoodProfile {
             schema_version: DOGFOOD_SCHEMA_VERSION,
-            name: if self_hosted {
-                "test-lab".into()
-            } else {
-                "security-suite".into()
-            },
+            name: if self_hosted { "test-lab".into() } else { "security-suite".into() },
             repository: if self_hosted {
                 "https://github.com/djames1987/DragonForge-Test-Lab.git".into()
             } else {
@@ -336,10 +332,7 @@ mod tests {
             name: "phase25".into(),
             profiles: vec![a, b],
         };
-        assert!(matches!(
-            campaign.validate(),
-            Err(DogfoodError::DuplicateRepository)
-        ));
+        assert!(matches!(campaign.validate(), Err(DogfoodError::DuplicateRepository)));
     }
 
     #[test]
