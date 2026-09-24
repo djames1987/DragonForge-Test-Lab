@@ -1,10 +1,6 @@
 use df_test_agent::Agent;
 use df_test_arm::{run_phase20_fixture, ArmCapability, ArmInspector, HardwarePlan, HardwareProbe};
 use df_test_chaos::{run_chaos_fixture, DEFAULT_STRESS_JOBS, MAX_STRESS_JOBS};
-use df_test_dogfood::{
-    load_campaign, load_profile, DogfoodCampaignReport, DogfoodProfile, DogfoodRunRecord,
-    DOGFOOD_SCHEMA_VERSION, MAX_PROFILE_BYTES,
-};
 use df_test_controller::{DurableController, DurableJobState, SCHEMA_VERSION};
 use df_test_dashboard::{
     run_dashboard_fixture, Dashboard, DashboardConfig, DEFAULT_DASHBOARD_BIND,
@@ -12,6 +8,10 @@ use df_test_dashboard::{
 use df_test_distributed::{
     connect_registration_probe, run_distributed_fixtures, serve_registration_probe_once,
     validate_controller_addr, NodeFeature, NodeProfile, NodeRegistration,
+};
+use df_test_dogfood::{
+    load_campaign, load_profile, DogfoodCampaignReport, DogfoodProfile, DogfoodRunRecord,
+    DOGFOOD_SCHEMA_VERSION, MAX_PROFILE_BYTES,
 };
 use df_test_executor::{CancellationToken, ExecutionReport, ExecutorConfig, LocalExecutor};
 use df_test_github::{CommitStatus, CommitStatusState, GhGitHubClient, GitHubRepository};
@@ -931,20 +931,15 @@ fn read_dogfood_profile(path: &str) -> Result<DogfoodProfile, Box<dyn std::error
     Ok(load_profile(&read_dogfood_bytes(path)?)?)
 }
 
-fn dogfood_profile_validate(
-    args: &[String],
-) -> Result<(), Box<dyn std::error::Error>> {
-    let path =
-        value_after(args, "--profile").ok_or("missing --profile <dogfood-profile.json>")?;
+fn dogfood_profile_validate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--profile").ok_or("missing --profile <dogfood-profile.json>")?;
     let profile = read_dogfood_profile(&path)?;
     println!("{}", serde_json::to_string_pretty(&profile)?);
     println!("status=dogfood_profile_valid");
     Ok(())
 }
 
-fn dogfood_profile_compile(
-    args: &[String],
-) -> Result<(), Box<dyn std::error::Error>> {
+fn dogfood_profile_compile(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let path = value_after(args, "--profile").ok_or("missing --profile <dogfood-profile.json>")?;
     let sha = value_after(args, "--sha").ok_or("missing --sha <immutable-commit>")?;
     let depth = value_after(args, "--depth")
@@ -957,11 +952,8 @@ fn dogfood_profile_compile(
     Ok(())
 }
 
-fn dogfood_campaign_validate(
-    args: &[String],
-) -> Result<(), Box<dyn std::error::Error>> {
-    let path =
-        value_after(args, "--campaign").ok_or("missing --campaign <campaign.json>")?;
+fn dogfood_campaign_validate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--campaign").ok_or("missing --campaign <campaign.json>")?;
     let bytes = read_dogfood_bytes(&path)?;
     let campaign = load_campaign(&bytes)?;
     println!("{}", serde_json::to_string_pretty(&campaign)?);
@@ -1005,9 +997,7 @@ fn dogfood_fixture() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn dogfood_campaign_run(
-    args: &[String],
-) -> Result<(), Box<dyn std::error::Error>> {
+fn dogfood_campaign_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let path = value_after(args, "--campaign").ok_or("missing --campaign <campaign.json>")?;
     let bytes = read_dogfood_bytes(&path)?;
     let campaign = load_campaign(&bytes)?;
@@ -1082,13 +1072,7 @@ fn dogfood_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let requested_revision =
         value_after(args, "--revision").unwrap_or_else(|| profile.default_revision.clone());
     let depth = value_after(args, "--depth")
-        .unwrap_or_else(|| {
-            if profile.self_hosted {
-                "1".into()
-            } else {
-                "0".into()
-            }
-        })
+        .unwrap_or_else(|| if profile.self_hosted { "1".into() } else { "0".into() })
         .parse::<u8>()?;
 
     let repository = GitHubRepository::parse_https(&profile.repository)?;
