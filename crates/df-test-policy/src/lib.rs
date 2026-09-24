@@ -124,7 +124,10 @@ mod tests {
             },
             vec![TestAction::Checkout],
         );
-        assert_eq!(policy.authorize(&job), Err(PolicyError::RepositoryNotAllowed));
+        assert_eq!(
+            policy.authorize(&job),
+            Err(PolicyError::RepositoryNotAllowed)
+        );
     }
 
     #[test]
