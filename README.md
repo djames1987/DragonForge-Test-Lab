@@ -119,6 +119,10 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       test-phase22.ps1
       test-phase22-linux.sh
 
+## Complete setup guide
+
+For a start-from-scratch walkthrough covering the Windows host, Hyper-V, Windows and Ubuntu golden images, disposable VMs, guest tooling, Docker, validation, dashboard/MCP, installer/release workflows, backups, and troubleshooting, see [docs/SETUP-GUIDE.md](docs/SETUP-GUIDE.md).
+
 ## Hyper-V host setup
 
 Follow docs/HOST-SETUP-HYPERV.md before running VM lifecycle tests.
