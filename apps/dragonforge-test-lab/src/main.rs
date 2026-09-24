@@ -1072,7 +1072,13 @@ fn dogfood_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let requested_revision =
         value_after(args, "--revision").unwrap_or_else(|| profile.default_revision.clone());
     let depth = value_after(args, "--depth")
-        .unwrap_or_else(|| if profile.self_hosted { "1".into() } else { "0".into() })
+        .unwrap_or_else(|| {
+            if profile.self_hosted {
+                "1".into()
+            } else {
+                "0".into()
+            }
+        })
         .parse::<u8>()?;
 
     let repository = GitHubRepository::parse_https(&profile.repository)?;
