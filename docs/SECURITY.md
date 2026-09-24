@@ -335,3 +335,11 @@ The release workflow accepts only the explicit dev/beta/stable channel enum and 
 87. Database corruption and worker-state write failures fail closed against disposable test data; operator state is not destructively fault-injected.
 88. Certificate revocation remains fail-closed during chaos qualification.
 89. Phase 24 stress execution is bounded to 2000 jobs per fixture and verifies one durable attempt per successful job plus audit-chain integrity.
+
+90. Phase 25 dogfood profiles compile only to existing typed TestAction variants; they cannot introduce shell commands, executable paths, arbitrary arguments, or environment mutation.
+91. Dogfood repository URLs pass through the strict GitHub HTTPS parser and requested revisions are resolved to immutable 40-character commit SHAs before execution.
+92. Self-hosted Test Lab validation is bounded to exactly one orchestration layer; external dogfood profiles use depth zero and cannot recurse.
+93. Dogfood profile/campaign inputs are bounded to 1 MiB, campaign size is bounded, duplicate profile names/repositories are rejected, and resource ceilings remain validated.
+94. Dogfood execution continues through Agent, ExecutionPolicy, LocalExecutor, and sandbox/resource controls; profiles do not grant capabilities or bypass worker authorization.
+95. Campaign execution is fail-fast and does not auto-merge, rewrite source, disable tests, or convert failures into success.
+96. Manual validation requiring physical hardware, production signing identity, privilege approval, or intentionally destructive isolation remains explicit and outside silent automation.
