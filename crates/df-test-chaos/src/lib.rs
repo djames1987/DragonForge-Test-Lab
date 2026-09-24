@@ -1,7 +1,7 @@
 use df_test_controller::{DurableController, DurableJobState};
 use df_test_distributed::{
-    AuthenticatedEnvelope, EnvelopeVerifier, MultiNodePlan, NodeFeature, NodeHeartbeat, NodeProfile,
-    NodeRegistration, NodeRegistry, NodeRequirement,
+    AuthenticatedEnvelope, EnvelopeVerifier, MultiNodePlan, NodeFeature, NodeHeartbeat,
+    NodeProfile, NodeRegistration, NodeRegistry, NodeRequirement,
 };
 use df_test_identity::IdentityTrustStore;
 use df_test_lifecycle::RetryPolicy;
@@ -129,11 +129,7 @@ fn controller_restart_scenario(root: &Path) -> Result<bool, ChaosError> {
     let request = job();
     {
         let mut controller = DurableController::open(&db)?;
-        controller.enqueue_job_with_retry(
-            &request,
-            RetryPolicy::bounded(3, 5, 30, true)?,
-            100,
-        )?;
+        controller.enqueue_job_with_retry(&request, RetryPolicy::bounded(3, 5, 30, true)?, 100)?;
         controller.register_worker(&worker("chaos-worker-a"), 101)?;
         let assigned = controller
             .assign_next("chaos-worker-a", 102)?
