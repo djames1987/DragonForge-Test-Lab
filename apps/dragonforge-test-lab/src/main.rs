@@ -1,7 +1,10 @@
 use df_test_agent::Agent;
 use df_test_arm::{run_phase20_fixture, ArmCapability, ArmInspector, HardwarePlan, HardwareProbe};
 use df_test_chaos::{run_chaos_fixture, DEFAULT_STRESS_JOBS, MAX_STRESS_JOBS};
-use df_test_dogfood::{load_campaign, load_profile, DogfoodProfile, DOGFOOD_SCHEMA_VERSION};
+use df_test_dogfood::{
+    load_campaign, load_profile, DogfoodCampaignReport, DogfoodProfile, DogfoodRunRecord,
+    DOGFOOD_SCHEMA_VERSION,
+};
 use df_test_controller::{DurableController, DurableJobState, SCHEMA_VERSION};
 use df_test_dashboard::{
     run_dashboard_fixture, Dashboard, DashboardConfig, DEFAULT_DASHBOARD_BIND,
@@ -100,6 +103,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "dogfood-profile-validate" => dogfood_profile_validate(&args[2..]),
         "dogfood-profile-compile" => dogfood_profile_compile(&args[2..]),
         "dogfood-campaign-validate" => dogfood_campaign_validate(&args[2..]),
+        "dogfood-campaign-run" => dogfood_campaign_run(&args[2..]),
         "dogfood-run" => dogfood_run(&args[2..]),
         "github-doctor" => github_doctor(),
         "identity-doctor" => identity_doctor(),
@@ -984,6 +988,72 @@ fn dogfood_fixture() -> Result<(), Box<dyn std::error::Error>> {
     println!("typed_action_surface=passed");
     println!("status=dogfood_fixture_passed");
     Ok(())
+}
+
+fn dogfood_campaign_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let path = value_after(args, "--campaign").ok_or("missing --campaign <campaign.json>")?;
+    let bytes = std::fs::read(path)?;
+    let campaign = load_campaign(&bytes)?;
+    let github = GhGitHubClient::default();
+    github.doctor()?;
+    let mut runs = Vec::new();
+
+    for profile in campaign.enabled_profiles() {
+        let repository = GitHubRepository::parse_https(&profile.repository)?;
+        let immutable_sha = github.resolve_commit(&repository, &profile.default_revision)?;
+        let depth = if profile.self_hosted { 1 } else { 0 };
+        let job = profile.compile_job(&immutable_sha, depth)?;
+        println!(
+            "dogfood_campaign_profile={} repository={} resolved_commit={}",
+            profile.name,
+            repository.slug(),
+            immutable_sha
+        );
+
+        let report = execute_typed_job(
+            job,
+            lab_root(args).join(&profile.name),
+            args.iter().any(|arg| arg == "--retain-workspace"),
+            sandbox_mode(args)?,
+            value_after(args, "--worker-user"),
+        )?;
+        let status = job_status_name(report.status).to_owned();
+        runs.push(DogfoodRunRecord {
+            profile: profile.name.clone(),
+            repository: profile.repository.clone(),
+            immutable_sha,
+            status,
+            summary: report.summary.clone(),
+            artifacts: report.artifacts.len(),
+        });
+        if report.status != JobStatus::Passed {
+            break;
+        }
+    }
+
+    let report = DogfoodCampaignReport {
+        schema_version: DOGFOOD_SCHEMA_VERSION,
+        campaign: campaign.name,
+        runs,
+    };
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if !report.passed() {
+        std::process::exit(2);
+    }
+    println!("status=dogfood_campaign_passed");
+    Ok(())
+}
+
+fn job_status_name(status: JobStatus) -> &'static str {
+    match status {
+        JobStatus::Queued => "queued",
+        JobStatus::Assigned => "assigned",
+        JobStatus::Running => "running",
+        JobStatus::Passed => "passed",
+        JobStatus::Failed => "failed",
+        JobStatus::Rejected => "rejected",
+        JobStatus::Cancelled => "cancelled",
+    }
 }
 
 fn dogfood_run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -2962,6 +3032,7 @@ fn print_help() {
     println!("  dragonforge-test-lab dogfood-profile-validate --profile <profile.json>");
     println!("  dragonforge-test-lab dogfood-profile-compile --profile <profile.json> --sha <commit> [--depth 0|1]");
     println!("  dragonforge-test-lab dogfood-campaign-validate --campaign <campaign.json>");
+    println!("  dragonforge-test-lab dogfood-campaign-run --campaign <campaign.json> [--lab-root <path>] [--retain-workspace] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!("  dragonforge-test-lab dogfood-run --profile <profile.json> [--revision <ref>] [--depth 0|1] [--lab-root <path>] [--retain-workspace] [--sandbox native|docker|podman] [--worker-user <name>]");
     println!(
         "  dragonforge-test-lab security-review [--root <repository-root>] [--output <report.json>]"
