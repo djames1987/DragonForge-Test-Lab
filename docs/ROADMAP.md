@@ -75,8 +75,8 @@ Dedicated adversarial review of protocol, workers, paths, artifacts, MCP, certif
 ## Phase 24 — Reliability / Chaos — Complete / Windows Qualified
 Deterministic controller restart, duplicate-assignment, stale-node/replay, worker restart/backoff, disk/database fail-closed, certificate revocation, and bounded high-volume stress scenarios with audit-chain verification. Windows/Linux qualification tooling is included.
 
-## Phase 25 — Dogfooding
-Use Test Lab as the normal validation platform for active DragonForge projects and eliminate routine manual validation where practical.
+## Phase 25 — Dogfooding — Implementation Complete / Qualification Pending
+Checked-in profiles for Test Lab, Security Suite, and Security Test Lab; immutable-SHA dogfood execution through the existing Agent/Policy/Executor boundary; one-layer self-hosting guard; consolidated fail-fast campaign reports; explicit manual-validation inventory; Windows/Linux qualification tooling; and Phase 24 reliability regression.
 
 ## Phase 26 — Release Candidate
 Feature freeze, full qualification matrix, bug/security/reliability fixes only, and v1.0.0 release-candidate validation.
