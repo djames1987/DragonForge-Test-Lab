@@ -6,7 +6,7 @@ The long-term target is a distributed DragonForge engineering lab spanning Windo
 
 ## Current status
 
-Phase 22 — Release Engineering — Complete / Signing Mechanics Qualified
+Phase 23 — Security Review — Implementation Complete / Qualification Pending
 
 Phases 0-3 established the versioned protocol, controller/agent policy boundary, local Rust worker, GitHub integration, Windows Job Object containment, worker identity checks, and Docker/Podman isolation.
 
@@ -40,6 +40,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       df-test-lifecycle/      failure classification and bounded retry policy
       df-test-plans/          versioned declarative plan validation and compilation
       df-test-release/        release channels, bundle manifests, signatures, and verification
+      df-test-security-review/ bounded adversarial invariant and secret-material review
     docs/
       ARCHITECTURE.md
       SECURITY.md
@@ -67,6 +68,7 @@ Phase 4 added typed Hyper-V VM orchestration and passed full Windows lifecycle v
       PHASE-20.md
       PHASE-21.md
       PHASE-22.md
+      PHASE-23.md
       ROADMAP.md
     scripts/
       check-hyperv-host.ps1
@@ -573,6 +575,32 @@ Linux qualification:
 Phase 22 adds dev/beta/stable channel policy, versioned release bundles, SHA-256 checksum indexes, CycloneDX 1.6 SBOM generation, cargo-audit/cargo-deny gates, Authenticode and minisign signing paths, deterministic release notes, bundle verification, and a GitHub release workflow. Stable bundles fail closed when package signatures are absent. Signing material is supplied externally and is never stored in the repository.
 
 See docs/PHASE-22.md for release channels, promotion gates, signing, SBOM/audit policy, GitHub publication, and qualification.
+
+## Phase 23 Security Review
+
+Readiness:
+
+    cargo run -p dragonforge-test-lab -- security-doctor
+
+Deterministic fixture:
+
+    cargo run -p dragonforge-test-lab -- security-fixture
+
+Review the repository and write a JSON report:
+
+    cargo run -p dragonforge-test-lab -- security-review --root . --output .\test-logs\security-report.json
+
+Windows qualification:
+
+    .\scripts\test-phase23.ps1 -InstallTools
+
+Linux qualification:
+
+    bash ./scripts/test-phase23-linux.sh --install-tools
+
+Phase 23 adds a bounded security review engine, committed-secret/key detection, a formal adversarial review matrix, dependency/advisory/license/source gates, and regressions for the trust boundaries most likely to be security-sensitive. The review also hardened core repository allowlist identity matching and removed unauthenticated MCP parser-detail disclosure.
+
+See docs/PHASE-23.md for the review scope, findings, fixes, limitations, and validation procedure.
 
 ## Security principle
 
