@@ -306,9 +306,36 @@ fn contains_complete_private_key_block(text: &str) -> bool {
         ),
     ];
 
-    PRIVATE_KEY_MARKERS
-        .iter()
-        .any(|(begin, end)| text.contains(begin) && text.contains(end))
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for (begin, end) in PRIVATE_KEY_MARKERS {
+        for (index, line) in lines.iter().enumerate() {
+            if line != begin {
+                continue;
+            }
+
+            let mut saw_payload = false;
+            for candidate in &lines[index + 1..] {
+                if candidate == end {
+                    if saw_payload {
+                        return true;
+                    }
+                    break;
+                }
+                if candidate.is_empty() {
+                    continue;
+                }
+                if candidate.len() > 4096
+                    || !candidate
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='))
+                {
+                    break;
+                }
+                saw_payload = true;
+            }
+        }
+    }
+    false
 }
 
 fn is_review_text_file(path: &Path) -> bool {
@@ -399,6 +426,22 @@ mod tests {
     fn complete_private_key_block_is_detected() {
         let pem = "-----BEGIN PRIVATE KEY-----\nZmFrZQ==\n-----END PRIVATE KEY-----";
         assert!(contains_complete_private_key_block(pem));
+    }
+
+    #[test]
+    fn quoted_begin_and_end_source_literals_do_not_match() {
+        let source_like = r#"
+            ("-----BEGIN PRIVATE KEY-----", "-----END PRIVATE KEY-----"),
+            let marker = "-----BEGIN OPENSSH PRIVATE KEY-----";
+            let end = "-----END OPENSSH PRIVATE KEY-----";
+        "#;
+        assert!(!contains_complete_private_key_block(source_like));
+    }
+
+    #[test]
+    fn marker_pair_without_encoded_payload_does_not_match() {
+        let invalid = "-----BEGIN PRIVATE KEY-----\nnot pem body!\n-----END PRIVATE KEY-----";
+        assert!(!contains_complete_private_key_block(invalid));
     }
 
     #[test]
