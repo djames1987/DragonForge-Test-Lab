@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a non-security product or documentation improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature discussion is welcome. Please do not submit source patches or other copyrightable implementation material; unsolicited code contributions are not currently accepted.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Desired behavior
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints or alternatives
+      description: Avoid confidential or security-sensitive information.
