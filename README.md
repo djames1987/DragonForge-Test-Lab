@@ -454,7 +454,7 @@ End-to-end Phase 16 validation:
 
     .\scripts\test-phase16.ps1
 
-Phase 16 upgrades the durable controller to schema v4 and adds versioned declarative plans for typed profiles/actions, dependency DAGs, conditions, resource limits, capabilities, typed artifacts, Phase 15 retries, target OS and node labels. Plans remain configuration: compilation yields ordinary typed JobRequest values and cannot inject arbitrary commands.
+Phase 16 upgrades the durable controller to schema v4 and adds versioned declarative plans for typed profiles/actions, dependency DAGs, conditions, resource limits, capabilities, Phase 15 retries, target OS and node labels. Plans remain configuration: compilation yields ordinary typed JobRequest values and cannot inject arbitrary commands.
 
 See docs/PHASE-16.md for the format, profile mappings, dependency semantics, bounds, persistence, and security boundary.
 
@@ -668,3 +668,11 @@ DragonForge Test Lab is not a remote shell.
 VM management is constrained to typed Hyper-V operations, managed DragonForge-* names, validated paths/resources, and explicit destructive confirmation. Phase 4 creates a disposable VM boundary but does not claim protection from hypervisor escape or provide arbitrary host-to-guest execution.
 
 See docs/SECURITY.md, docs/HOST-SETUP-HYPERV.md, docs/PHASE-4.md, docs/PHASE-5.md, docs/PHASE-6.md, docs/PHASE-7.md, docs/PHASE-8.md, docs/PHASE-9.md, docs/PHASE-10.md, docs/PHASE-11.md, docs/PHASE-12.md, docs/PHASE-13.md, docs/PHASE-14.md, docs/PHASE-15.md, docs/PHASE-16.md, docs/PHASE-17.md, docs/PHASE-18.md, docs/PHASE-19.md, docs/PHASE-20.md, docs/PHASE-21.md, docs/PHASE-22.md, and docs/ROADMAP.md.
+
+## License
+
+Copyright © 2026 David James. All rights reserved.
+
+This repository is source-visible for evaluation, portfolio review, security review, and reference, but it is **not open source**. Except for rights expressly required by GitHub's Terms of Service for public repositories, no general license is granted to use, copy, modify, redistribute, sublicense, sell, commercially exploit, or incorporate original DragonForge material into another work.
+
+See [LICENSE](LICENSE) for the governing notice. Third-party components remain subject to their own licenses and independent rights.
