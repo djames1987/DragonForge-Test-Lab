@@ -44,7 +44,7 @@ uuid = { version = "1", features = ["serde", "v4"] }
 proptest = "=1.5.0"
 criterion = "0.5"
 hmac = "0.12"
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 rusqlite = { version = "0.37", features = ["bundled"] }
 rustls = "0.23"
