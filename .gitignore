@@ -4,8 +4,28 @@
 /.dragonforge-test-lab
 *.log
 .env
+.env.*
+!.env.example
 artifacts/
 workspaces/
 test-logs/
 fuzz/artifacts/
 fuzz/corpus/
+
+# Public-readiness: local/generated reports and crash/runtime state
+phase*-run-*-report.json
+*.dmp
+*.dump
+core
+core.*
+*.db
+*.sqlite
+*.sqlite3
+
+# Public-readiness: private key and signing material
+*.pem
+*.key
+*.pfx
+*.p12
+*.pvk
+*.snk
