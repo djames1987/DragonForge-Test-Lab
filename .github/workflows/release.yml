@@ -60,7 +60,7 @@ jobs:
         run: bash ./scripts/release-audit-linux.sh ./audit-report.txt
       - name: Generate CycloneDX SBOM
         run: python3 ./scripts/generate-sbom.py --version "${{ inputs.version }}" --commit "${{ needs.validate.outputs.commit }}" --output ./dragonforge-test-lab-${{ inputs.version }}.cdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-metadata
           path: |
@@ -75,7 +75,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build Linux release archive
         run: bash ./scripts/build-release-linux.sh "${{ inputs.channel }}" "${{ inputs.version }}" ./dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-package
           path: dist/dragonforge-test-lab-${{ inputs.version }}-linux-*.tar.gz
@@ -103,7 +103,7 @@ jobs:
       - name: Build Windows release archive
         shell: pwsh
         run: .\scripts\build-release-windows.ps1 -Channel "${{ inputs.channel }}" -ReleaseVersion "${{ inputs.version }}" -OutputRoot .\dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-package
           path: dist/dragonforge-test-lab-${{ inputs.version }}-windows-*.zip
@@ -175,7 +175,7 @@ jobs:
           args+=(--artifact "release_notes::$notes")
           python3 ./scripts/assemble-release.py "${args[@]}"
           cargo run -q -p dragonforge-test-lab -- release-bundle-verify --manifest bundle/release-bundle.json --root bundle
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-bundle-${{ inputs.version }}
           path: bundle/
