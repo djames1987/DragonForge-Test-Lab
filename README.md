@@ -1,5 +1,9 @@
 # DragonForge Test Lab
 
+<p align="center">
+  <img src="docs/assets/readme/phase-05-hero.svg" alt="DragonForge Test Lab banner showing a controller distributing typed work to Windows, Linux, virtual-machine, GUI, and ARM workers" width="100%">
+</p>
+
 DragonForge Test Lab is a local-first test orchestration platform for validation work that conventional hosted CI cannot conveniently cover. It is built for projects that need real operating systems, disposable virtual machines, containers, GUI interaction, distributed workers, physical ARM devices, hardware-in-the-loop checks, long-running services, and reproducible evidence from those environments.
 
 > **Status:** Phase 25 dogfooding is complete and the Windows path is qualified. Linux, ARM, VM, distributed, GUI, release, security-review, and other capabilities have separate qualification procedures documented in the repository.
@@ -43,7 +47,27 @@ scripts/                     validation, packaging, install/rollback, release to
 
 The controller does not treat worker claims as authority. Capability, identity, policy, and execution boundaries are modeled explicitly, and higher-risk operations remain opt-in or environment-gated.
 
+### Distributed lab at a glance
+
+```mermaid
+flowchart TB
+    Operator[Operator / Dashboard / GitHub] --> Controller[Test Lab Controller]
+    Controller --> Policy[Typed policy + capability scheduler]
+    Policy --> W[Windows worker]
+    Policy --> L[Linux worker]
+    Policy --> V[Hyper-V / GUI worker]
+    Policy --> A[ARM / HIL worker]
+    W --> Evidence[Bounded artifacts + evidence]
+    L --> Evidence
+    V --> Evidence
+    A --> Evidence
+```
+
 See [Architecture](docs/ARCHITECTURE.md) and [Security Model](docs/SECURITY.md).
+
+### Screenshots
+
+The current tree does not contain a dedicated public screenshot pack, and this connector environment cannot safely run the real dashboard/worker stack. No screenshot is fabricated. The required synthetic dashboard, run-detail, and worker-inventory captures are specified in [Public Screenshot Capture](docs/PUBLIC_SCREENSHOT_CAPTURE.md).
 
 ## Quick start
 
@@ -93,6 +117,7 @@ A historical author/committer metadata privacy issue identified by the public-re
 - [Roadmap](docs/ROADMAP.md) — complete implementation history and current roadmap
 - [Hyper-V Host Setup](docs/HOST-SETUP-HYPERV.md) — Windows VM prerequisites
 - [Dogfood Manual Validation](docs/DOGFOOD-MANUAL-VALIDATION.md) — manual qualification boundaries
+- [Public Screenshot Capture](docs/PUBLIC_SCREENSHOT_CAPTURE.md) — synthetic-data capture and sanitization requirements
 - [Future Plans](docs/FUTURE-PLANS.md) — concepts intentionally outside the active numbered roadmap
 - [Third-party notices](THIRD_PARTY_NOTICES.md) — dependency and container redistribution notes
 - [`docs/`](docs/) — Phase 0–25 engineering and validation records
