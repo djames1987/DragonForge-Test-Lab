@@ -124,6 +124,16 @@ A historical author/committer metadata privacy issue identified by the public-re
 
 The detailed phase chronology remains in the roadmap and phase documents. The root README is intentionally focused on what the system is and how to evaluate it.
 
+## Personal / Portfolio Use Disclaimer
+
+This repository is maintained for my personal projects, learning, evaluation, authorized testing, and portfolio demonstration. It is not intended or offered as a commercial product, managed service, professional consulting service, certification, warranty, or guarantee of fitness for any particular purpose.
+
+Any third party who chooses to compile, run, adapt, evaluate, or otherwise use material from this repository does so entirely at their own risk and is responsible for ensuring that their use is lawful, authorized, appropriate for their environment, and compliant with applicable licenses and third-party terms.
+
+To the maximum extent permitted by applicable law, I assume no responsibility or liability for loss, damage, data loss, service interruption, security incidents, system changes, misuse, legal or regulatory consequences, or any other outcome arising from another person's use of or reliance on this repository or its materials.
+
+This disclaimer does not expand the permissions granted by the repository's license. The licensing terms below continue to control whether and how the material may be used.
+
 ## Licensing
 
 Copyright © 2026 David James. All rights reserved.
